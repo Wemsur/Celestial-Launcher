@@ -135,6 +135,7 @@ import _GitGraphIcon from './icons/git-graph.svg?component'
 import _GlassesIcon from './icons/glasses.svg?component'
 import _GlobeIcon from './icons/globe.svg?component'
 import _GridIcon from './icons/grid.svg?component'
+import _GripVerticalIcon from './icons/grip-vertical.svg?component'
 import _HamburgerIcon from './icons/hamburger.svg?component'
 import _HammerIcon from './icons/hammer.svg?component'
 import _HandHelpingIcon from './icons/hand-helping.svg?component'
@@ -189,6 +190,7 @@ import _MonitorSmartphoneIcon from './icons/monitor-smartphone.svg?component'
 import _MoonIcon from './icons/moon.svg?component'
 import _MoreHorizontalIcon from './icons/more-horizontal.svg?component'
 import _MoreVerticalIcon from './icons/more-vertical.svg?component'
+import _MoveIcon from './icons/move.svg?component'
 import _NewspaperIcon from './icons/newspaper.svg?component'
 import _NoSignalIcon from './icons/no-signal.svg?component'
 import _NotepadTextIcon from './icons/notepad-text.svg?component'
@@ -415,6 +417,7 @@ import _UserSearchIcon from './icons/user-search.svg?component'
 import _UserXIcon from './icons/user-x.svg?component'
 import _UsersIcon from './icons/users.svg?component'
 import _VersionIcon from './icons/version.svg?component'
+import _VideoIcon from './icons/video.svg?component'
 import _WikiIcon from './icons/wiki.svg?component'
 import _WindowIcon from './icons/window.svg?component'
 import _WorldIcon from './icons/world.svg?component'
@@ -555,6 +558,7 @@ export const GitGraphIcon = _GitGraphIcon
 export const GlassesIcon = _GlassesIcon
 export const GlobeIcon = _GlobeIcon
 export const GridIcon = _GridIcon
+export const GripVerticalIcon = _GripVerticalIcon
 export const HamburgerIcon = _HamburgerIcon
 export const HammerIcon = _HammerIcon
 export const HandHelpingIcon = _HandHelpingIcon
@@ -609,6 +613,7 @@ export const MonitorSmartphoneIcon = _MonitorSmartphoneIcon
 export const MoonIcon = _MoonIcon
 export const MoreHorizontalIcon = _MoreHorizontalIcon
 export const MoreVerticalIcon = _MoreVerticalIcon
+export const MoveIcon = _MoveIcon
 export const NewspaperIcon = _NewspaperIcon
 export const NoSignalIcon = _NoSignalIcon
 export const NotepadTextIcon = _NotepadTextIcon
@@ -835,6 +840,7 @@ export const UserSearchIcon = _UserSearchIcon
 export const UserXIcon = _UserXIcon
 export const UsersIcon = _UsersIcon
 export const VersionIcon = _VersionIcon
+export const VideoIcon = _VideoIcon
 export const WikiIcon = _WikiIcon
 export const WindowIcon = _WindowIcon
 export const WorldIcon = _WorldIcon

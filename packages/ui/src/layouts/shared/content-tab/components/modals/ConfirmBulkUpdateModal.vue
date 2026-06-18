@@ -8,12 +8,12 @@
 	>
 		<div class="flex flex-col gap-6">
 			<Admonition type="warning" :header="formatMessage(messages.admonitionHeader)">
-				{{ formatMessage(messages.admonitionBody, { count: props.count }) }}
+				{{ formatMessage(messages.admonitionBody, { count: visibleCount }) }}
 			</Admonition>
 			<InlineBackupCreator
 				ref="backupCreator"
 				:backup-name="
-					props.backupTip ? `Before bulk update (${props.backupTip})` : 'Before bulk update'
+					visibleBackupTip ? `Before bulk update (${visibleBackupTip})` : 'Before bulk update'
 				"
 				:shift-click-hint-override="formatMessage(messages.shiftClickHint)"
 				@update:buttons-disabled="buttonsDisabled = $event"
@@ -35,7 +35,7 @@
 						@click="confirm"
 					>
 						<DownloadIcon />
-						{{ formatMessage(messages.updateButton, { count: props.count }) }}
+						{{ formatMessage(messages.updateButton, { count: visibleCount }) }}
 					</button>
 				</ButtonStyled>
 			</div>
@@ -45,7 +45,7 @@
 
 <script setup lang="ts">
 import { DownloadIcon, XIcon } from '@modrinth/assets'
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 
 import Admonition from '#ui/components/base/Admonition.vue'
 import ButtonStyled from '#ui/components/base/ButtonStyled.vue'
@@ -97,8 +97,13 @@ const emit = defineEmits<{
 const modal = ref<InstanceType<typeof NewModal>>()
 const backupCreator = ref<InstanceType<typeof InlineBackupCreator>>()
 const buttonsDisabled = ref(false)
+const visibleCount = ref(props.count)
+const visibleBackupTip = ref(props.backupTip)
 
-function show() {
+async function show() {
+	await nextTick()
+	visibleCount.value = props.count
+	visibleBackupTip.value = props.backupTip
 	modal.value?.show()
 }
 

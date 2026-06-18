@@ -377,6 +377,48 @@
   "content.confirm-unlink.unlink-button": {
     "defaultMessage": "Unlink"
   },
+  "content.dependency-warning.admonition-header": {
+    "defaultMessage": "This content is required by other content"
+  },
+  "content.dependency-warning.affected-dependents-label": {
+    "defaultMessage": "Affected {count, plural, one {project} other {projects}}"
+  },
+  "content.dependency-warning.bulk-admonition-body": {
+    "defaultMessage": "Some selected projects are installed as dependencies. Deleting them may break your {context} or stop dependent content from loading correctly."
+  },
+  "content.dependency-warning.context.instance": {
+    "defaultMessage": "instance"
+  },
+  "content.dependency-warning.context.server": {
+    "defaultMessage": "server"
+  },
+  "content.dependency-warning.delete-anyway-button": {
+    "defaultMessage": "Delete anyway"
+  },
+  "content.dependency-warning.delete-many-anyway-button": {
+    "defaultMessage": "Delete {count, number} {itemType} anyway"
+  },
+  "content.dependency-warning.deleting-label": {
+    "defaultMessage": "Deleting"
+  },
+  "content.dependency-warning.disable-dependents-label": {
+    "defaultMessage": "Disable dependents after deleting"
+  },
+  "content.dependency-warning.effect-dependent-content": {
+    "defaultMessage": "Dependent content may fail to load or may disable itself"
+  },
+  "content.dependency-warning.effect-instance": {
+    "defaultMessage": "Your {context} may crash, refuse to start, or behave unexpectedly"
+  },
+  "content.dependency-warning.header": {
+    "defaultMessage": "Dependency warning"
+  },
+  "content.dependency-warning.single-admonition-body": {
+    "defaultMessage": "{project} is installed as a dependency. Deleting it may break your {context} or stop dependent content from loading correctly."
+  },
+  "content.dependency-warning.what-happens-label": {
+    "defaultMessage": "What happens?"
+  },
   "content.diff-modal.added-count": {
     "defaultMessage": "{count} added"
   },
@@ -1646,6 +1688,9 @@
   "instances.content-install.header": {
     "defaultMessage": "Install project"
   },
+  "instances.content-install.incompatible-tooltip": {
+    "defaultMessage": "This instance uses a different loader or game version than this project supports."
+  },
   "instances.content-install.install-button": {
     "defaultMessage": "Install"
   },
@@ -1718,6 +1763,12 @@
   "instances.updater-modal.hide-incompatible": {
     "defaultMessage": "Hide incompatible"
   },
+  "instances.updater-modal.incompatibility-warning": {
+    "defaultMessage": "This version is not marked as compatible with this instance. Dependencies will not be installed automatically."
+  },
+  "instances.updater-modal.incompatibility-warning-header": {
+    "defaultMessage": "Choose version"
+  },
   "instances.updater-modal.incompatible-update.description": {
     "defaultMessage": "{version} is not marked as compatible with this installation. It may fail to launch or behave unexpectedly."
   },
@@ -1726,6 +1777,9 @@
   },
   "instances.updater-modal.incompatible-update.proceed": {
     "defaultMessage": "Update anyway"
+  },
+  "instances.updater-modal.install-anyway": {
+    "defaultMessage": "Install anyway"
   },
   "instances.updater-modal.loading-changelog": {
     "defaultMessage": "Loading changelog..."
@@ -3414,7 +3468,7 @@
     "defaultMessage": "Changed user permissions"
   },
   "servers.access-page.activity-log-filter.action.user-removed": {
-    "defaultMessage": "Removed user"
+    "defaultMessage": "Revoked access"
   },
   "servers.access-page.activity-log-filter.add": {
     "defaultMessage": "Add filter"
@@ -3450,10 +3504,10 @@
     "defaultMessage": "Friend request could not be sent"
   },
   "servers.access-page.notification.invite-cancelled.text": {
-    "defaultMessage": "Cancelled the invite for {target}."
+    "defaultMessage": "Revoked the invite for {target}."
   },
   "servers.access-page.notification.invite-cancelled.title": {
-    "defaultMessage": "Invite cancelled"
+    "defaultMessage": "Invite revoked"
   },
   "servers.access-page.notification.invite-failed.title": {
     "defaultMessage": "Invite could not be sent"
@@ -3477,10 +3531,10 @@
     "defaultMessage": "Access could not be loaded"
   },
   "servers.access-page.notification.member-removed.text": {
-    "defaultMessage": "Removed {target} from this server."
+    "defaultMessage": "Revoked access for {target}."
   },
   "servers.access-page.notification.member-removed.title": {
-    "defaultMessage": "Access removed"
+    "defaultMessage": "Access revoked"
   },
   "servers.access-page.notification.remove-failed.title": {
     "defaultMessage": "Access could not be removed"
@@ -3525,10 +3579,10 @@
     "defaultMessage": "Limited"
   },
   "servers.access-table.action.cancel-invite": {
-    "defaultMessage": "Cancel invite"
+    "defaultMessage": "Revoke invite"
   },
   "servers.access-table.action.remove-user": {
-    "defaultMessage": "Remove user"
+    "defaultMessage": "Revoke access"
   },
   "servers.access-table.action.resend-invite": {
     "defaultMessage": "Resend invite"
@@ -3807,7 +3861,7 @@
     "defaultMessage": "Changed permissions for <target-user></target-user> to <permission-label>{permissions}</permission-label>"
   },
   "servers.audit-log.event.user-removed": {
-    "defaultMessage": "Removed <target-user></target-user>"
+    "defaultMessage": "Revoked access for <target-user></target-user>"
   },
   "servers.audit-log.scope.server": {
     "defaultMessage": "Server"
@@ -3934,6 +3988,12 @@
   },
   "servers.backups.item.backup-schedule": {
     "defaultMessage": "Backup schedule"
+  },
+  "servers.backups.item.creator-avatar-alt": {
+    "defaultMessage": "{username}'s avatar"
+  },
+  "servers.backups.item.creator.support": {
+    "defaultMessage": "Support"
   },
   "servers.backups.item.manual-backup": {
     "defaultMessage": "Manual backup"
@@ -4440,7 +4500,7 @@
     "defaultMessage": "Added {time}"
   },
   "servers.remove-access-modal.cancel-button": {
-    "defaultMessage": "Cancel invite"
+    "defaultMessage": "Revoke invite"
   },
   "servers.remove-access-modal.cancel-effect-access": {
     "defaultMessage": "They will not be added to this server"
@@ -4449,13 +4509,13 @@
     "defaultMessage": "You can send them another invite later"
   },
   "servers.remove-access-modal.cancel-header": {
-    "defaultMessage": "Cancel invite"
+    "defaultMessage": "Revoke invite"
   },
   "servers.remove-access-modal.cancel-warning-body": {
-    "defaultMessage": "If you cancel this invite, {username} will need a new invitation before they can join this server."
+    "defaultMessage": "If you revoke this invite, {username} will need a new invitation before they can join this server."
   },
   "servers.remove-access-modal.header": {
-    "defaultMessage": "Remove user"
+    "defaultMessage": "Revoke access"
   },
   "servers.remove-access-modal.invited-label": {
     "defaultMessage": "Invited {time}"
@@ -4464,7 +4524,7 @@
     "defaultMessage": "Pending invite"
   },
   "servers.remove-access-modal.remove-button": {
-    "defaultMessage": "Remove user"
+    "defaultMessage": "Revoke access"
   },
   "servers.remove-access-modal.remove-effect-access": {
     "defaultMessage": "They will immediately lose access to the server panel and will no longer be able to edit content"
@@ -4479,7 +4539,7 @@
     "defaultMessage": "{username}'s avatar"
   },
   "servers.remove-access-modal.warning-body": {
-    "defaultMessage": "If you remove a user from your server, you'll need to re-invite them to restore access."
+    "defaultMessage": "If you revoke a user's access to your server, you'll need to re-invite them to restore access."
   },
   "servers.remove-access-modal.what-happens-label": {
     "defaultMessage": "What happens?"

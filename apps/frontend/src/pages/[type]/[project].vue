@@ -1874,12 +1874,18 @@ const isSettings = computed(() => route.name.startsWith('type-project-settings')
 
 // Transform versionsV3 to be same shape as versionsV2 for compatibility in project pages
 const versionsRaw = computed(() => {
-	return (versionsV3.value ?? []).map((v) => {
-		const isModpack = v.project_types?.includes('modpack')
+	return (versionsV3.value ?? []).map((version) => {
+		const files = Array.isArray(version.files) ? version.files : []
+		const gameVersions = Array.isArray(version.game_versions) ? version.game_versions : []
+		const loaders = Array.isArray(version.loaders) ? version.loaders : []
+		const isModpack = version.project_types?.includes('modpack')
+		const mrpackLoaders = Array.isArray(version.mrpack_loaders) ? version.mrpack_loaders : []
 
 		return {
-			...v,
-			loaders: isModpack && v.mrpack_loaders ? v.mrpack_loaders : v.loaders,
+			...version,
+			files,
+			game_versions: gameVersions,
+			loaders: isModpack && mrpackLoaders.length ? mrpackLoaders : loaders,
 		}
 	})
 })
@@ -1892,6 +1898,7 @@ const versions = computed(() => {
 
 // Versions loading state
 const versionsLoading = computed(() => versionsV3Loading.value)
+const versionsLoaded = computed(() => versionsV3.value !== undefined || !!_versionsV3Error.value)
 
 // Load versions on demand (client-side only)
 function loadVersions() {
@@ -2735,6 +2742,7 @@ provideProjectPageContext({
 	// Lazy version loading
 	versions,
 	versionsLoading,
+	versionsLoaded,
 	// Lazy dependencies loading
 	dependencies,
 	dependenciesLoading: computed(() => dependenciesLoading.value),

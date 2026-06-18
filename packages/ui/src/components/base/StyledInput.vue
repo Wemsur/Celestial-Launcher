@@ -21,6 +21,7 @@
 		<textarea
 			v-if="multiline"
 			:id="id"
+			v-bind="inputAttrs"
 			ref="inputRef"
 			:value="model"
 			:placeholder="placeholder"
@@ -50,6 +51,7 @@
 		<input
 			v-else
 			:id="id"
+			v-bind="inputAttrs"
 			ref="inputRef"
 			:type="type"
 			:value="model"
@@ -77,9 +79,6 @@
 				variant === 'outlined'
 					? 'bg-transparent border border-solid border-button-bg rounded-l-xl border-r-0'
 					: 'bg-surface-4 border-none rounded-xl',
-				{
-					'placeholder:text-sm': type === 'search',
-				},
 			]"
 			@input="onInput"
 			@focus="isFocused = true"
@@ -149,6 +148,7 @@ const props = withDefaults(
 		resize?: 'none' | 'vertical' | 'both'
 		inputClass?: string
 		wrapperClass?: string
+		inputAttrs?: Record<string, string | number | boolean | undefined>
 	}>(),
 	{
 		type: 'text',
