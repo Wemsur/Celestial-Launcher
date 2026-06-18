@@ -1,39 +1,16 @@
-# ![Modrinth Monorepo Cover](/.github/assets/monorepo_cover.png)
+# 一个Modrinth App的修改版
 
-![Issues](https://img.shields.io/github/issues-raw/Modrinth/code?color=c78aff&label=issues&style=for-the-badge)
-![Pull Requests](https://img.shields.io/github/issues-pr-raw/Modrinth/code?color=c78aff&label=PRs&style=for-the-badge)
-![Contributors](https://img.shields.io/github/contributors/Modrinth/code?color=c78aff&label=contributors&style=for-the-badge)
-![Lines](https://img.shields.io/endpoint?url=https://ghloc.vercel.app/api/modrinth/code/badge?style=flat&logoColor=white&color=c78aff&style=for-the-badge)
-![Commit Activity](https://img.shields.io/github/commit-activity/m/Modrinth/code?color=c78aff&label=commits&style=for-the-badge)
-![Last Commit](https://img.shields.io/github/last-commit/Modrinth/code?color=c78aff&label=last%20commit&style=for-the-badge)
+主要专注于删除modrinthapp中的不必要部分   修改一些功能
 
-## Modrinth Monorepo
+## 已实现特性
+- 删除右侧栏中的广告区域
+- 删除左侧的Modrinth Hosting按钮
 
-Welcome to the Modrinth Monorepo, the primary codebase for the Modrinth web interface and app. It contains ![Lines](https://img.shields.io/endpoint?url=https://ghloc.vercel.app/api/modrinth/olympus/badge?logoColor=white&color=black&label=) lines of code and has ![Contributors](https://img.shields.io/github/contributors/Modrinth/code?color=black&label=) contributors!
+## 未来规划
+- 暂无
 
-If you're not a developer and you've stumbled upon this repository, you can access the web interface on the [Modrinth website](https://modrinth.com) and download the latest release of the app [here](https://modrinth.com/app).
+积极接受issues 
 
-## Development
+由于学业原因更新较慢
 
-This repository contains two primary packages. For detailed development information, please refer to their respective guides:
-
-- [Website frontend](https://docs.modrinth.com/contributing/knossos/)
-- [Desktop app](https://docs.modrinth.com/contributing/theseus/)
-
-## Contributing
-
-We welcome contributions! Before submitting any contributions, please read our [contributing guidelines](https://docs.modrinth.com/contributing/getting-started/).
-
-If you plan to fork this repository for your own purposes, please review our [copying guidelines](COPYING.md).
-
-## Security
-
-If you discover a security vulnerability within our codebase, please follow our [responsible disclosure guidelines](https://modrinth.com/legal/security).
-
-## Support
-
-If you need help with the Modrinth web interface or app, please visit our [support page](https://support.modrinth.com). For general inquiries, you can also join our [Discord server](https://discord.modrinth.com).
-
-## License
-
-All packages in this repository are licensed under their respective licenses. Refer to the LICENSE file in each package for more information.
+请勿从较新的Modrinth App官方版本更换到较旧的本仓库版本，可能引起一些问题。
