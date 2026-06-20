@@ -377,6 +377,7 @@ pub struct Hooks {
 pub enum DefaultPage {
     Home,
     Library,
+    Worlds,
 }
 
 impl DefaultPage {
@@ -384,6 +385,7 @@ impl DefaultPage {
         match self {
             DefaultPage::Home => "home",
             DefaultPage::Library => "library",
+            DefaultPage::Worlds => "Worlds",
         }
     }
 
@@ -391,6 +393,7 @@ impl DefaultPage {
         match string {
             "home" => Self::Home,
             "library" => Self::Library,
+            "Wrolds" => Self::Worlds,
             _ => Self::Home,
         }
     }

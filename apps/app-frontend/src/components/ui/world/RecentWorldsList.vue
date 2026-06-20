@@ -265,7 +265,7 @@ onUnmounted(() => {
 			<LoaderCircleIcon class="mx-auto size-8 animate-spin text-contrast" />
 		</div>
 	</div>
-	<div v-else-if="jumpBackInItems.length > 0" class="flex flex-col gap-2">
+	<div v-else-if="jumpBackInItems.length > 0" class="flex flex-1 h-full flex-col gap-2">
 		<HeadingLink v-if="theme.getFeatureFlag('worlds_tab')" to="/worlds" class="mt-1">
 			Jump back in
 		</HeadingLink>
@@ -275,7 +275,7 @@ onUnmounted(() => {
 		>
 			Jump back in
 		</span>
-		<div class="grid-when-huge flex flex-col w-full gap-2">
+		<div class="grid-when-huge flex flex-col w-full gap-2 flex-1 overflow-y-auto">
 			<template
 				v-for="item in jumpBackInItems"
 				:key="`${item.instance.path}-${item.type === 'world' ? getWorldIdentifier(item.world) : 'instance'}`"

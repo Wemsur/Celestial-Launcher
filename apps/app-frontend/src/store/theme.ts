@@ -3,16 +3,16 @@ import { defineStore } from 'pinia'
 let systemThemeMq: MediaQueryList | null = null
 
 export const DEFAULT_FEATURE_FLAGS = {
-	project_background: false,
-	page_path: false,
-	worlds_tab: false,
+	project_background: true,//false
+	page_path: false,//false
+	worlds_tab: true,//false
 	worlds_in_home: true,
-	server_project_qa: false,
-	server_ram_as_bytes_always_on: false,
-	always_show_app_controls: false,
-	skip_unknown_pack_warning: false,
+	server_project_qa: false,//false
+	server_ram_as_bytes_always_on: false,//false
+	always_show_app_controls: false,//false
+	skip_unknown_pack_warning: false,//false
 	pride_fundraiser: true,
-	i18n_debug: false,
+	i18n_debug: false,//false
 	show_instance_play_time: true,
 }
 

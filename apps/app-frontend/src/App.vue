@@ -359,6 +359,10 @@ async function setupApp() {
 		await router.push('/library')
 	}
 
+    if (default_page === 'Worlds') {
+        await router.push('/Worlds')
+    }
+
 	os.value = await getOS()
 	const dev = await isDev()
 	isDevEnvironment.value = dev
@@ -1396,10 +1400,10 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 		<div
 			class="app-grid-navbar bg-bg-raised flex flex-col p-[0.5rem] pt-0 gap-[0.5rem] w-[--left-bar-width]"
 		>
-			<NavButton v-tooltip.right="'Home'" to="/">
+			<NavButton v-if="false" v-tooltip.right="'Home'" to="/">
 				<HomeIcon />
 			</NavButton>
-			<NavButton v-if="themeStore.featureFlags.worlds_tab" v-tooltip.right="'Worlds'" to="/worlds">
+			<NavButton v-if="true" v-tooltip.right="'Worlds'" to="/Worlds">
 				<WorldIcon />
 			</NavButton>
 			<NavButton

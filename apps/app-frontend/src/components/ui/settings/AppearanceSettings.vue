@@ -72,6 +72,10 @@ const messages = defineMessages({
 		id: 'app.appearance-settings.default-landing-page.library',
 		defaultMessage: 'Library',
 	},
+    defaultLandingPageWorlds: {
+        id: 'app.appearance-settings.default-landing-page.worlds',
+        defaultMessage: 'Library',
+    },
 	selectOption: {
 		id: 'app.appearance-settings.select-option',
 		defaultMessage: 'Select an option',
@@ -240,6 +244,10 @@ watch(
 				{
 					value: 'Library',
 					label: formatMessage(messages.defaultLandingPageLibrary),
+				},
+				{
+					value: 'Worlds',
+					label: formatMessage(messages.defaultLandingPageWorlds),
 				},
 			]"
 			:display-value="settings.default_page ?? 'Select an option'"

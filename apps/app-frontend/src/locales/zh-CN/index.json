@@ -56,6 +56,9 @@
   "app.appearance-settings.default-landing-page.library": {
     "message": "库"
   },
+  "app.appearance-settings.default-landing-page.worlds": {
+    "message": "世界"
+  },
   "app.appearance-settings.default-landing-page.title": {
     "message": "默认起始页"
   },
