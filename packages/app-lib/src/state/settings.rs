@@ -393,7 +393,7 @@ impl DefaultPage {
         match string {
             "home" => Self::Home,
             "library" => Self::Library,
-            "Wrolds" => Self::Worlds,
+            "Worlds" => Self::Worlds,
             _ => Self::Home,
         }
     }
