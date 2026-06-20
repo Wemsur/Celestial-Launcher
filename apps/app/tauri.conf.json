@@ -93,7 +93,8 @@
 				"minWidth": 1100,
 				"visible": false,
 				"zoomHotkeysEnabled": false,
-				"decorations": false
+				"decorations": false,
+				"dragDropEnabled": false
 			}
 		],
 		"security": {
@@ -102,6 +103,7 @@
 					"$APPDATA/caches/icons/*",
 					"$APPCONFIG/caches/icons/*",
 					"$CONFIG/caches/icons/*",
+					"$APPDATA/ModrinthApp/custom_backgrounds/*",
 					"$APPDATA/profiles/*/saves/*/icon.png",
 					"$APPCONFIG/profiles/*/saves/*/icon.png",
 					"$CONFIG/profiles/*/saves/*/icon.png"

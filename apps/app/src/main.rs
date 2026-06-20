@@ -10,6 +10,9 @@ use std::sync::atomic::Ordering;
 use tauri::{Listener, Manager};
 use tauri_plugin_fs::FsExt;
 use theseus::prelude::*;
+use std::fs;
+use std::path::PathBuf;
+use base64::{Engine as _, engine::general_purpose}; // 需要在 Cargo.toml 引入 base64 库
 
 mod api;
 mod error;
@@ -107,6 +110,101 @@ async fn set_restart_after_pending_update(
         .store(should_restart, Ordering::Relaxed);
     Ok(())
 }
+
+#[tauri::command]
+async fn save_background_image(
+    app_handle: tauri::AppHandle,
+    background_blob: Vec<u8>,
+    file_name: String,
+) -> Result<String, String> {
+    // 1. 获取应用专属的本地数据存储目录 (例如 Windows 下的 AppData/Roaming/ theseus_gui)
+    let mut target_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
+
+    // 2. 创建一个名为 custom_backgrounds 的专用子文件夹
+    target_dir.push("custom_backgrounds");
+    if !target_dir.exists() {
+        fs::create_dir_all(&target_dir)
+            .map_err(|e| format!("创建背景图存储文件夹失败: {}", e))?;
+    }
+
+    // 3. 提取文件后缀，固定命名或保留原名。这里为了防止命名冲突导致覆盖，可以使用固定名称
+    // 或者你可以直接用传入的 file_name
+    let extension = std::path::Path::new(&file_name)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("png");
+
+    let final_file_name = format!("current_background.{}", extension);
+    target_dir.push(final_file_name);
+
+    // 4. 将前端传过来的二进制字节流写入磁盘
+    fs::write(&target_dir, background_blob)
+        .map_err(|e| format!("写入图片文件流失败: {}", e))?;
+
+    println!("[Rust Backend] 成功持久化背景图至: {:?}", target_dir);
+
+    // 5. 返回保存成功的绝对路径字符串供前端记录或备用
+    target_dir
+        .to_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "路径包含非 UTF-8 字符".to_string())
+}
+
+#[tauri::command]
+fn get_current_background_path(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let mut path = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    path.push("custom_backgrounds");
+    path.push("current_background.jpg"); // 建议这里做个简单的文件存在性检查
+
+    if path.exists() {
+        Ok(path.to_str().unwrap().to_string())
+    } else {
+        Err("No background found".into())
+    }
+}
+
+#[tauri::command]
+async fn get_background_as_base64(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let mut path = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?;
+
+    path.push("custom_backgrounds");
+    path.push("current_background.jpg"); // 优先找 jpg
+
+    if !path.exists() {
+        // 如果 jpg 不存在，尝试 png
+        path.set_extension("png");
+        if !path.exists() {
+            return Err("Background file not found".into());
+        }
+    }
+
+    // 读取文件并转为 Base64
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let base64_str = general_purpose::STANDARD.encode(bytes);
+
+    Ok(format!("data:image/jpeg;base64,{}", base64_str))
+}
+
+#[tauri::command]
+fn delete_background(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let mut path = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    path.push("custom_backgrounds");
+    path.push("current_background.jpg");
+
+    if path.exists() {
+        fs::remove_file(path).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("背景文件不存在".to_string())
+    }
+}
+
 
 // if Tauri app is called with arguments, then those arguments will be treated as commands
 // ie: deep links or filepaths for .mrpacks
@@ -261,6 +359,9 @@ fn main() {
             toggle_decorations,
             show_window,
             restart_app,
+            save_background_image,
+            get_background_as_base64,
+            delete_background,
         ]);
 
     tracing::info!("Initializing app...");

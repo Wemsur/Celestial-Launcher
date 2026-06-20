@@ -46,9 +46,21 @@
 	--sl-color-bg-sidebar: var(--color-raised-bg);
 	--sl-color-bg-inline-code: var(--color-button-bg);
 	--sl-color-bg-accent: var(--color-brand-highlight);
+	--app-custom-background: none;
 }
 
 :root[data-theme='light'],
 [data-theme='light'] ::backdrop {
 	--sl-color-bg: var(--color-raised-bg);
 }
+
+
+.app-viewport.html.body {
+	background-image: var(--app-custom-background) !important;
+	background-size: cover !important;
+	background-position: center !important;
+	background-attachment: fixed !important;
+	background-repeat: no-repeat !important;
+/*	background-color: #121212 !important;*/
+}
+

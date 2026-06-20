@@ -5173,5 +5173,14 @@
   },
   "user.profile.badge.staff.name": {
     "defaultMessage": "Modrinth 团队"
+  },
+  "app.appearance-settings.background-image.title": {
+    "defaultMessage": "背景图片"
+  },
+  "app.appearance-settings.background-image.description": {
+    "defaultMessage": "拖放或点击以选择图片"
+  },
+  "app.appearance-settings.background-image.title": {
+    "defaultMessage": "背景图片"
   }
 }

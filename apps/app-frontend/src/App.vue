@@ -138,6 +138,8 @@ import { get_available_capes, get_available_skins } from './helpers/skins'
 import { AppNotificationManager } from './providers/app-notifications'
 import { AppPopupNotificationManager } from './providers/app-popup-notifications'
 
+import { getAssetUrl } from '@/helpers/background';
+
 const themeStore = useTheming()
 const router = useRouter()
 const route = useRoute()
@@ -292,12 +294,65 @@ const authUnreachable = computed(() => {
 	return false
 })
 
+const handleDeleteBackground = async () => {
+    try {
+        // 1. 调用 Rust 删除文件
+        await invoke('delete_background');
+
+        // 2. 清理 UI 元素
+        const bgImg = document.body.querySelector('img[src*="data:image"]'); // 或者你之前创建的那个标识符
+        if (bgImg) {
+            bgImg.remove();
+        }
+        console.log("背景已删除");
+    } catch (e) {
+        console.error("删除失败:", e);
+    }
+};
+
 onMounted(async () => {
 	await useCheckDisableMouseover()
 
 	document.querySelector('body').addEventListener('click', handleClick)
 	document.querySelector('body').addEventListener('auxclick', handleAuxClick)
 
+    // 启动时自动从后端获取当前的背景路径
+    try {
+        // 删掉了 ": string" 等标注，IDE 不会再报错了
+        const base64Data = await invoke('get_background_as_base64');
+
+        // 注入到 CSS 变量
+        document.documentElement.style.setProperty('--app-custom-background', `url('${base64Data}')`);
+        document.body.classList.add('custom-bg-active');
+    } catch (e) {
+        console.log("没有检测到自定义背景，使用默认主题");
+    }
+    try {
+        const base64Data = await invoke('get_background_as_base64');
+
+        // 1. 创建一个新的 img 元素
+        const bgImg = document.createElement('img');
+        bgImg.src = base64Data;
+
+        // 2. 赋予它绝对定位，把它变成全屏覆盖
+        bgImg.style.position = 'fixed';
+        bgImg.style.top = '0';
+        bgImg.style.left = '0';
+        bgImg.style.width = '100vw';
+        bgImg.style.height = '100vh';
+        bgImg.style.objectFit = 'cover'; // 等同于 background-size: cover
+        bgImg.style.zIndex = '-9999';    // 强制把这个图片推到最底层
+        bgImg.style.pointerEvents = 'none'; // 防止遮挡点击操作
+
+        // 3. 把它加到 body 的最前面
+        document.body.prepend(bgImg);
+        document.body.classList.add('custom-bg-active');
+
+        console.log("背景层注入完成");
+    } catch (e) {
+        // 关键改动：把 e 打印出来，这是解决问题的唯一线索
+        console.error("Invoke 调用失败，错误原因:", e);
+    }
 	checkUpdates()
 })
 

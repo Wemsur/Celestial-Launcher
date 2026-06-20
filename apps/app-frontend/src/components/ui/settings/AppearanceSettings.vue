@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { Combobox, defineMessages, ThemeSelector, Toggle, useVIntl } from '@modrinth/ui'
+import {ButtonStyled, Combobox, defineMessages, ThemeSelector, Toggle, useVIntl} from '@modrinth/ui'
 import { ref, watch } from 'vue'
 
 import { get, set } from '@/helpers/settings.ts'
 import { getOS } from '@/helpers/utils'
 import { useTheming } from '@/store/state'
 import type { ColorTheme, FeatureFlag } from '@/store/theme.ts'
+import BackgroundImageSettings from '@/components/BackgroundImageSettings.vue'
+import {invoke} from "@tauri-apps/api/core";
+import {TrashIcon} from "@modrinth/assets";
 
 const themeStore = useTheming()
 const { formatMessage } = useVIntl()
@@ -13,6 +16,40 @@ const { formatMessage } = useVIntl()
 const worldsInHomeFlag: FeatureFlag = 'worlds_in_home'
 const skipUnknownPackWarningFlag: FeatureFlag = 'skip_unknown_pack_warning'
 const showPlayTimeFlag: FeatureFlag = 'show_instance_play_time'
+
+const delete_background = async () => {
+    try {
+        // 调用 Rust 后端删除文件
+        await invoke('delete_background');
+
+        // 3. 执行 CSS 清理 (根据我们之前的类名逻辑)
+        document.body.classList.remove('custom-background-enabled');
+        document.body.classList.remove('custom-bg-active');
+
+        // 4. 执行 DOM 清理 (移除背景图片 DOM)
+        const img = document.getElementById('custom-bg-layer');
+        if (img) {
+            img.remove();
+        }
+        console.log("背景已删除");
+    } catch (e) {
+        console.error("删除失败:", e);
+    }
+};
+
+// 开启自定义背景模式
+const enableCustomMode = () => {
+    // 相当于 self.is_custom_mode = True
+    document.body.classList.add('custom-bg-active');
+};
+
+// 关闭自定义背景模式（恢复默认）
+const disableCustomMode = () => {
+    // 相当于 self.is_custom_mode = False
+    document.body.classList.remove('custom-bg-active');
+};
+
+
 
 const messages = defineMessages({
 	colorThemeTitle: {
@@ -143,6 +180,11 @@ watch(
 		:theme-options="themeStore.getThemeOptions()"
 		system-theme-color="system"
 	/>
+    <BackgroundImageSettings/>
+    <button id="purge-cache" class="btn min-w-max m-2" @click="delete_background">
+        <TrashIcon />
+        清除已选择的背景
+    </button>
 
 	<div class="mt-6 flex items-center justify-between">
 		<div>
@@ -153,7 +195,6 @@ watch(
 				{{ formatMessage(messages.advancedRenderingDescription) }}
 			</p>
 		</div>
-
 		<Toggle
 			id="advanced-rendering"
 			:model-value="themeStore.advancedRendering"

@@ -10596,6 +10596,7 @@ name = "theseus_gui"
 version = "1.0.0-local"
 dependencies = [
  "async_zip",
+ "base64 0.22.1",
  "chrono",
  "core-foundation 0.10.1",
  "core-graphics",

@@ -44,6 +44,7 @@ tracing-error = { workspace = true }
 url = { workspace = true }
 urlencoding = { workspace = true }
 uuid = { workspace = true, features = ["serde", "v4"] }
+base64 = "0.22.1"
 
 [build-dependencies]
 tauri-build = { workspace = true, features = ["codegen"] }

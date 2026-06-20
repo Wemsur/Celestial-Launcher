@@ -233,3 +233,71 @@ textarea {
 		opacity: 0.6;
 	}
 }
+
+/* 只保留始终存在的 class，去掉动态变化的 .disable-advanced-rendering */
+body.custom-bg-active .app-grid-layout {
+	background-color: color-mix(in srgb, var(--surface-3) 50%, transparent) !important; /* 你可以根据需要调整这个透明度 */
+	backdrop-filter: blur(7px) !important;
+}
+body.custom-bg-active .app-grid-navbar {
+	background: none;
+}
+body.custom-bg-active .app-grid-statusbar {
+	background: none;
+}
+body.custom-bg-active .app-contents {
+	background-color: color-mix(in srgb, var(--surface-1) 60%, transparent) !important; /* 你可以根据需要调整这个透明度 */
+	outline: none;
+}
+
+body.custom-bg-active .smart-clickable .a {
+	background: none;
+	color: #ffffff;
+}
+
+.grid.card-shadow.rounded-xl {
+	transition-duration: 0.1s;
+}
+
+body.custom-bg-active .grid.card-shadow.rounded-xl {
+	background-color: color-mix(in srgb, var(--surface-3) 30%, transparent);
+	backdrop-filter: blur(10px) !important;
+}
+
+body.custom-bg-active .button-base.bg-bg-raised {
+	background-color: color-mix(in srgb, var(--surface-3) 30%, transparent);
+	backdrop-filter: blur(10px) !important;
+}
+
+body.custom-bg-active .relative.flex.w-fit.overflow-x-auto.rounded-full {
+	background-color: color-mix(in srgb, var(--surface-3) 30%, transparent);
+	backdrop-filter: blur(10px) !important;
+}
+
+body.custom-bg-active .w-full.touch-manipulation.text-primary {
+	background-color: color-mix(in srgb, var(--surface-4) 50%, transparent);
+	border: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+}
+
+body.custom-bg-active .w-full.h-full.border-solid {
+	background-color: color-mix(in srgb, var(--surface-4) 50%, transparent);
+	border: 1px solid color-mix(in srgb, var(--color-text-primary) 5%, transparent);
+}
+
+body.custom-bg-active .sticky.top-0.z-10.flex.h-12 {
+	background-color: color-mix(in srgb, var(--surface-3) 70%, transparent);
+	border: 1px solid color-mix(in srgb, var(--color-text-primary) 5%, transparent);
+}
+
+body.custom-bg-active .bg-surface-2 {
+	background-color: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+body.custom-bg-active [class~="bg-surface-1.5"] {
+	background-color: color-mix(in srgb, var(--surface-1-5) 70%, transparent);
+}
+
+body.custom-bg-active .sticky.top-0 {
+	background-color: color-mix(in srgb, var(--surface-1) 50%, transparent);
+	backdrop-filter: blur(20px) !important;
+}
