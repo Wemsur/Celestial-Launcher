@@ -38,7 +38,7 @@
 	--color-green-200: #b2ffd9;
 	--color-green-300: #76ffbc;
 	--color-green-400: #33f598;
-	--color-green-500: #09de78;
+	--color-green-500: #deb309;
 	--color-green-600: #00af5c;
 	--color-green-700: #04914f;
 	--color-green-800: #0a7141;
@@ -424,4 +424,107 @@ html {
 .retro-mode {
 	--surface-2-5: #3a3c3e;
 	--brand-gradient-strong-bg: #3a3b38;
+}
+
+.elegant-mode {
+	@extend .dark-mode;
+	--surface-1: #2d322d;
+	--surface-1-5: #283028;
+	--surface-2: #2c352c;
+	--surface-2-5: #222429;
+	--surface-3: #364239;
+	--surface-4: #3e453e;
+	--surface-5: #42444a;
+
+	--color-ad: #0d1828;
+
+	--color-focus-ring: #7eb693;
+
+	--brand-gradient-bg: linear-gradient(
+					0deg,
+					rgba(22, 66, 51, 0.15) 0%,
+					rgba(55, 137, 73, 0.1) 100%
+	);
+	--brand-gradient-strong-bg: linear-gradient(
+					270deg,
+					rgba(9, 18, 14, 0.6) 10%,
+					rgba(19, 31, 23, 0.5) 100%
+	);
+
+	--color-green-50: #effef5;
+	--color-green-100: #dafee8;
+	--color-green-200: #b8fad2;
+	--color-green-300: #6bf3a1;
+	--color-green-400: #4fcd83;
+	--color-green-500: #b59d3e;
+	--color-green-600: #4da873;
+	--color-green-700: #418c61;
+	--color-green-800: #2d6847;
+	--color-green-900: #1f5135;
+	--color-green-950: #182c21;
+	--color-green: var(--color-green-500);
+
+	--color-gradient-button-bg: linear-gradient(180deg, #1b1b20 0%, #25262b 100%);
+}
+
+.antique-dark-mode {
+	@extend .dark-mode;
+	--surface-1: #1a1a1a;
+	--surface-1-5: #1b1b1b;
+	--surface-2: #202020;
+	--surface-2-5: #303030;
+	--surface-3: #232324;
+	--surface-4: #262626;
+	--surface-5: #42444a;
+
+	--color-ad: #0d1828;
+
+	--color-focus-ring: #ede3ba;
+
+	--brand-gradient-bg: linear-gradient(
+					0deg,
+					rgb(66 60 22 / 0.15) 0%,
+					rgb(182 172 116 / 0.1) 100%
+	);
+	--brand-gradient-strong-bg: linear-gradient(
+					270deg,
+					rgb(41 38 20 / 0.6) 10%,
+					rgb(74 70 46 / 0.5) 100%
+	);
+
+	--color-green-50: #effef5;
+	--color-green-100: #fbf8d8;
+	--color-green-200: #faf3b5;
+	--color-green-300: #ede490;
+	--color-green-400: #ccc694;
+	--color-green-500: #b8b485;
+	--color-green-600: #b6b375;
+	--color-green-700: #a8a271;
+	--color-green-800: #6c683a;
+	--color-green-900: #4e4b33;
+	--color-green-950: #2e2c07;
+	--color-green: var(--color-green-500);
+
+	--color-text-primary: #f1ece7;
+	--color-text-default: #a6a58e;
+	--color-text-tertiary: #b0ab96;
+
+	--brand-gradient-bg: linear-gradient(0deg, rgba(14, 35, 19, 0.2) 0%, rgb(143 130 65 / 0.1) 100%);
+	--brand-gradient-strong-bg: linear-gradient(270deg, #110f09 10%, #1f1d13 100%);
+	--brand-gradient-button: rgba(255, 255, 255, 0.08);
+	--brand-gradient-border: rgb(255 242 155 / 0.08);
+	--brand-gradient-fade-out-color: linear-gradient(to bottom, rgba(24, 30, 31, 0), #1e1c17 80%);
+
+	--color-gradient-button-bg: linear-gradient(180deg, #1b1b20 0%, #7e7757 100%);
+	[class*="outline-none"] {//输入框外框
+		border: 1px solid rgb(166 162 126 / 0.39);
+	}
+	[class*="router-link-exact-active"]{
+		background: #3e3e36;
+		border-radius: 100px;
+	}
+	[class*="custom-focus-indicator text-inherit outline-none"] {
+		border:none;
+	}
+	--color-brand-highlight: rgb(140 129 82 / 0.25);
 }

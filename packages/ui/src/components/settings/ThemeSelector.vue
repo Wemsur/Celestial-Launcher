@@ -40,6 +40,10 @@ const colorTheme = defineMessages({
 		id: 'settings.display.theme.retro',
 		defaultMessage: 'Retro',
 	},
+    elegant: {
+        id: 'settings.display.theme.elegant',
+        defaultMessage: 'Elegant',
+    },
 	preferredLight: {
 		id: 'settings.display.theme.preferred-light-theme',
 		defaultMessage: 'Preferred light theme',
@@ -117,6 +121,13 @@ function getPreviewClass(option: T): string {
 		&.retro-mode {
 			@extend .retro-mode;
 		}
+        &.elegant-mode {
+            @extend .elegant-mode;
+        }
+
+        &.antique-dark-mode {
+            @extend .elegant-mode;
+        }
 	}
 
 	.preview .example-card {

@@ -4496,6 +4496,12 @@
   "settings.display.theme.retro": {
     "defaultMessage": "复古"
   },
+  "settings.display.theme.elegant": {
+    "defaultMessage": "素雅"
+  },
+  "settings.display.theme.antique-dark": {
+    "defaultMessage": "古典黑"
+  },
   "settings.display.theme.system": {
     "defaultMessage": "跟随系统"
   },

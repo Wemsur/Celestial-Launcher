@@ -16,7 +16,7 @@ export const DEFAULT_FEATURE_FLAGS = {
 	show_instance_play_time: true,
 }
 
-export const THEME_OPTIONS = ['dark', 'light', 'oled', 'system'] as const
+export const THEME_OPTIONS = ['dark', 'light', 'oled', 'elegant', 'antique-dark', 'system'] as const
 
 export type FeatureFlag = keyof typeof DEFAULT_FEATURE_FLAGS
 export type FeatureFlags = Record<FeatureFlag, boolean>
