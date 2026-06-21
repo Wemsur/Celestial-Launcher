@@ -234,9 +234,9 @@ textarea {
 	}
 }
 
-/* 只保留始终存在的 class，去掉动态变化的 .disable-advanced-rendering */
+
 body.custom-bg-active .app-grid-layout {
-	background-color: color-mix(in srgb, var(--surface-3) 50%, transparent) !important; /* 你可以根据需要调整这个透明度 */
+	background-color: color-mix(in srgb, var(--surface-3) 50%, transparent) !important;
 	backdrop-filter: blur(7px) !important;
 }
 body.custom-bg-active .app-grid-navbar {
@@ -246,14 +246,10 @@ body.custom-bg-active .app-grid-statusbar {
 	background: none;
 }
 body.custom-bg-active .app-contents {
-	background-color: color-mix(in srgb, var(--surface-1) 60%, transparent) !important; /* 你可以根据需要调整这个透明度 */
+	background-color: color-mix(in srgb, var(--surface-1) 60%, transparent) !important;
 	outline: none;
 }
 
-body.custom-bg-active .smart-clickable .a {
-	background: none;
-	color: #ffffff;
-}
 
 .grid.card-shadow.rounded-xl {
 	transition-duration: 0.1s;
@@ -262,11 +258,17 @@ body.custom-bg-active .smart-clickable .a {
 body.custom-bg-active .grid.card-shadow.rounded-xl {
 	background-color: color-mix(in srgb, var(--surface-3) 30%, transparent);
 	backdrop-filter: blur(10px) !important;
+	border: 1px solid color-mix(in srgb, var(--color-text-primary) 4%, transparent);
+	border-top: 1.4px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+	border-left: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
 }
 
 body.custom-bg-active .button-base.bg-bg-raised {
 	background-color: color-mix(in srgb, var(--surface-3) 30%, transparent);
 	backdrop-filter: blur(10px) !important;
+	border: 1px solid color-mix(in srgb, var(--color-text-primary) 4%, transparent);
+	border-top: 1.4px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+	border-left: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
 }
 
 body.custom-bg-active .relative.flex.w-fit.overflow-x-auto.rounded-full {
@@ -300,4 +302,12 @@ body.custom-bg-active [class~="bg-surface-1.5"] {
 body.custom-bg-active .sticky.top-0 {
 	background-color: color-mix(in srgb, var(--surface-1) 50%, transparent);
 	backdrop-filter: blur(20px) !important;
+}
+
+.flex.mt-1.mb-3.leading-none.items-center {
+	background: none;
+}
+
+body.custom-bg-active .modal-body.flex.flex-col.bg-bg-raised {
+	opacity: 0.7;
 }
