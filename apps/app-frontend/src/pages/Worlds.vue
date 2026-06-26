@@ -85,8 +85,8 @@ async function refreshFeaturedProjects() {
 await fetchInstances()
 await refreshFeaturedProjects()
 
-const unlistenProfile = await profile_listener(
-    async (e: { event: string; profile_path_id: string }) => {
+const unlistenInstance = await instance_listener(
+    async (e: { event: string; instance_id: string }) => {
         await fetchInstances()
 
         if (e.event === 'added' || e.event === 'created' || e.event === 'removed') {
@@ -96,7 +96,7 @@ const unlistenProfile = await profile_listener(
 )
 
 onUnmounted(() => {
-    unlistenProfile()
+    unlistenInstance()
 })
 </script>
 
@@ -105,6 +105,5 @@ onUnmounted(() => {
         <h1 v-if="recentInstances?.length > 0" class="m-0 text-2xl font-extrabold">Worlds</h1>
         <h1 v-else class="m-0 text-2xl font-extrabold">Create Instance first!</h1>
         <RecentWorldsList :recent-instances="recentInstances" />
-
     </div>
 </template>

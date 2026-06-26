@@ -11,8 +11,7 @@ use tauri::{Listener, Manager};
 use tauri_plugin_fs::FsExt;
 use theseus::prelude::*;
 use std::fs;
-use std::path::PathBuf;
-use base64::{Engine as _, engine::general_purpose}; // 需要在 Cargo.toml 引入 base64 库
+use base64::{Engine as _, engine::general_purpose};
 
 mod api;
 mod error;
@@ -151,19 +150,6 @@ async fn save_background_image(
         .to_str()
         .map(|s| s.to_string())
         .ok_or_else(|| "路径包含非 UTF-8 字符".to_string())
-}
-
-#[tauri::command]
-fn get_current_background_path(app_handle: tauri::AppHandle) -> Result<String, String> {
-    let mut path = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    path.push("custom_backgrounds");
-    path.push("current_background.jpg"); // 建议这里做个简单的文件存在性检查
-
-    if path.exists() {
-        Ok(path.to_str().unwrap().to_string())
-    } else {
-        Err("No background found".into())
-    }
 }
 
 #[tauri::command]
