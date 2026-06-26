@@ -7,10 +7,11 @@ export const DEFAULT_FEATURE_FLAGS = {
 	page_path: false,//false
 	worlds_tab: true,//false
 	worlds_in_home: true,
-	server_project_qa: false,//false
-	server_ram_as_bytes_always_on: false,//false
-	always_show_app_controls: false,//false
-	skip_unknown_pack_warning: false,//false
+	server_project_qa: false,
+	server_ram_as_bytes_always_on: false,
+	always_show_app_controls: false,
+	skip_non_essential_warnings: false,
+	skip_unknown_pack_warning: false,
 	pride_fundraiser: true,
 	i18n_debug: false,//false
 	show_instance_play_time: true,

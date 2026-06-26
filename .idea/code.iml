@@ -23,6 +23,8 @@
       <sourceFolder url="file://$MODULE_DIR$/packages/labrinth-derive/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/packages/sqlx-tracing/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/packages/sqlx-tracing/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/modrinth-content-management/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/modrinth-content-management/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
