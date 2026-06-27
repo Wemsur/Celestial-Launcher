@@ -44,6 +44,10 @@ const colorTheme = defineMessages({
         id: 'settings.display.theme.elegant',
         defaultMessage: 'Elegant',
     },
+	antiqueDark: {
+		id: 'settings.display.theme.antique-dark',
+		defaultMessage: 'AntiqueDark',
+	},
 	preferredLight: {
 		id: 'settings.display.theme.preferred-light-theme',
 		defaultMessage: 'Preferred light theme',

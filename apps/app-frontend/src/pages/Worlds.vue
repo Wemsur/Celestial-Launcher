@@ -32,10 +32,6 @@ const recentInstances = computed(() =>
         .sort((a, b) => dayjs(b.last_played).diff(dayjs(a.last_played))),
 )
 
-const hasFeaturedProjects = computed(
-    () => (featuredModpacks.value?.length ?? 0) + (featuredMods.value?.length ?? 0) > 0,
-)
-
 const offline = ref<boolean>(!navigator.onLine)
 window.addEventListener('offline', () => {
     offline.value = true

@@ -4646,7 +4646,7 @@
   "settings.display.theme.elegant": {
     "defaultMessage": "素雅"
   },
-  "settings.display.theme.antique-dark": {
+	"settings.display.theme.antique-dark": {
     "defaultMessage": "古典黑"
   },
   "settings.display.theme.system": {
@@ -5331,10 +5331,16 @@
     "defaultMessage": "背景图片"
   },
   "app.appearance-settings.background-image.description": {
-    "defaultMessage": "拖放或点击以选择图片"
+		"defaultMessage": "自定义 Modrinth App 的整体背景"
   },
   "app.appearance-settings.background-image.title": {
     "defaultMessage": "背景图片"
-  }
+  },
+	"app.appearance-settings.background-image.drop-active": {
+		"defaultMessage": "松手以应用..."
+	},
+	"app.appearance-settings.background-image.hint": {
+		"defaultMessage": "拖放或点击以选择图片"
+	}
 }
 

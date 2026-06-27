@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { defineMessages, useVIntl } from '@modrinth/ui'
-import { ref, computed, onUnmounted } from 'vue'
-import {process_dragged_background, getAssetUrl, get_background_url} from '@/helpers/background'
+import { computed, onUnmounted,ref } from 'vue'
+
+import {get_background_url, process_dragged_background} from '@/helpers/background'
 
 const { formatMessage } = useVIntl()
 
@@ -12,11 +13,15 @@ const messages = defineMessages({
     },
     bgSettingsDescription: {
         id: 'app.appearance-settings.background-image.description',
-        defaultMessage: 'Drag and drop an image or click to customize your app background.',
+        defaultMessage: 'Customize the overall background of the Modrinth App',
     },
     dropZoneActive: {
         id: 'app.appearance-settings.background-image.drop-active',
         defaultMessage: 'Drop image here...',
+    },
+	bgSettingsHint: {
+        id: 'app.appearance-settings.background-image.hint',
+        defaultMessage: 'Drag and drop an image or click to customize your app background.',
     },
 })
 
@@ -135,7 +140,7 @@ onUnmounted(() => {
         />
 
         <div
-            class="relative flex h-36 w-full items-center justify-center overflow-hidden rounded-lg border-2 border-dashed p-4 text-center transition-all duration-200 cursor-pointer"
+            class="relative flex h-36 w-full items-center justify-center overflow-hidden rounded-[20px] border border-dashed transition-[background,border-color,box-shadow] duration-200 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand border-surface-5 bg-surface-2 hover:bg-surface-3 aspect-[31/40] box-border"
             :class="[
 				isHighlighted
 					? 'border-brand-500 bg-black/40 text-brand-400'
@@ -153,20 +158,89 @@ onUnmounted(() => {
 
             <div class="relative z-10 flex flex-col items-center gap-1 select-none">
                 <p class="m-0 text-sm font-medium">
-					<span v-if="isHighlighted">
+					<span v-if="isHighlighted" class="font-semibold">
 						{{ formatMessage(messages.dropZoneActive) }}
 					</span>
-                    <span v-else-if="previewUrl" class="text-brand-400">
+                    <span v-else-if="previewUrl" class="text-primary">
 						已载入临时预览：点击或拖拽可更换新背景
 					</span>
-                    <span v-else>
-						{{ formatMessage(messages.bgSettingsDescription) }}
+                    <span v-else class="text-base font-semibold leading-6">
+						{{ formatMessage(messages.bgSettingsHint) }}
 					</span>
                 </p>
                 <p class="m-0 text-xs text-neutral-500">
                     Supports JPG, PNG, WEBP
                 </p>
             </div>
+
+<!--			<template #button="{ open }">
+					<DropdownIcon
+						class="size-6 shrink-0 text-primary transition-transform duration-300"
+						:class="{ 'rotate-180': open }"
+					/>
+					<span class="min-w-0 text-xl font-semibold leading-7 text-primary">
+						{{ section.title }}
+					</span>
+					<Tooltip
+						v-if="section.infoTooltip"
+						theme="dismissable-prompt"
+						placement="top"
+						:triggers="['hover', 'focus']"
+					>
+						<span
+							class="inline-flex size-6 shrink-0 items-center justify-center text-secondary transition-colors group-hover:text-primary"
+							@click.stop
+						>
+							<UnknownIcon class="size-5" />
+						</span>
+						<template #popper>
+							<p class="m-0 max-w-96 text-wrap text-sm font-medium leading-tight">
+								{{ section.infoTooltip }}
+							</p>
+						</template>
+					</Tooltip>
+				</template>
+
+				<Draggable
+					v-if="section.kind === 'saved'"
+					:list="draggableSavedSkins"
+					class="grid w-full grid-cols-3 gap-3 min-[1300px]:grid-cols-4 min-[1750px]:grid-cols-5 min-[2050px]:grid-cols-6"
+					:item-key="savedSkinKey"
+					:disabled="readOnly || !canReorderSavedSkins"
+					:animation="250"
+					:swap-threshold="1"
+					:invert-swap="false"
+					:force-fallback="true"
+					:fallback-on-body="true"
+					:fallback-tolerance="4"
+					ghost-class="skin-reorder-ghost"
+					chosen-class="skin-reorder-chosen"
+					drag-class="skin-reorder-drag"
+					fallback-class="skin-reorder-fallback"
+					@start="onSavedSkinDragStart"
+					@end="onSavedSkinDragEnd"
+				>
+					<template #header>
+						<SkinLikeTextButton
+							ref="addSkinButton"
+							class="aspect-[31/40] w-full min-w-0 box-border rounded-[20px]"
+							dropzone
+							:disabled="readOnly"
+							:drag-active="!readOnly && isAddSkinButtonDragActive"
+							@click="emit('add-skin')"
+							@dragenter="emit('add-skin-dragenter', $event)"
+							@dragover="emit('add-skin-dragover', $event)"
+							@dragleave="emit('add-skin-dragleave', $event)"
+							@drop="emit('add-skin-drop', $event)"
+						>
+							<template #icon>
+								<PlusIcon class="size-8" />
+							</template>
+							{{ formatMessage(messages.addSkinButton) }}
+							<template #subtitle>{{ formatMessage(messages.dragAndDropSubtitle) }}</template>
+						</SkinLikeTextButton>
+					</template>-->
+
         </div>
     </div>
 </template>
