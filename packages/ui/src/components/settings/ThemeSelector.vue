@@ -44,8 +44,8 @@ const colorTheme = defineMessages({
         id: 'settings.display.theme.elegant',
         defaultMessage: 'Elegant',
     },
-	antiqueDark: {
-		id: 'settings.display.theme.antique-dark',
+	antiquedark: {
+		id: 'settings.display.theme.antiquedark',
 		defaultMessage: 'AntiqueDark',
 	},
 	preferredLight: {
@@ -129,7 +129,7 @@ function getPreviewClass(option: T): string {
             @extend .elegant-mode;
         }
 
-        &.antique-dark-mode {
+        &.antiquedark-mode {
             @extend .elegant-mode;
         }
 	}
