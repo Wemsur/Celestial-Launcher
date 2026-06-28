@@ -1,0 +1,2 @@
+cargo tauri build
+pause

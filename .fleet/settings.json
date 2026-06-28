@@ -1,0 +1,8 @@
+{
+	"plugins": [
+		{
+			"type": "add",
+			"pluginName": "com.mallowigi.material.fleet"
+		}
+	]
+}

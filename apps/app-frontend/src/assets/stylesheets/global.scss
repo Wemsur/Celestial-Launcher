@@ -234,28 +234,64 @@ textarea {
 	}
 }
 
+body.custom-bg-active.custom-bgblur .app-grid-layout {
+    background: none !important;
+}
+body.custom-bg-active:not(.custom-bgblur) .app-grid-layout {
+    background: none !important;
+}
 
-body.custom-bg-active .app-grid-layout {
-	background-color: color-mix(in srgb, var(--surface-3) 50%, transparent) !important;
-	backdrop-filter: blur(7px) !important;
+/* 1. 父级网格骨架：变成“幽灵外壳” */
+.app-grid-layout {
+    z-index: 10;
+    /* 核心修正：让整个网格线和它的空白区域对鼠标完全透明！
+       这样鼠标就能穿透那些所谓的“隐形盖子”，直接点进处于 z-index: 0 的主卡片里！ */
+    pointer-events: none !important;
 }
-body.custom-bg-active .app-grid-navbar {
-	background: none;
-}
+
+/* 2. 顶栏与状态栏：重新捕获鼠标 */
+body.custom-bg-active .app-grid-navbar,
 body.custom-bg-active .app-grid-statusbar {
-	background: none;
+    background: transparent !important;
+    position: relative;
+    z-index: 10;
+
+    /* 核心修正：虽然父级让出了点击权，但侧栏和顶栏自身的图标、按钮可不能漏过去。
+       必须强行恢复它们自身的鼠标捕获能力，确保 Worlds 切换、拖拽区域、窗口关闭按钮完美可点！ */
+    pointer-events: auto !important;
 }
+
+/* 3. 主内容卡片：维持在底层喷射阴影，且恢复交互 */
 body.custom-bg-active .app-contents {
-	background-color: color-mix(in srgb, var(--surface-1) 60%, transparent) !important;
-	outline: none;
+    background-color: color-mix(in srgb, var(--surface-1) 30%, transparent);
+    outline: none;
+    z-index: 0;
+
+    /* 确保它在底层依然能够承接被上层“幽灵外壳”漏下来的点击事件 */
+    pointer-events: auto !important;
+
+    box-shadow:
+        0 0 0 250px color-mix(in srgb, var(--surface-3) 50%, transparent); /* 逆向外围遮罩 */
 }
 
-
+/* 4. 你的模糊图片逻辑完全保持原样，无需任何改动 */
+body.custom-bg-active.custom-bgblur .custom-user-bg-img {
+	filter: blur(5px) !important;
+	-webkit-filter: blur(5px) !important;
+	transform: scale(1.03) !important;
+	transform-origin: center center !important;
+	backface-visibility: hidden;
+	will-change: filter, transform;
+}
+body.custom-bg-active:not(.custom-bgblur) .custom-user-bg-img {
+	filter: none !important;
+	transform: scale(1) !important;
+}
 .grid.card-shadow.rounded-xl {
 	transition-duration: 0.1s;
 }
 
-body.custom-bg-active .grid.card-shadow.rounded-xl {
+body.custom-bg-active.custom-bgblur .grid.card-shadow.rounded-xl {
 	background-color: color-mix(in srgb, var(--surface-3) 30%, transparent);
 	backdrop-filter: blur(10px) !important;
 	border: 1px solid color-mix(in srgb, var(--color-text-primary) 4%, transparent);
@@ -263,7 +299,14 @@ body.custom-bg-active .grid.card-shadow.rounded-xl {
 	border-left: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
 }
 
-body.custom-bg-active .button-base.bg-bg-raised {
+body.custom-bg-active:not(.custom-bgblur) .grid.card-shadow.rounded-xl {
+	background-color: color-mix(in srgb, var(--surface-3) 30%, transparent);
+	border: 1px solid color-mix(in srgb, var(--color-text-primary) 4%, transparent);
+	border-top: 1.4px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+	border-left: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+}
+
+body.custom-bg-active.custom-bgblur .button-base.bg-bg-raised {
 	background-color: color-mix(in srgb, var(--surface-3) 30%, transparent);
 	backdrop-filter: blur(10px) !important;
 	border: 1px solid color-mix(in srgb, var(--color-text-primary) 4%, transparent);
@@ -271,9 +314,21 @@ body.custom-bg-active .button-base.bg-bg-raised {
 	border-left: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
 }
 
-body.custom-bg-active .relative.flex.w-fit.overflow-x-auto.rounded-full {
+body.custom-bg-active:not(.custom-bgblur) .button-base.bg-bg-raised {
+	background-color: color-mix(in srgb, var(--surface-3) 30%, transparent);
+	border: 1px solid color-mix(in srgb, var(--color-text-primary) 4%, transparent);
+	border-top: 1.4px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+	border-left: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+}
+
+body.custom-bg-active.custom-bgblur .relative.flex.w-fit.overflow-x-auto.rounded-full {
 	background-color: color-mix(in srgb, var(--surface-3) 30%, transparent);
 	backdrop-filter: blur(10px) !important;
+	border: none;
+}
+body.custom-bg-active:not(.custom-bgblur) .relative.flex.w-fit.overflow-x-auto.rounded-full {
+	background-color: color-mix(in srgb, var(--surface-3) 30%, transparent);
+	border-color: color-mix(in srgb, var(--surface-4) 20%, transparent);
 }
 
 body.custom-bg-active .w-full.touch-manipulation.text-primary {
@@ -299,9 +354,12 @@ body.custom-bg-active [class~="bg-surface-1.5"] {
 	background-color: color-mix(in srgb, var(--surface-1-5) 70%, transparent);
 }
 
-body.custom-bg-active .sticky.top-0 {
+body.custom-bg-active.custom-bgblur .sticky.top-0 {
 	background-color: color-mix(in srgb, var(--surface-1) 50%, transparent);
 	backdrop-filter: blur(20px) !important;
+}
+body.custom-bg-active:not(.custom-bgblur) .sticky.top-0 {
+	background-color: color-mix(in srgb, var(--surface-1) 50%, transparent);
 }
 
 .flex.mt-1.mb-3.leading-none.items-center {
@@ -310,4 +368,43 @@ body.custom-bg-active .sticky.top-0 {
 
 body.custom-bg-active .modal-body.flex.flex-col.bg-bg-raised {
 	opacity: 0.7;
+}
+
+body.custom-bg-active .selected{
+	background-color: color-mix(in srgb, var(--surface-4) 50%, transparent) !important;
+}
+
+body.custom-bg-active.custom-bgblur {
+    [class*="app-sidebar"] {
+        backdrop-filter: blur(3px) !important;
+        -webkit-backdrop-filter: blur(3px) !important;
+		background-color: color-mix(in srgb, var(--surface-4) 14%, transparent) !important;
+    }
+}
+body.custom-bg-active:not(.custom-bgblur) {
+    [class*="app-sidebar"] {
+        backdrop-filter: blur(3px) !important;
+        -webkit-backdrop-filter: blur(3px) !important;
+		background-color: color-mix(in srgb, var(--surface-4) 14%, transparent) !important;
+    }
+}
+
+body.custom-bg-active .relative.flex.min-h-5 {
+	opacity: 0.7;
+}
+.bg-surface-4.border.border-solid.border-surface-5.shadow-2xl {
+	opacity: 0.9;
+}
+
+body.custom-bg-active .card,
+body.custom-bg-active .relative.min-h-0.flex-1.overflow-hidden {
+	opacity: 0.8;
+}
+
+body.custom-bg-active .v-popper--has-tooltip {
+	opacity: 0.8 !important;
+}
+
+.router-link-active.router-link-exact-active.shrink-0.whitespace-nowrap.text-primary {
+	background: none;
 }

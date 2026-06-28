@@ -344,7 +344,7 @@ onMounted(async () => {
         bgImg.style.objectFit = 'cover'; // 等同于 background-size: cover
         bgImg.style.zIndex = '-9999';    // 强制把这个图片推到最底层
         bgImg.style.pointerEvents = 'none'; // 防止遮挡点击操作
-
+		bgImg.classList.add('custom-user-bg-img');
         // 3. 把它加到 body 的最前面
         document.body.prepend(bgImg);
         document.body.classList.add('custom-bg-active');
@@ -354,6 +354,7 @@ onMounted(async () => {
         // 关键改动：把 e 打印出来，这是解决问题的唯一线索
         console.error("Invoke 调用失败，错误原因:", e);
     }
+	themeStore.loadCustomSettings()
 	checkUpdates()
 })
 
@@ -398,6 +399,7 @@ async function setupApp() {
 		collapsed_navigation,
 		hide_nametag_skins_page,
 		advanced_rendering,
+		custom_bgblur,
 		onboarded,
 		default_page,
 		toggle_sidebar,
@@ -431,6 +433,7 @@ async function setupApp() {
 	themeStore.setThemeState(theme)
 	themeStore.collapsedNavigation = collapsed_navigation
 	themeStore.advancedRendering = advanced_rendering
+	themeStore.customBgBlur = custom_bgblur
 	themeStore.hideNametagSkinsPage = hide_nametag_skins_page
 	themeStore.toggleSidebar = toggle_sidebar
 	themeStore.devMode = developer_mode

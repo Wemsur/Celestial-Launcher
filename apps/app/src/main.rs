@@ -152,6 +152,49 @@ async fn save_background_image(
         .ok_or_else(|| "路径包含非 UTF-8 字符".to_string())
 }
 
+
+// 1. 保存开关状态到文件
+#[tauri::command(rename_all = "camelCase")]
+async fn save_bg_blur_status(app_handle: tauri::AppHandle, is_active: bool) -> Result<(), String> {
+    let mut target_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
+
+    target_dir.push("custom_backgrounds");
+    if !target_dir.exists() {
+        let _ = fs::create_dir_all(&target_dir);
+    }
+
+    target_dir.push("blur_status.txt");
+    fs::write(&target_dir, String::from(if is_active { "true" } else { "false" }))
+        .map_err(|e| format!("写入模糊状态失败: {}", e))?;
+
+    println!("[Rust Backend] 模糊开关状态已成功保存: {}", is_active);
+    Ok(())
+}
+
+// 2. 读取开关状态
+#[tauri::command]
+async fn load_bg_blur_status(app_handle: tauri::AppHandle) -> Result<bool, String> {
+    let mut target_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
+
+    target_dir.push("custom_backgrounds");
+    target_dir.push("blur_status.txt");
+
+    if !target_dir.exists() {
+        return Ok(true); // 文件不存在（首次运行），默认开启
+    }
+
+    let content = fs::read_to_string(&target_dir)
+        .map_err(|e| format!("读取模糊状态失败: {}", e))?;
+
+    Ok(content.trim() == "true")
+}
+
 #[tauri::command]
 async fn get_background_as_base64(app_handle: tauri::AppHandle) -> Result<String, String> {
     let mut path = app_handle
@@ -348,6 +391,8 @@ fn main() {
             save_background_image,
             get_background_as_base64,
             delete_background,
+            save_bg_blur_status,
+            load_bg_blur_status
         ]);
 
     tracing::info!("Initializing app...");

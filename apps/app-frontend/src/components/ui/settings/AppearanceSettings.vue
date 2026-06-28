@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import {ButtonStyled, Combobox, defineMessages, ThemeSelector, Toggle, useVIntl} from '@modrinth/ui'
+import {
+ButtonStyled, Combobox, defineMessages, ThemeSelector, Toggle, useVIntl
+} from '@modrinth/ui'
 import { ref, watch } from 'vue'
 
 import { get, set } from '@/helpers/settings.ts'
@@ -18,7 +20,7 @@ const skipNonEssentialWarningsFlag: FeatureFlag = 'skip_non_essential_warnings'
 const skipUnknownPackWarningFlag: FeatureFlag = 'skip_unknown_pack_warning'
 const showPlayTimeFlag: FeatureFlag = 'show_instance_play_time'
 
-const delete_background = async () => {
+const delete_background = async() => {
     try {
         // 调用 Rust 后端删除文件
         await invoke('delete_background');
@@ -69,6 +71,15 @@ const messages = defineMessages({
 		id: 'app.appearance-settings.advanced-rendering.description',
 		defaultMessage:
 			'Enables advanced rendering such as blur effects that may cause performance issues without hardware-accelerated rendering.',
+	},
+	blurBackgroundTitle: {
+		id: 'app.appearance-settings.blur-background.title',
+		defaultMessage: 'BackgroundBlur',
+	},
+	blurBackgroundDescription: {
+		id: 'app.appearance-settings.blur-background.description',
+		defaultMessage:
+			'Enables background blur when customizing background images.',
 	},
 	hideNametagTitle: {
 		id: 'app.appearance-settings.hide-nametag.title',
@@ -167,7 +178,7 @@ const settings = ref(await get())
 
 watch(
 	settings,
-	async () => {
+	async() => {
 		await set(settings.value)
 	},
 	{ deep: true },
@@ -192,9 +203,31 @@ watch(
 	/>
     <BackgroundImageSettings/>
     <button id="purge-cache" class="btn min-w-max m-2" @click="delete_background">
-        <TrashIcon />
+        <TrashIcon/>
         清除已选择的背景
     </button>
+
+	<div class="mt-6 flex items-center justify-between">
+		<div>
+			<h2 class="m-0 text-lg font-semibold text-contrast">
+				{{ formatMessage(messages.blurBackgroundTitle) }}
+			</h2>
+			<p class="m-0 mt-1">
+				{{ formatMessage(messages.blurBackgroundDescription) }}
+			</p>
+		</div>
+		<Toggle
+			id="custom-bg-blur"
+			:model-value="themeStore.customBgBlur"
+			@update:model-value="
+			(e) => {
+				// 只做一件事：把最新的布尔值状态传给 action
+				// 里面会自动帮你修改 customBgBlur、设置 class 并通过 invoke 告诉 Rust
+				themeStore.toggleBgBlur(!!e)
+			}
+			"
+		/>
+	</div>
 
 	<div class="mt-6 flex items-center justify-between">
 		<div>
@@ -224,7 +257,7 @@ watch(
 			</h2>
 			<p class="m-0 mt-1">{{ formatMessage(messages.nativeDecorationsDescription) }}</p>
 		</div>
-		<Toggle id="native-decorations" v-model="settings.native_decorations" />
+		<Toggle id="native-decorations" v-model="settings.native_decorations"/>
 	</div>
 
 	<div class="mt-6 flex items-center justify-between">
@@ -234,7 +267,7 @@ watch(
 			</h2>
 			<p class="m-0 mt-1">{{ formatMessage(messages.minimizeLauncherDescription) }}</p>
 		</div>
-		<Toggle id="minimize-launcher" v-model="settings.hide_on_process_start" />
+		<Toggle id="minimize-launcher" v-model="settings.hide_on_process_start"/>
 	</div>
 
 	<div class="mt-6 flex items-center justify-between">

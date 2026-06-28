@@ -4373,6 +4373,12 @@
   "settings.display.project-list.layouts.collection": {
     "message": "收藏"
   },
+	"settings.display.sidebar.blur-background.description": {
+		"message": "在自定义背景图片时启用背景模糊。"
+	},
+	"settings.display.sidebar.blur-background.title": {
+		"message": "背景模糊"
+	},
   "settings.display.sidebar.advanced-rendering.description": {
     "message": "启用模糊效果等高级渲染。可能会在没有硬件加速渲染的情况下造成性能问题。"
   },

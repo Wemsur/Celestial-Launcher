@@ -1,0 +1,21 @@
+{
+	"configurations": [
+		{
+			"type": "cargo",
+			"name": "Build Release",
+			"cargoArgs": [
+				"tauri",
+				"build"
+			]
+		},
+		{
+			"type": "command",
+			"name": "pnpm app:dev",
+			"program": "pnpm",
+			"args": [
+				"run",
+				"app:dev"
+			]
+		}
+	]
+}

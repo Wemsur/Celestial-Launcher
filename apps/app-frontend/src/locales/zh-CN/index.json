@@ -44,6 +44,12 @@
   "app.action-bar.view-logs": {
     "message": "查看日志"
   },
+	"app.appearance-settings.blur-background.description": {
+		"message": "在自定义背景图片时启用背景模糊。"
+	},
+	"app.appearance-settings.blur-background.title": {
+		"message": "背景模糊"
+	},
   "app.appearance-settings.advanced-rendering.description": {
     "message": "启用模糊效果等高级渲染。可能会在没有硬件加速渲染的情况下造成性能问题。"
   },

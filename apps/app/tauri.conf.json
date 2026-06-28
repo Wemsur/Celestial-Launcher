@@ -106,7 +106,9 @@
 					"$APPDATA/ModrinthApp/custom_backgrounds/*",
 					"$APPDATA/profiles/*/saves/*/icon.png",
 					"$APPCONFIG/profiles/*/saves/*/icon.png",
-					"$CONFIG/profiles/*/saves/*/icon.png"
+					"$CONFIG/profiles/*/saves/*/icon.png",
+					"$APPDATA/custom_bg_settings.txt",
+					"$APPDATA/*"
 				],
 				"enable": true
 			},

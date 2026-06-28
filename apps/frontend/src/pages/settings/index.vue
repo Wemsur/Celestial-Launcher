@@ -324,6 +324,15 @@ const toggleFeatures = defineMessages({
 		defaultMessage:
 			'Enables advanced rendering such as blur effects that may cause performance issues without hardware-accelerated rendering.',
 	},
+	blurBackgroundTitle: {
+		id: 'settings.display.sidebar.blur-background.title',
+		defaultMessage: 'Advanced rendering',
+	},
+	blurBackgroundDescription: {
+		id: 'settings.display.sidebar.blur-background.description',
+		defaultMessage:
+			'Enables advanced rendering such as blur effects that may cause performance issues without hardware-accelerated rendering.',
+	},
 	externalLinksNewTabTitle: {
 		id: 'settings.display.sidebar.external-links-new-tab.title',
 		defaultMessage: 'Open external links in new tab',
