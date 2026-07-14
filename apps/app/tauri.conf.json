@@ -94,7 +94,8 @@
 				"visible": false,
 				"zoomHotkeysEnabled": false,
 				"decorations": false,
-				"dragDropEnabled": false
+				"dragDropEnabled": false,
+				"transparent": true
 			}
 		],
 		"security": {

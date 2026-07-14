@@ -42,7 +42,6 @@
 
 :root {
 	font-family: var(--font-standard, sans-serif), sans-serif;
-	color-scheme: dark;
 	--view-width: calc(100% - 5rem);
 	--expanded-view-width: calc(100% - 13rem);
 	--medal-promotion-bg: #000;
@@ -241,12 +240,12 @@ body.custom-bg-active:not(.custom-bgblur) .app-grid-layout {
     background: none !important;
 }
 
-/* 1. 父级网格骨架：变成“幽灵外壳” */
-.app-grid-layout {
-    z-index: 10;
-    /* 核心修正：让整个网格线和它的空白区域对鼠标完全透明！
+/* 1. 父级网格骨架：变成“幽灵外壳” (修复：加上 body.custom-bg-active 限制) */
+body.custom-bg-active .app-grid-layout {
+	z-index: 10;
+	/* 核心修正：让整个网格线和它的空白区域对鼠标完全透明！
        这样鼠标就能穿透那些所谓的“隐形盖子”，直接点进处于 z-index: 0 的主卡片里！ */
-    pointer-events: none !important;
+	pointer-events: none !important;
 }
 
 /* 2. 顶栏与状态栏：重新捕获鼠标 */
@@ -266,7 +265,6 @@ body.custom-bg-active .app-contents {
     background-color: color-mix(in srgb, var(--surface-1) 30%, transparent);
     outline: none;
     z-index: 0;
-
     /* 确保它在底层依然能够承接被上层“幽灵外壳”漏下来的点击事件 */
     pointer-events: auto !important;
 

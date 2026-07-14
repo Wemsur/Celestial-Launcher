@@ -116,7 +116,7 @@ async fn save_background_image(
     background_blob: Vec<u8>,
     file_name: String,
 ) -> Result<String, String> {
-    // 1. 获取应用专属的本地数据存储目录 (例如 Windows 下的 AppData/Roaming/ theseus_gui)
+    // 1. 获取应用专属的本地数据存储目录
     let mut target_dir = app_handle
         .path()
         .app_data_dir()
@@ -128,9 +128,22 @@ async fn save_background_image(
         fs::create_dir_all(&target_dir)
             .map_err(|e| format!("创建背景图存储文件夹失败: {}", e))?;
     }
-
-    // 3. 提取文件后缀，固定命名或保留原名。这里为了防止命名冲突导致覆盖，可以使用固定名称
-    // 或者你可以直接用传入的 file_name
+    // --- 新增逻辑：在保存新背景前，清理所有旧格式的背景图片 ---
+    // 注意：只删除背景图片，保留同目录下的 blur_status.txt 等其他配置文件
+    if let Ok(entries) = fs::read_dir(&target_dir) {
+        for entry in entries.flatten() {
+            if let Ok(file_type) = entry.file_type() {
+                if file_type.is_file() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        if name.starts_with("current_background.") {
+                            let _ = fs::remove_file(entry.path());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // 3. 提取文件后缀
     let extension = std::path::Path::new(&file_name)
         .extension()
         .and_then(|ext| ext.to_str())
@@ -139,13 +152,13 @@ async fn save_background_image(
     let final_file_name = format!("current_background.{}", extension);
     target_dir.push(final_file_name);
 
-    // 4. 将前端传过来的二进制字节流写入磁盘
+    // 4. 写入磁盘
     fs::write(&target_dir, background_blob)
         .map_err(|e| format!("写入图片文件流失败: {}", e))?;
 
     println!("[Rust Backend] 成功持久化背景图至: {:?}", target_dir);
 
-    // 5. 返回保存成功的绝对路径字符串供前端记录或备用
+    // 5. 返回路径
     target_dir
         .to_str()
         .map(|s| s.to_string())
@@ -203,34 +216,75 @@ async fn get_background_as_base64(app_handle: tauri::AppHandle) -> Result<String
         .map_err(|e| e.to_string())?;
 
     path.push("custom_backgrounds");
-    path.push("current_background.jpg"); // 优先找 jpg
 
     if !path.exists() {
-        // 如果 jpg 不存在，尝试 png
-        path.set_extension("png");
-        if !path.exists() {
-            return Err("Background file not found".into());
+        return Err("Background folder not found".into());
+    }
+
+    // 自动寻找当前存在的任意后缀背景
+    let mut found_path = None;
+    let mut mime_type = String::from("jpeg"); // 默认回退值
+
+    if let Ok(entries) = std::fs::read_dir(&path) {
+        for entry in entries.flatten() {
+            if let Ok(file_type) = entry.file_type() {
+                if file_type.is_file() {
+                    if let Some(file_name) = entry.file_name().to_str() {
+                        if file_name.starts_with("current_background.") {
+                            found_path = Some(entry.path());
+                            // 提取后缀并构建合法的 MIME-Type
+                            if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
+                                mime_type = if ext == "jpg" { "jpeg".to_string() } else { ext.to_string() };
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
         }
     }
 
+    let bg_path = found_path.ok_or_else(|| "Background file not found".to_string())?;
+
     // 读取文件并转为 Base64
-    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let bytes = std::fs::read(bg_path).map_err(|e| e.to_string())?;
     let base64_str = general_purpose::STANDARD.encode(bytes);
 
-    Ok(format!("data:image/jpeg;base64,{}", base64_str))
+    // 动态返回正确的 mime type（如 image/png，image/webp）
+    Ok(format!("data:image/{};base64,{}", mime_type, base64_str))
 }
 
 #[tauri::command]
 fn delete_background(app_handle: tauri::AppHandle) -> Result<(), String> {
     let mut path = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
     path.push("custom_backgrounds");
-    path.push("current_background.jpg");
 
     if path.exists() {
-        fs::remove_file(path).map_err(|e| e.to_string())?;
-        Ok(())
+        let mut deleted = false;
+        // 遍历并删除以 current_background. 开头的文件
+        if let Ok(entries) = fs::read_dir(&path) {
+            for entry in entries.flatten() {
+                if let Ok(file_type) = entry.file_type() {
+                    if file_type.is_file() {
+                        if let Some(file_name) = entry.file_name().to_str() {
+                            if file_name.starts_with("current_background.") {
+                                if fs::remove_file(entry.path()).is_ok() {
+                                    deleted = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if deleted {
+            Ok(())
+        } else {
+            Err("背景文件不存在".to_string())
+        }
     } else {
-        Err("背景文件不存在".to_string())
+        Err("背景文件夹不存在".to_string())
     }
 }
 

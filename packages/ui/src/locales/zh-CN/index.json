@@ -4913,6 +4913,12 @@
   "settings.display.theme.oled": {
     "defaultMessage": "OLED"
   },
+  "settings.display.theme.elegant": {
+    "defaultMessage": "素雅"
+  },
+  "settings.display.theme.antiquedark": {
+    "defaultMessage": "古典黑"
+  },
   "settings.display.theme.preferred-dark-theme": {
     "defaultMessage": "首选深色主题"
   },
