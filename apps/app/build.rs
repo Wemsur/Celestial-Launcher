@@ -12,13 +12,14 @@ fn main() {
                 "auth",
                 InlinedPlugin::new()
                     .commands(&[
-                        "check_reachable",
-                        "login",
-                        "remove_user",
-                        "get_default_user",
-                        "set_default_user",
-                        "get_users",
-                    ])
+                       "check_reachable",
+                       "login",
+                       "remove_user",
+                       "get_default_user",
+                       "set_default_user",
+                       "get_users",
+                       "create_offline_user",
+                   ])
                     .default_permission(
                         DefaultPermissionRule::AllowAllCommands,
                     ),

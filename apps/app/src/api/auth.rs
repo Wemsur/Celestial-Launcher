@@ -13,6 +13,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             get_default_user,
             set_default_user,
             get_users,
+            create_offline_user,
         ])
         .build()
 }
@@ -102,4 +103,9 @@ pub async fn set_default_user(user: uuid::Uuid) -> Result<()> {
 #[tauri::command]
 pub async fn get_users() -> Result<Vec<Credentials>> {
     Ok(minecraft_auth::users().await?)
+}
+
+#[tauri::command]
+pub async fn create_offline_user(username: String) -> Result<Credentials> {
+    Ok(minecraft_auth::create_offline_user(&username).await?)
 }

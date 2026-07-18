@@ -295,6 +295,38 @@ impl Credentials {
         Ok(())
     }
 
+    /// 创建一个离线 Minecraft 账户凭证
+    pub async fn create_offline(username: &str) -> crate::Result<Self> {
+        // 1. 校验用户名格式
+        let username = username.trim();
+        let username_regex = regex::Regex::new(r"^[A-Za-z0-9_]{3,16}$")
+            .map_err(|e| {
+                crate::ErrorKind::OtherError(format!("Invalid username regex: {e}"))
+            })?;
+
+        if !username_regex.is_match(username) {
+            return Err(crate::ErrorKind::OtherError(
+                "Offline username must be 3-16 characters long and contain only letters, numbers, or '_'"
+                    .to_string(),
+            ).into());
+        }
+
+        // 2. 构造 Credentials 对象
+        Ok(Self {
+            offline_profile: MinecraftProfile {
+                id: uuid::Uuid::new_v4(),       // 随机 UUID
+                name: username.to_string(),      // 用户输入的名字
+                skins: vec![],                   // 离线用户没有皮肤
+                capes: vec![],                   // 离线用户没有披风
+                fetch_time: None,
+            },
+            access_token: "OFFLINE".to_string(), // 标记为离线
+            refresh_token: String::new(),        // 无需刷新
+            expires: Utc::now() + Duration::days(365 * 20), // 20年后过期
+            active: true,                         // 自动设为活跃账户
+        })
+    }
+
     /// Returns online profile data when the cached copy is still recent enough.
     #[tracing::instrument(skip(self))]
     pub async fn online_profile(&self) -> Option<Arc<MinecraftProfile>> {

@@ -440,6 +440,9 @@
   "app.settings.tabs.java-installations": {
     "message": "Java 管理"
   },
+  "app.settings.tabs.accounts-manage": {
+    "message": "账户管理"
+  },
   "app.settings.tabs.language": {
     "message": "语言"
   },

@@ -88,3 +88,16 @@ pub async fn users() -> crate::Result<Vec<Credentials>> {
     let users = Credentials::get_all(&state.pool).await?;
     Ok(users.into_iter().map(|x| x.1).collect())
 }
+
+#[tracing::instrument]
+pub async fn create_offline_user(username: &str) -> crate::Result<Credentials> {
+    let state = State::get().await?;
+
+    // 1. 调用 Credentials 上的静态方法
+    let credentials = Credentials::create_offline(username).await?;
+
+    // 2. 存入数据库
+    credentials.upsert(&state.pool).await?;
+
+    Ok(credentials)
+}

@@ -64,3 +64,16 @@ export async function remove_user(user) {
 export async function users() {
 	return await invoke('plugin:auth|get_users')
 }
+
+/**
+ * 创建离线 Minecraft 账户
+ * @param {string} username - 用户名（3-16个字符，仅字母数字和下划线）
+ * @returns {Promise<Object>} 创建的凭证对象
+ */
+export async function create_offline_user(username) {
+	return await invoke('plugin:auth|create_offline_user', { username })
+}
+// 正版登录
+export async function minecraft_login() {
+	return await invoke('plugin:auth|login')
+}

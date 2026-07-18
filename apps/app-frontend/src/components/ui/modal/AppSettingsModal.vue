@@ -27,6 +27,7 @@ import AppearanceSettings from '@/components/ui/settings/AppearanceSettings.vue'
 import DefaultInstanceSettings from '@/components/ui/settings/DefaultInstanceSettings.vue'
 import FeatureFlagSettings from '@/components/ui/settings/FeatureFlagSettings.vue'
 import JavaSettings from '@/components/ui/settings/JavaSettings.vue'
+import AccountsSettings from '@/components/ui/settings/AccountsSettings.vue'
 import LanguageSettings from '@/components/ui/settings/LanguageSettings.vue'
 import PrivacySettings from '@/components/ui/settings/PrivacySettings.vue'
 import ResourceManagementSettings from '@/components/ui/settings/ResourceManagementSettings.vue'
@@ -79,6 +80,14 @@ const tabs = [
 		icon: CoffeeIcon,
 		content: JavaSettings,
 	},
+    {
+        name: defineMessage({
+            id: 'app.settings.tabs.accounts-manage',
+            defaultMessage: 'Accounts manager',
+        }),
+        icon: CoffeeIcon,
+        content: AccountsSettings,
+    },
 	{
 		name: defineMessage({
 			id: 'app.settings.tabs.default-instance-options',
@@ -150,7 +159,7 @@ const messages = defineMessages({
 	<TabbedModal ref="modal" :tabs="tabs.filter((t) => !t.developerOnly || themeStore.devMode)">
 		<template #title>
 			<span class="flex items-center gap-2 text-lg font-extrabold text-contrast">
-				<SettingsIcon /> Settings
+				<SettingsIcon /> 设置
 			</span>
 		</template>
 		<template #footer>
@@ -178,7 +187,7 @@ const messages = defineMessages({
 						<ModrinthIcon class="w-6 h-6" />
 					</button>
 					<div class="max-w-[200px]">
-						<p class="m-0">Modrinth App {{ version }}</p>
+						<p class="m-0">Modrinth App edit {{ version }}</p>
 						<p class="m-0">
 							<span v-if="osPlatform === 'macos'">macOS</span>
 							<span v-else class="capitalize">{{ osPlatform }}</span>
