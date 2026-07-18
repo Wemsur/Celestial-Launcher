@@ -262,14 +262,14 @@ body.custom-bg-active .app-grid-statusbar {
 
 /* 3. 主内容卡片：维持在底层喷射阴影，且恢复交互 */
 body.custom-bg-active .app-contents {
-    background-color: color-mix(in srgb, var(--surface-1) 30%, transparent);
+    background-color: color-mix(in srgb, var(--surface-1) 48%, transparent);
     outline: none;
     z-index: 0;
     /* 确保它在底层依然能够承接被上层“幽灵外壳”漏下来的点击事件 */
     pointer-events: auto !important;
 
     box-shadow:
-        0 0 0 250px color-mix(in srgb, var(--surface-3) 50%, transparent); /* 逆向外围遮罩 */
+        0 0 0 250px color-mix(in srgb, var(--surface-3) 65%, transparent); /* 逆向外围遮罩 */
 }
 
 /* 4. 你的模糊图片逻辑完全保持原样，无需任何改动 */

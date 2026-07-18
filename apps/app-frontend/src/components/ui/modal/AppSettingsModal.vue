@@ -9,6 +9,7 @@ import {
 	SettingsIcon,
 	ShieldIcon,
 	ToggleRightIcon,
+    UsersIcon,
 } from '@modrinth/assets'
 import {
 	commonMessages,
@@ -85,7 +86,7 @@ const tabs = [
             id: 'app.settings.tabs.accounts-manage',
             defaultMessage: 'Accounts manager',
         }),
-        icon: CoffeeIcon,
+        icon: UsersIcon,
         content: AccountsSettings,
     },
 	{

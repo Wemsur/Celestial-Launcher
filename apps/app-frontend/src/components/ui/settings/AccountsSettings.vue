@@ -13,7 +13,24 @@ import { login, logout, get as getModrinthUser } from '@/helpers/mr_auth.ts'
 
 const notificationManager = injectNotificationManager()
 
-// 辅助函数：统一用 addNotification
+// ===== 辅助函数 =====
+
+/** 获取玩家名的首字母 */
+function getInitial(name: string): string {
+    return name.charAt(0).toUpperCase()
+}
+
+/** 为离线账户生成一致的背景色 */
+function getOfflineAvatarColor(name: string): string {
+    // 基于名字生成一个哈希值，确保同一个名字总是得到相同的颜色
+    let hash = 0
+    for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    // 使用 HSL 生成好看的绿色系颜色（与品牌色协调）
+    const hue = Math.abs(hash % 360)
+    return `hsl(${hue}, 60%, 45%)`
+}
 function notifyError(msg: string) {
     notificationManager.addNotification({ title: 'Error', text: msg, type: 'error' })
 }
@@ -30,8 +47,27 @@ const newOfflineUsername = ref('')
 
 // ===== Minecraft 账户 =====
 async function loadUsers() {
+    type MinecraftUser = {
+        profile: { id: string; name: string }
+        access_token: string
+        active: boolean
+    }
     try {
-        minecraftUsers.value = await users()
+        const rawUsers = await users()
+        minecraftUsers.value = ([...rawUsers] as any).sort((a: { active: any; access_token: string; profile: { name: any } }, b: { active: any; access_token: string; profile: { name: any } }) => {
+            // 1. 活跃账户排最前
+            if (a.active && !b.active) return -1
+            if (!a.active && b.active) return 1
+
+            // 2. 正版账户在前，离线账户在后
+            const aIsOnline = a.access_token !== 'OFFLINE'
+            const bIsOnline = b.access_token !== 'OFFLINE'
+            if (aIsOnline && !bIsOnline) return -1
+            if (!aIsOnline && bIsOnline) return 1
+
+            // 3. 同组内按名字字母排序
+            return (a.profile?.name ?? '').localeCompare(b.profile?.name ?? '')
+        })
     } catch (err) {
         notifyError(err instanceof Error ? err.message : String(err))
     }
@@ -68,6 +104,8 @@ async function onSetDefault(uuid: string) {
         notifyError(err instanceof Error ? err.message : String(err))
     }
 }
+
+
 
 // ===== Modrinth 账户 =====
 async function loadModrinthUser() {
@@ -174,11 +212,16 @@ onMounted(async () => {
                     :class="{ 'ring-2 ring-brand': user.active }"
                 >
                     <div class="flex items-center gap-3">
-                        <!-- 头像占位 -->
-                        <img
-                            :src="`https://crafatar.com/avatars/${user.profile.id}?size=40`"
-                            class="w-10 h-10 rounded"
-                            alt=""
+                        <!-- 头像：根据账户类型显示不同内容 -->
+                        <div v-if="user.access_token === 'OFFLINE'"
+                             class="w-10 h-10 rounded flex items-center justify-center text-white font-bold text-sm"
+                             :style="{ backgroundColor: getOfflineAvatarColor(user.profile.name) }">
+                            {{ getInitial(user.profile.name) }}
+                        </div>
+                        <img v-else
+                             :src="`https://mc-heads.net/avatar/${user.profile.id}/40`"
+                             class="w-10 h-10 rounded"
+                             alt=""
                         />
                         <div>
                             <p class="font-semibold">{{ user.profile.name }}</p>
