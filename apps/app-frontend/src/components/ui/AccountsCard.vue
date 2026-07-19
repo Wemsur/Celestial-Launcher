@@ -58,18 +58,18 @@
 							class="w-5 h-5 text-brand shrink-0"
 						/>
 						<RadioButtonIcon v-else class="w-5 h-5 text-secondary shrink-0" />
-                        <Avatar
-                            v-if="getAccountAvatarUrl(account)"
-                            :src="getAccountAvatarUrl(account)"
-                            size="24px"
-                        />
                         <span
-                            v-else
-                            class="inline-flex w-6 h-6 rounded flex items-center justify-center text-white font-bold text-xs shrink-0"
+                            v-if="account.access_token === 'OFFLINE'"
+                            class="inline-flex w-6 h-6 rounded items-center justify-center text-white font-bold text-xs shrink-0"
                             :style="{ backgroundColor: getOfflineAvatarColor(account.profile.name) }"
                         >
                             {{ account.profile.name.charAt(0).toUpperCase() }}
                         </span>
+                        <Avatar
+                            v-else
+                            :src="getAccountAvatarUrl(account)"
+                            size="24px"
+                        />
 						<p
 							class="m-0 truncate min-w-0"
 							:class="
@@ -243,13 +243,15 @@ const avatarUrl = computed(() => {
         return null
     }
 
+    // 如果有装备的皮肤，优先用缓存
     if (equippedSkin.value?.texture_key) {
         const cachedUrl = headUrlCache.value.get(equippedSkin.value.texture_key)
         if (cachedUrl) {
             return cachedUrl
         }
-        return `https://mc-heads.net/avatar/${equippedSkin.value.texture_key}/128`
     }
+
+    // 没有缓存，走 mc-heads
     return `https://mc-heads.net/avatar/${selectedAccount.value.profile.id}/128`
 })
 
@@ -259,7 +261,7 @@ function getAccountAvatarUrl(account: MinecraftCredential) {
         return null
     }
 
-    // 正版账户：直接用 mc-heads
+    // 直接用 mc-heads，不查缓存（缓存只存当前活跃账户的）
     return 'https://mc-heads.net/avatar/' + account.profile.id + '/24'
 }
 
