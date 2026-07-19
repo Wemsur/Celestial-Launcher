@@ -18,24 +18,34 @@
 		button-class="button-base w-full bg-transparent px-3 py-2 border-0 cursor-pointer"
 		:open-by-default="false"
 	>
-		<template #title>
-			<div class="flex gap-2 w-full min-w-0">
-				<Avatar
-					size="36px"
-					:src="
-						selectedAccount
-							? avatarUrl
-							: 'https://launcher-files.modrinth.com/assets/steve_head.png'
-					"
-				/>
-				<div class="flex flex-col items-start w-full min-w-0">
-					<span class="truncate w-full text-left">{{
-						selectedAccount ? selectedAccount.profile.name : formatMessage(messages.selectAccount)
-					}}</span>
-					<span class="text-secondary text-xs">{{ formatMessage(messages.minecraftAccount) }}</span>
-				</div>
-			</div>
-		</template>
+        <template #title>
+            <div class="flex gap-2 w-full min-w-0">
+                <template v-if="avatarUrl">
+                    <Avatar size="36px" :src="avatarUrl" />
+                </template>
+                <template v-else>
+                    <span
+                        v-if="selectedAccount"
+                        class="inline-flex w-9 h-9 rounded items-center justify-center text-white font-bold text-sm shrink-0"
+                        :style="{ backgroundColor: getOfflineAvatarColor(selectedAccount.profile.name) }"
+                    >
+                        {{ selectedAccount.profile.name.charAt(0).toUpperCase() }}
+                    </span>
+                    <img
+                        v-else
+                        src="https://launcher-files.modrinth.com/assets/steve_head.png"
+                        class="w-9 h-9 rounded shrink-0"
+                        alt=""
+                    />
+                </template>
+                <div class="flex flex-col items-start w-full min-w-0">
+            <span class="truncate w-full text-left">{{
+                    selectedAccount ? selectedAccount.profile.name : formatMessage(messages.selectAccount)
+                }}</span>
+                    <span class="text-secondary text-xs">{{ getAccountTypeLabel() }}</span>
+                </div>
+            </div>
+        </template>
 		<div class="bg-button-bg pt-1 pb-2 border border-solid border-surface-5">
 			<template v-if="accounts.length > 0">
 				<div v-for="account in accounts" :key="account.profile.id" class="flex gap-1 items-center">
@@ -48,7 +58,18 @@
 							class="w-5 h-5 text-brand shrink-0"
 						/>
 						<RadioButtonIcon v-else class="w-5 h-5 text-secondary shrink-0" />
-						<Avatar :src="getAccountAvatarUrl(account)" size="24px" />
+                        <Avatar
+                            v-if="getAccountAvatarUrl(account)"
+                            :src="getAccountAvatarUrl(account)"
+                            size="24px"
+                        />
+                        <span
+                            v-else
+                            class="inline-flex w-6 h-6 rounded flex items-center justify-center text-white font-bold text-xs shrink-0"
+                            :style="{ backgroundColor: getOfflineAvatarColor(account.profile.name) }"
+                        >
+                            {{ account.profile.name.charAt(0).toUpperCase() }}
+                        </span>
 						<p
 							class="m-0 truncate min-w-0"
 							:class="
@@ -78,6 +99,12 @@
 						{{ formatMessage(messages.addAccount) }}
 					</button>
 				</ButtonStyled>
+                <ButtonStyled v-if="accounts.length > 0" class="w-full">
+                    <button :disabled="loginDisabled" @click="login()">
+                        <PlusIcon />
+                        添加离线账户
+                    </button>
+                </ButtonStyled>
 			</div>
 		</div>
 	</Accordion>
@@ -129,6 +156,8 @@ type MinecraftCredential = {
 		id: string
 		name: string
 	}
+    access_token: string
+    active: boolean
 }
 
 const accounts: Ref<MinecraftCredential[]> = ref([])
@@ -138,29 +167,42 @@ const equippedSkin = ref<Skin | null>(null)
 const headUrlCache = ref(new Map<string, string>())
 
 async function refreshValues() {
-	defaultUser.value = await get_default_user().catch(handleError)
-	const userList = await users().catch(handleError)
-	accounts.value = Array.isArray(userList) ? [...userList] : []
-	accounts.value.sort((a, b) => (a.profile?.name ?? '').localeCompare(b.profile?.name ?? ''))
+    defaultUser.value = await get_default_user().catch(handleError)
+    const userList = await users().catch(handleError)
+    accounts.value = Array.isArray(userList) ? [...userList] : []
+    accounts.value.sort((a, b) => {
+        // 1. 活跃账户排最前
+        if (a.active && !b.active) return -1
+        if (!a.active && b.active) return 1
 
-	try {
-		const skins = await get_available_skins()
-		equippedSkin.value = skins.find((skin) => skin.is_equipped) ?? null
+        // 2. 正版账户在前，离线账户在后
+        const aIsOnline = a.access_token !== 'OFFLINE'
+        const bIsOnline = b.access_token !== 'OFFLINE'
+        if (aIsOnline && !bIsOnline) return -1
+        if (!aIsOnline && bIsOnline) return 1
 
-		if (equippedSkin.value) {
-			try {
-				const headUrl = await getPlayerHeadUrl(equippedSkin.value)
-				headUrlCache.value = new Map(headUrlCache.value).set(
-					equippedSkin.value.texture_key,
-					headUrl,
-				)
-			} catch (error) {
-				console.warn('Failed to get head render for equipped skin:', error)
-			}
-		}
-	} catch {
-		equippedSkin.value = null
-	}
+        // 3. 同组内按名字字母排序
+        return (a.profile?.name ?? '').localeCompare(b.profile?.name ?? '')
+    })
+
+    try {
+        const skins = await get_available_skins()
+        equippedSkin.value = skins.find((skin) => skin.is_equipped) ?? null
+
+        if (equippedSkin.value) {
+            try {
+                const headUrl = await getPlayerHeadUrl(equippedSkin.value)
+                headUrlCache.value = new Map(headUrlCache.value).set(
+                    equippedSkin.value.texture_key,
+                    headUrl,
+                )
+            } catch (error) {
+                console.warn('Failed to get head render for equipped skin:', error)
+            }
+        }
+    } catch {
+        equippedSkin.value = null
+    }
 }
 
 async function setEquippedSkin(skin: Skin) {
@@ -192,30 +234,51 @@ const selectedAccount = computed(() =>
 )
 
 const avatarUrl = computed(() => {
-	if (equippedSkin.value?.texture_key) {
-		const cachedUrl = headUrlCache.value.get(equippedSkin.value.texture_key)
-		if (cachedUrl) {
-			return cachedUrl
-		}
-		return `https://mc-heads.net/avatar/${equippedSkin.value.texture_key}/128`
-	}
-	if (selectedAccount.value?.profile?.id) {
-		return `https://mc-heads.net/avatar/${selectedAccount.value.profile.id}/128`
-	}
-	return 'https://launcher-files.modrinth.com/assets/steve_head.png'
+    if (!selectedAccount.value) {
+        return 'https://launcher-files.modrinth.com/assets/steve_head.png'
+    }
+
+    // 离线账户：不返回 mc-heads URL，模板里用 CSS 头像替代
+    if (selectedAccount.value.access_token === 'OFFLINE') {
+        return null
+    }
+
+    if (equippedSkin.value?.texture_key) {
+        const cachedUrl = headUrlCache.value.get(equippedSkin.value.texture_key)
+        if (cachedUrl) {
+            return cachedUrl
+        }
+        return `https://mc-heads.net/avatar/${equippedSkin.value.texture_key}/128`
+    }
+    return `https://mc-heads.net/avatar/${selectedAccount.value.profile.id}/128`
 })
 
 function getAccountAvatarUrl(account: MinecraftCredential) {
-	if (
-		account.profile.id === selectedAccount.value?.profile?.id &&
-		equippedSkin.value?.texture_key
-	) {
-		const cachedUrl = headUrlCache.value.get(equippedSkin.value.texture_key)
-		if (cachedUrl) {
-			return cachedUrl
-		}
-	}
-	return `https://mc-heads.net/avatar/${account.profile.id}/128`
+    // 离线账户：返回 null，模板用 CSS 头像
+    if (account.access_token === 'OFFLINE') {
+        return null
+    }
+
+    // 正版账户：直接用 mc-heads
+    return 'https://mc-heads.net/avatar/' + account.profile.id + '/24'
+}
+
+function getAccountTypeLabel() {
+    if (!selectedAccount.value) {
+        return formatMessage(messages.minecraftAccount)
+    }
+    return selectedAccount.value.access_token === 'OFFLINE'
+        ? '离线账户'
+        : '正版账户'
+}
+
+function getOfflineAvatarColor(name: string) {
+    let hash = 0
+    for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    var hue = Math.abs(hash % 360)
+    return 'hsl(' + hue + ', 60%, 45%)'
 }
 
 async function setAccount(account: MinecraftCredential) {
@@ -248,7 +311,7 @@ async function logout(id: string) {
 	trackEvent('AccountLogOut')
 }
 
-const unlisten = await process_listener(async (e) => {
+const unlisten = await process_listener(async (e: { event: string }) => {
 	if (e.event === 'launched') {
 		await refreshValues()
 	}

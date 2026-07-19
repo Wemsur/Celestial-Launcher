@@ -54,6 +54,15 @@ import {
 	useHostingIntercom,
 	useVIntl,
 } from '@modrinth/ui'
+
+import {
+    users,
+    remove_user,
+    set_default_user,
+    create_offline_user,
+    minecraft_login,
+} from '@/helpers/auth.js'
+
 import { renderString } from '@modrinth/utils'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { getVersion } from '@tauri-apps/api/app'
@@ -355,7 +364,7 @@ onMounted(async () => {
         console.error("Invoke 调用失败，错误原因:", e);
     }
 	themeStore.loadCustomSettings()
-	checkUpdates()
+	/*checkUpdates()*/
 })
 
 onUnmounted(async () => {
@@ -1701,7 +1710,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 				<div id="sidebar-teleport-target" class="sidebar-teleport-content"></div>
 				<div class="sidebar-default-content" :class="{ 'sidebar-enabled': sidebarVisible }">
 					<div class="p-4 border-0 border-b-[1px] border-[--brand-gradient-border] border-solid">
-						<h3 class="text-base text-primary font-medium m-0">Playing as</h3>
+						<h3 class="text-base text-primary font-medium m-0">游玩账号</h3>
 						<suspense>
 							<AccountsCard ref="accounts" />
 						</suspense>
