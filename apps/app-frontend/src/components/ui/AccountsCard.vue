@@ -139,6 +139,7 @@ import {
 	users,
 } from '@/helpers/auth'
 import { process_listener } from '@/helpers/events'
+import { generatePlayerHeadBlob } from '@/helpers/rendering/batch-skin-renderer.ts'
 import { getPlayerHeadUrl } from '@/helpers/rendering/batch-skin-renderer.ts'
 import type { Skin } from '@/helpers/skins'
 import { get_available_skins } from '@/helpers/skins'
@@ -251,8 +252,21 @@ const avatarUrl = computed(() => {
         }
     }
 
-    // 没有缓存，走 mc-heads
-    return `https://mc-heads.net/avatar/${selectedAccount.value.profile.id}/128`
+    // 尝试从账户列表中获取该账户的皮肤 URL 并渲染头像
+    const skinUrl = selectedAccount.value.profile?.skins?.[0]?.url
+    if (skinUrl) {
+        const headKey = `head-${selectedAccount.value.profile.id}`
+        if (!headUrlCache.value.has(headKey)) {
+            generatePlayerHeadBlob(skinUrl, 128).then(blob => {
+                const url = URL.createObjectURL(blob)
+                headUrlCache.value = new Map(headUrlCache.value).set(headKey, url)
+            }).catch(() => {})
+        }
+        const cached = headUrlCache.value.get(headKey)
+        if (cached) return cached
+    }
+    // 所有途径都失败，回退到 Steve 默认头像
+    return 'https://launcher-files.modrinth.com/assets/steve_head.png'
 })
 
 function getAccountAvatarUrl(account: MinecraftCredential) {
@@ -261,8 +275,20 @@ function getAccountAvatarUrl(account: MinecraftCredential) {
         return null
     }
 
-    // 直接用 mc-heads，不查缓存（缓存只存当前活跃账户的）
-    return 'https://mc-heads.net/avatar/' + account.profile.id + '/24'
+    // 从账户的 profile.skins 获取皮肤 URL 并渲染头像
+    const skinUrl = account.profile?.skins?.[0]?.url
+    if (skinUrl) {
+        const headKey = `head-${account.profile.id}`
+        if (!headUrlCache.value.has(headKey)) {
+            generatePlayerHeadBlob(skinUrl, 24).then(blob => {
+                const url = URL.createObjectURL(blob)
+                headUrlCache.value = new Map(headUrlCache.value).set(headKey, url)
+            }).catch(() => {})
+        }
+        const cached = headUrlCache.value.get(headKey)
+        if (cached) return cached
+    }
+    return null
 }
 
 function getAccountTypeLabel() {
