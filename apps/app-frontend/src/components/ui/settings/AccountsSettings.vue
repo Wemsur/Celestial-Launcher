@@ -115,6 +115,7 @@
             </p>
 
             <div v-if="modrinthUser" class="mt-4 flex items-center gap-3">
+                <Avatar :src="modrinthCredentials?.user?.avatar_url" alt="" size="32px" circle />
                 <p class="font-semibold">
                     {{ modrinthCredentials?.user?.username }}</p>
                 <button class="btn btn-red btn-small" @click="handleLogout">
@@ -132,8 +133,8 @@
 </template>
 
 <script setup lang="ts">
-import {injectNotificationManager, StyledInput} from '@modrinth/ui'
-import { ref, onMounted, onUnmounted } from 'vue'
+import {Avatar, injectNotificationManager, StyledInput} from '@modrinth/ui'
+import { inject, ref, onMounted, onUnmounted } from 'vue'
 
 import {
     users,
@@ -147,7 +148,7 @@ import { generatePlayerHeadBlob } from '@/helpers/rendering/batch-skin-renderer.
 
 const notificationManager = injectNotificationManager()
 const modrinthCredentials = inject('modrinthCredentials', null)
-import { inject } from 'vue'
+
 
 
 // ===== 辅助函数 =====
