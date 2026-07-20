@@ -831,6 +831,7 @@ onMounted(() => {
 
 const accounts = ref(null)
 provide('accountsCard', accounts)
+provide('ModrinthCredentials', credentials)
 
 command_listener(handleCommand)
 notification_listener(handleLiveNotification)

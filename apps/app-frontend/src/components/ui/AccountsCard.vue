@@ -96,18 +96,51 @@
 				<ButtonStyled v-if="accounts.length > 0" class="w-full">
 					<button :disabled="loginDisabled" @click="login()">
 						<PlusIcon />
-						{{ formatMessage(messages.addAccount) }}
+						正版登录
 					</button>
 				</ButtonStyled>
                 <ButtonStyled v-if="accounts.length > 0" class="w-full">
-                    <button :disabled="loginDisabled" @click="login()">
+                    <button :disabled="loginDisabled" @click="offlineModalRef?.show()">
                         <PlusIcon />
-                        添加离线账户
+                        离线登录
                     </button>
                 </ButtonStyled>
 			</div>
 		</div>
 	</Accordion>
+    <NewModal
+        ref="offlineModalRef"
+        header="Add Offline Account"
+        :max-width="'500px'"
+    >
+        <form @submit.prevent="handleCreateOffline" class="space-y-6 min-w-[400px]">
+            <label class="flex flex-col gap-2">
+                <span class="font-semibold text-contrast">Username</span>
+                <StyledInput
+                    ref="offlineInputRef"
+                    v-model="offlineUsername"
+                    wrapper-class="w-full"
+                />
+                <div v-if="offlineError" class="text-sm text-red">{{ offlineError }}</div>
+            </label>
+        </form>
+        <template #actions>
+            <div class="flex gap-2 justify-end">
+                <ButtonStyled type="outlined">
+                    <button @click="hideOfflineModal">
+                        <XIcon class="h-5 w-5" />
+                        Cancel
+                    </button>
+                </ButtonStyled>
+                <ButtonStyled color="brand">
+                    <button :disabled="offlineSubmitting" @click="handleCreateOffline">
+                        <EditIcon class="h-5 w-5" />
+                        Add
+                    </button>
+                </ButtonStyled>
+            </div>
+        </template>
+    </NewModal>
 </template>
 
 <script setup lang="ts">
@@ -123,6 +156,8 @@ import {
 	Accordion,
 	Avatar,
 	ButtonStyled,
+    NewModal,
+    StyledInput,
 	defineMessages,
 	injectNotificationManager,
 	useVIntl,
@@ -145,8 +180,12 @@ import type { Skin } from '@/helpers/skins'
 import { get_available_skins } from '@/helpers/skins'
 import { handleSevereError } from '@/store/error.js'
 
+import { XIcon, EditIcon } from '@modrinth/assets'
+import { create_offline_user } from '@/helpers/auth'
+
 const { formatMessage } = useVIntl()
-const { handleError } = injectNotificationManager()
+const notificationManager = injectNotificationManager()
+const { handleError } = notificationManager
 
 const emit = defineEmits<{
 	change: []
@@ -166,6 +205,14 @@ const loginDisabled = ref(false)
 const defaultUser = ref<string | undefined>()
 const equippedSkin = ref<Skin | null>(null)
 const headUrlCache = ref(new Map<string, string>())
+
+// 离线账户弹窗
+const offlineModalRef = ref<InstanceType<typeof NewModal>>()
+const offlineInputRef = ref<InstanceType<typeof StyledInput>>()
+const offlineUsername = ref('')
+const offlineSubmitting = ref(false)
+const offlineError = ref('')
+
 
 async function refreshValues() {
     defaultUser.value = await get_default_user().catch(handleError)
@@ -307,6 +354,54 @@ function getOfflineAvatarColor(name: string) {
     }
     var hue = Math.abs(hash % 360)
     return 'hsl(' + hue + ', 60%, 45%)'
+}
+/** 校验用户名 */
+function validateOfflineUsername(name: string): string {
+    const trimmed = name.trim()
+    if (!trimmed) return 'Username is required'
+    if (!/^[A-Za-z0-9_]{3,16}$/.test(trimmed)) {
+        return 'Must be 3-16 characters (letters, numbers, underscore only)'
+    }
+    return ''
+}
+
+/** 创建离线账户 */
+async function handleCreateOffline() {
+    const error = validateOfflineUsername(offlineUsername.value)
+    if (error) {
+        offlineError.value = error
+        return
+    }
+
+    offlineSubmitting.value = true
+    offlineError.value = ''
+    try {
+        // 创建离线账户
+        const newCred = await create_offline_user(offlineUsername.value.trim())
+        // 设为默认激活账户
+        await set_default_user(newCred.profile.id)
+        // 刷新列表（包含头像渲染）
+        await refreshValues()
+        // 关闭弹窗
+        hideOfflineModal()
+        // 通知
+        notificationManager.addNotification({
+            title: 'Success',
+            text: 'Offline account created',
+            type: 'success',
+        })
+    } catch (err) {
+        offlineError.value = err instanceof Error ? err.message : String(err)
+    } finally {
+        offlineSubmitting.value = false
+    }
+}
+
+/** 关闭弹窗 */
+function hideOfflineModal() {
+    offlineModalRef.value?.hide()
+    offlineUsername.value = ''
+    offlineError.value = ''
 }
 
 async function setAccount(account: MinecraftCredential) {
