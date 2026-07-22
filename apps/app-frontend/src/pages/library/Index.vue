@@ -36,13 +36,13 @@ onUnmounted(() => {
 
 <template>
 	<div class="p-6 flex flex-col gap-3">
-		<h1 class="m-0 text-2xl hidden">Library</h1>
+		<h1 class="m-0 text-2xl hidden">库</h1>
 		<NavTabs
 			:links="[
-				{ label: 'All instances', href: `/library` },
-				{ label: 'Modpacks', href: `/library/modpacks` },
-				{ label: 'Servers', href: `/library/servers` },
-				{ label: 'Custom', href: `/library/custom` },
+				{ label: '全部实例', href: `/library` },
+				{ label: '整合包', href: `/library/modpacks` },
+				{ label: '服务器', href: `/library/servers` },
+				{ label: '自定义', href: `/library/custom` },
 				{ label: 'Shared with me', href: `/library/shared`, shown: false },
 				{ label: 'Saved', href: `/library/saved`, shown: false },
 			]"
@@ -54,7 +54,7 @@ onUnmounted(() => {
 			<div class="icon">
 				<NewInstanceImage />
 			</div>
-			<h3>No instances found</h3>
+			<h3>未找到实例</h3>
 			<ButtonStyled color="brand">
 				<button :disabled="offline" @click="showCreationModal?.()">
 					<PlusIcon />

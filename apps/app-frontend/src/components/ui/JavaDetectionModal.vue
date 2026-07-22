@@ -11,15 +11,15 @@
 				<template #cell-actions="{ row }">
 					<div class="flex items-center justify-end">
 						<ButtonStyled v-if="currentSelected.path === row.path">
-							<button class="!shadow-none" disabled><CheckIcon /> Selected</button>
+							<button class="!shadow-none" disabled><CheckIcon /> 已选择</button>
 						</ButtonStyled>
 						<ButtonStyled v-else>
-							<button class="!shadow-none" @click="setJavaInstall(row)"><PlusIcon /> Select</button>
+							<button class="!shadow-none" @click="setJavaInstall(row)"><PlusIcon /> 选择</button>
 						</ButtonStyled>
 					</div>
 				</template>
 				<template #empty-state>
-					<div class="p-4 text-secondary">No java installations found!</div>
+					<div class="p-4 text-secondary">未找到 Java 安装！</div>
 				</template>
 			</Table>
 			<div class="flex justify-end">
@@ -29,7 +29,7 @@
 						@click="$refs.detectJavaModal.hide()"
 					>
 						<XIcon />
-						Cancel
+						取消
 					</button>
 				</ButtonStyled>
 			</div>
@@ -51,9 +51,9 @@ const chosenInstallOptions = ref([])
 const detectJavaModal = ref(null)
 const currentSelected = ref({})
 const javaInstallColumns = [
-	{ key: 'version', label: 'Version', width: '9rem' },
-	{ key: 'path', label: 'Path' },
-	{ key: 'actions', label: 'Actions', align: 'right', width: '10rem' },
+	{ key: 'version', label: '版本', width: '9rem' },
+	{ key: 'path', label: '路径' },
+	{ key: 'actions', label: '状态', align: 'right', width: '10rem' },
 ]
 
 defineExpose({

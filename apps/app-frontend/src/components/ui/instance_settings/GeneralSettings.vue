@@ -68,8 +68,6 @@ function formatReleaseChannelLabel(channel: ReleaseChannel) {
 			return formatMessage(messages.updateChannelRelease)
 		case 'beta':
 			return formatMessage(messages.updateChannelBeta)
-		case 'alpha':
-			return formatMessage(messages.updateChannelAlpha)
 	}
 }
 
@@ -289,7 +287,7 @@ const messages = defineMessages({
 	<div class="block">
 		<div class="float-end ml-10 relative group w-fit">
 			<div class="flex flex-col gap-1">
-				<span class="text-lg font-semibold text-contrast">Icon</span>
+				<span class="text-lg font-semibold text-contrast">图标</span>
 				<div class="group relative w-fit">
 					<OverflowMenu
 						v-tooltip="formatMessage(messages.editIcon)"

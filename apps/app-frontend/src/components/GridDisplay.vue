@@ -133,8 +133,8 @@ const handleOptionsClick = async (args) => {
 const state = useStorage(
 	`${props.label}-grid-display-state`,
 	{
-		group: 'Group',
-		sortBy: 'Name',
+		group: '标签',
+		sortBy: '名称',
 		collapsedGroups: [],
 	},
 	localStorage,
@@ -164,37 +164,37 @@ const setSectionCollapsed = (sectionName, collapsed) => {
 }
 
 const filteredResults = computed(() => {
-	const { group = 'Group', sortBy = 'Name' } = state.value
+	const { group = '标签', sortBy = '名称' } = state.value
 
 	const instances = props.instances.filter((instance) => {
 		return instance.name.toLowerCase().includes(search.value.toLowerCase())
 	})
 
-	if (sortBy === 'Name') {
+	if (sortBy === '名称') {
 		instances.sort((a, b) => {
 			return a.name.localeCompare(b.name)
 		})
 	}
 
-	if (sortBy === 'Game version') {
+	if (sortBy === '游戏版本') {
 		instances.sort((a, b) => {
 			return a.game_version.localeCompare(b.game_version, undefined, { numeric: true })
 		})
 	}
 
-	if (sortBy === 'Last played') {
+	if (sortBy === '最后游玩') {
 		instances.sort((a, b) => {
 			return dayjs(b.last_played ?? 0).diff(dayjs(a.last_played ?? 0))
 		})
 	}
 
-	if (sortBy === 'Date created') {
+	if (sortBy === '创建时间') {
 		instances.sort((a, b) => {
 			return dayjs(b.date_created).diff(dayjs(a.date_created))
 		})
 	}
 
-	if (sortBy === 'Date modified') {
+	if (sortBy === '修改时间') {
 		instances.sort((a, b) => {
 			return dayjs(b.date_modified).diff(dayjs(a.date_modified))
 		})
@@ -202,7 +202,7 @@ const filteredResults = computed(() => {
 
 	const instanceMap = new Map()
 
-	if (group === 'Loader') {
+	if (group === '加载器') {
 		instances.forEach((instance) => {
 			const loader = formatLoader(formatMessage, instance.loader)
 			if (!instanceMap.has(loader)) {
@@ -211,7 +211,7 @@ const filteredResults = computed(() => {
 
 			instanceMap.get(loader).push(instance)
 		})
-	} else if (group === 'Game version') {
+	} else if (group === '游戏版本') {
 		instances.forEach((instance) => {
 			if (!instanceMap.has(instance.game_version)) {
 				instanceMap.set(instance.game_version, [])
@@ -219,10 +219,10 @@ const filteredResults = computed(() => {
 
 			instanceMap.get(instance.game_version).push(instance)
 		})
-	} else if (group === 'Group') {
+	} else if (group === '标签') {
 		instances.forEach((instance) => {
 			if (instance.groups.length === 0) {
-				instance.groups.push('None')
+				instance.groups.push('不分组')
 			}
 
 			for (const category of instance.groups) {
@@ -234,18 +234,18 @@ const filteredResults = computed(() => {
 			}
 		})
 	} else {
-		return instanceMap.set('None', instances)
+		return instanceMap.set('不分组', instances)
 	}
 
 	// For 'name', we intuitively expect the sorting to apply to the name of the group first, not just the name of the instance
 	// ie: Category A should come before B, even if the first instance in B comes before the first instance in A
-	if (sortBy === 'Name') {
+	if (sortBy === '名称') {
 		const sortedEntries = [...instanceMap.entries()].sort((a, b) => {
 			// None should always be first
-			if (a[0] === 'None' && b[0] !== 'None') {
+			if (a[0] === '不分组' && b[0] !== '不分组') {
 				return -1
 			}
-			if (a[0] !== 'None' && b[0] === 'None') {
+			if (a[0] !== '不分组' && b[0] === '不分组') {
 				return 1
 			}
 			return a[0].localeCompare(b[0])
@@ -257,7 +257,7 @@ const filteredResults = computed(() => {
 	}
 	// default sorting would do 1.20.4 < 1.8.9 because 2 < 8
 	// localeCompare with numeric=true puts 1.8.9 < 1.20.4 because 8 < 20
-	if (group === 'Game version') {
+	if (group === '游戏版本') {
 		const sortedEntries = [...instanceMap.entries()].sort((a, b) => {
 			return a[0].localeCompare(b[0], undefined, { numeric: true })
 		})
@@ -285,10 +285,10 @@ const filteredResults = computed(() => {
 			v-model="state.sortBy"
 			name="Sort Dropdown"
 			class="max-w-[16rem]"
-			:options="['Name', 'Last played', 'Date created', 'Date modified', 'Game version']"
+			:options="['名称', '最后游玩', '创建时间', '修改时间', '游戏版本']"
 			placeholder="Select..."
 		>
-			<span class="font-semibold text-primary">Sort by: </span>
+			<span class="font-semibold text-primary">排序方式：</span>
 			<span class="font-semibold text-secondary">{{ selected }}</span>
 		</DropdownSelect>
 		<DropdownSelect
@@ -296,10 +296,10 @@ const filteredResults = computed(() => {
 			v-model="state.group"
 			class="max-w-[16rem]"
 			name="Group Dropdown"
-			:options="['Group', 'Loader', 'Game version', 'None']"
+			:options="['标签', '加载器', '游戏版本', '不分组']"
 			placeholder="Select..."
 		>
-			<span class="font-semibold text-primary">Group by: </span>
+			<span class="font-semibold text-primary">分组方式：</span>
 			<span class="font-semibold text-secondary">{{ selected }}</span>
 		</DropdownSelect>
 	</div>
@@ -309,13 +309,13 @@ const filteredResults = computed(() => {
 			value,
 		}))"
 		:key="instanceSection.key"
-		:divider="instanceSection.key !== 'None'"
+		:divider="instanceSection.key !== '不分组'"
 		:open-by-default="!isSectionCollapsed(instanceSection.key)"
 		class="row"
 		@on-open="setSectionCollapsed(instanceSection.key, false)"
 		@on-close="setSectionCollapsed(instanceSection.key, true)"
 	>
-		<template v-if="instanceSection.key !== 'None'" #title>
+		<template v-if="instanceSection.key !== '不分组'" #title>
 			<span class="text-base">{{ instanceSection.key }}</span>
 		</template>
 		<section class="instances">
@@ -330,14 +330,14 @@ const filteredResults = computed(() => {
 	</Accordion>
 	<ConfirmDeleteInstanceModal ref="confirmModal" @delete="deleteInstance" />
 	<ContextMenu ref="instanceOptions" @option-clicked="handleOptionsClick">
-		<template #play> <PlayIcon /> Play </template>
-		<template #stop> <StopCircleIcon /> Stop </template>
-		<template #add_content> <PlusIcon /> Add content </template>
-		<template #edit> <EyeIcon /> View instance </template>
-		<template #duplicate> <ClipboardCopyIcon /> Duplicate instance</template>
-		<template #delete> <TrashIcon /> Delete </template>
-		<template #open> <FolderOpenIcon /> Open folder </template>
-		<template #copy> <ClipboardCopyIcon /> Copy path </template>
+		<template #play> <PlayIcon /> 游玩 </template>
+		<template #stop> <StopCircleIcon /> 停止 </template>
+		<template #add_content> <PlusIcon /> 添加内容 </template>
+		<template #edit> <EyeIcon /> 查看实例 </template>
+		<template #duplicate> <ClipboardCopyIcon /> 复制实例 </template>
+		<template #delete> <TrashIcon /> 删除 </template>
+		<template #open> <FolderOpenIcon /> 实例文件夹 </template>
+		<template #copy> <ClipboardCopyIcon /> 复制路径 </template>
 	</ContextMenu>
 </template>
 <style lang="scss" scoped>

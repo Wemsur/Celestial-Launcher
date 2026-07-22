@@ -98,8 +98,8 @@ onUnmounted(() => {
 
 <template>
     <div class="p-6 flex flex-col gap-2">
-        <h1 v-if="recentInstances?.length > 0" class="m-0 text-2xl font-extrabold">Worlds</h1>
-        <h1 v-else class="m-0 text-2xl font-extrabold">Create Instance first!</h1>
+        <h1 v-if="recentInstances?.length > 0" class="m-0 text-2xl font-extrabold">世界</h1>
+        <h1 v-else class="m-0 text-2xl font-extrabold">请先创建实例！</h1>
         <RecentWorldsList :recent-instances="recentInstances" />
     </div>
 </template>

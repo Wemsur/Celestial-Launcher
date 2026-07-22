@@ -7,7 +7,7 @@
 				@click="emit('clear')"
 			>
 				<XIcon />
-				Clear
+				清空
 			</button>
 		</ButtonStyled>
 		<ButtonStyled v-if="showDelete" type="transparent" hover-color-fill="background" color="red">
@@ -17,7 +17,7 @@
 				@click="emit('delete')"
 			>
 				<TrashIcon />
-				Delete
+				删除
 			</button>
 		</ButtonStyled>
 		<ButtonStyled v-if="hasLogs" type="transparent">
@@ -28,14 +28,14 @@
 			>
 				<SpinnerIcon v-if="sharing" class="animate-spin" />
 				<ShareIcon v-else />
-				Share
+				分享
 			</button>
 		</ButtonStyled>
 		<ButtonStyled type="transparent">
 			<button @click="emit('toggle-fullscreen')">
 				<ContractIcon v-if="fullscreen" />
 				<ExpandIcon v-else />
-				{{ fullscreen ? 'Collapse' : 'Expand' }}
+				{{ fullscreen ? '恢复' : '全屏' }}
 			</button>
 		</ButtonStyled>
 	</div>

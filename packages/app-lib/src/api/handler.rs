@@ -49,11 +49,11 @@ pub async fn handle_url(sublink: &str) -> crate::Result<CommandPayload> {
 
             if server.is_some() && singleplayer_world.is_some() {
                 emit_warning(
-                    "Invalid command, cannot launch both a server and a singleplayer world",
+                    "无效命令，无法同时启动服务器和单人游戏",
                 )
                 .await?;
                 return Err(crate::ErrorKind::InputError(
-                    "Cannot launch both a server and a singleplayer world"
+                    "无法同时启动服务器和单人游戏"
                         .to_string(),
                 )
                 .into());
@@ -67,11 +67,11 @@ pub async fn handle_url(sublink: &str) -> crate::Result<CommandPayload> {
                 },
                 Err(e) => {
                     emit_warning(&format!(
-                        "Invalid UTF-8 in instance path: {e}"
+                        "实例路径中的 UTF-8 编码无效: {e}"
                     ))
                     .await?;
                     return Err(crate::ErrorKind::InputError(format!(
-                        "Invalid UTF-8 in instance path: {e}"
+                        "实例路径中的 UTF-8 编码无效: {e}"
                     ))
                     .into());
                 }
@@ -79,11 +79,11 @@ pub async fn handle_url(sublink: &str) -> crate::Result<CommandPayload> {
         }
         _ => {
             emit_warning(&format!(
-                "Invalid command, unrecognized path: {sublink}"
+                "无效命令，无法识别的路径: {sublink}"
             ))
             .await?;
             return Err(crate::ErrorKind::InputError(format!(
-                "Invalid command, unrecognized path: {sublink}"
+                "无效命令，无法识别的路径: {sublink}"
             ))
             .into());
         }
@@ -109,12 +109,12 @@ pub async fn parse_command(
             return Ok(CommandPayload::RunMRPack { path });
         }
         emit_warning(&format!(
-            "Invalid command, unrecognized filetype: {}",
+            "无效命令，无法识别的文件类型: {}",
             path.display()
         ))
         .await?;
         Err(crate::ErrorKind::InputError(format!(
-            "Invalid command, unrecognized filetype: {}",
+            "无效命令，无法识别的文件类型: {}",
             path.display()
         ))
         .into())

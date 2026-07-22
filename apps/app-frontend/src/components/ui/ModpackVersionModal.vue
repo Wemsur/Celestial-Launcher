@@ -63,8 +63,8 @@ const onHide = () => {
 				<div class="table">
 					<div class="table-row with-columns table-head">
 						<div class="table-cell table-text download-cell" />
-						<div class="name-cell table-cell table-text">Name</div>
-						<div class="table-cell table-text">Supports</div>
+						<div class="name-cell table-cell table-text">名称</div>
+						<div class="table-cell table-text">支持</div>
 					</div>
 					<div class="scrollable">
 						<div

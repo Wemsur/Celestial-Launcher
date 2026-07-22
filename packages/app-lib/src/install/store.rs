@@ -87,7 +87,7 @@ pub async fn insert(
 
     get(id, app_state).await?.ok_or_else(|| {
         crate::ErrorKind::OtherError(format!(
-            "Install job {id} was not inserted"
+            "安装任务 {id} 未被插入"
         ))
         .into()
     })
@@ -284,7 +284,7 @@ pub async fn get_required(
     app_state: &State,
 ) -> crate::Result<InstallJobRecord> {
     get(id, app_state).await?.ok_or_else(|| {
-        crate::ErrorKind::InputError(format!("Unknown install job {id}")).into()
+        crate::ErrorKind::InputError(format!("未知的安装任务 {id}")).into()
     })
 }
 
@@ -292,7 +292,7 @@ fn row_to_record(row: InstallJobRow) -> crate::Result<InstallJobRecord> {
     Ok(InstallJobRecord {
         id: Uuid::parse_str(&row.id).map_err(|err| {
             crate::ErrorKind::InputError(format!(
-                "Invalid install job id {}: {err}",
+                "无效的安装任务 ID {0}: {err}",
                 row.id
             ))
         })?,

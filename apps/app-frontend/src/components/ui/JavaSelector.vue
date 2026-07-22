@@ -53,19 +53,19 @@
 					@click="reinstallJava"
 				>
 					<DownloadIcon />
-					{{ installingJava ? 'Installing...' : 'Install recommended' }}
+					{{ installingJava ? '正在安装...' : '安装推荐版本' }}
 				</button>
 			</ButtonStyled>
 			<ButtonStyled>
 				<button class="!shadow-none" :disabled="props.disabled" @click="autoDetect">
 					<SearchIcon />
-					Detect
+					检测
 				</button>
 			</ButtonStyled>
 			<ButtonStyled>
 				<button class="!shadow-none" :disabled="props.disabled" @click="handleJavaFileInput()">
 					<FolderSearchIcon />
-					Browse
+					选择
 				</button>
 			</ButtonStyled>
 		</span>

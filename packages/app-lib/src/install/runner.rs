@@ -157,8 +157,8 @@ pub async fn cancel_job(job_id: Uuid) -> crate::Result<InstallJobSnapshot> {
     }
 
     job.state.error = Some(InstallErrorView {
-        code: "canceled".to_string(),
-        message: "Install was canceled".to_string(),
+        code: "已取消".to_string(),
+        message: "安装已取消".to_string(),
     });
     recovery::apply_cleanup(&job.state, &state).await?;
     clear_deleted_new_instance_id(&mut job.state);
@@ -286,7 +286,7 @@ async fn prepare_initial_instance(
                     .await?
                     .ok_or_else(|| {
                         crate::ErrorKind::InputError(
-                            "Unknown instance".to_string(),
+                            "未知的实例".to_string(),
                         )
                     })?;
             let created = crate::api::instance::create(
@@ -402,7 +402,7 @@ async fn run_request(
         } => {
             let Some(instance_id) = current_instance_id(job_state) else {
                 return Err(crate::ErrorKind::InputError(
-                    "Install job is missing its instance id".to_string(),
+                    "安装任务缺少其实例 ID".to_string(),
                 )
                 .into());
             };
@@ -432,7 +432,7 @@ async fn run_request(
                 )
                 .await?
                 .ok_or_else(|| {
-                    crate::ErrorKind::InputError("Unknown instance".to_string())
+                    crate::ErrorKind::InputError("未知的实例".to_string())
                 })?;
             crate::launcher::install_minecraft_with_reporter(
                 &context,
@@ -448,7 +448,7 @@ async fn run_request(
         } => {
             let Some(instance_id) = current_instance_id(job_state) else {
                 return Err(crate::ErrorKind::InputError(
-                    "Install job is missing its instance id".to_string(),
+                    "安装任务缺少其实例 ID".to_string(),
                 )
                 .into());
             };
@@ -478,7 +478,7 @@ async fn run_request(
         } => {
             let Some(instance_id) = current_instance_id(job_state) else {
                 return Err(crate::ErrorKind::InputError(
-                    "Install job is missing its instance id".to_string(),
+                    "安装任务缺少其实例 ID".to_string(),
                 )
                 .into());
             };
@@ -506,7 +506,7 @@ async fn run_request(
         InstallRequest::DuplicateInstance { source_instance_id } => {
             let Some(instance_id) = current_instance_id(job_state) else {
                 return Err(crate::ErrorKind::InputError(
-                    "Install job is missing its instance id".to_string(),
+                    "安装任务缺少其实例 ID".to_string(),
                 )
                 .into());
             };
@@ -535,7 +535,7 @@ async fn run_request(
                 )
                 .await?
                 .ok_or_else(|| {
-                    crate::ErrorKind::InputError("Unknown instance".to_string())
+                    crate::ErrorKind::InputError("未知的实例".to_string())
                 })?;
             crate::launcher::install_minecraft_with_reporter(
                 &context,
@@ -563,7 +563,7 @@ async fn run_request(
                 )
                 .await?
                 .ok_or_else(|| {
-                    crate::ErrorKind::InputError("Unknown instance".to_string())
+                    crate::ErrorKind::InputError("未知的实例".to_string())
                 })?;
             crate::launcher::install_minecraft_with_reporter(
                 &context,
@@ -645,7 +645,7 @@ async fn remove_existing_pack_content(
     )
     .await?
     .ok_or_else(|| {
-        crate::ErrorKind::InputError("Unknown instance".to_string())
+        crate::ErrorKind::InputError("未知的实例".to_string())
     })?;
     let (project_id, version_id) = match &metadata.link {
         InstanceLink::ModrinthModpack {

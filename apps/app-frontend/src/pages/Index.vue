@@ -102,20 +102,20 @@ onUnmounted(() => {
 
 <template>
 	<div class="p-6 flex flex-col gap-2">
-		<h1 v-if="recentInstances?.length > 0" class="m-0 text-2xl font-extrabold">Welcome back!</h1>
-		<h1 v-else class="m-0 text-2xl font-extrabold">Welcome to Modrinth App!</h1>
+		<h1 v-if="recentInstances?.length > 0" class="m-0 text-2xl font-extrabold">欢迎回来！</h1>
+		<h1 v-else class="m-0 text-2xl font-extrabold">欢迎来到 Modrinth App！</h1>
 		<RecentWorldsList :recent-instances="recentInstances" />
 		<RowDisplay
 			v-if="hasFeaturedProjects"
 			:instances="[
 				{
-					label: 'Discover a modpack',
+					label: '发现整合包',
 					route: '/browse/modpack',
 					instances: featuredModpacks,
 					downloaded: false,
 				},
 				{
-					label: 'Discover mods',
+					label: '发现模组',
 					route: '/browse/mod',
 					instances: featuredMods,
 					downloaded: false,

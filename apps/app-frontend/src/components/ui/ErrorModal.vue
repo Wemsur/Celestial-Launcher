@@ -160,7 +160,7 @@ async function copyToClipboard(text) {
 			<div class="markdown-body">
 				<template v-if="errorType === 'minecraft_auth'">
 					<template v-if="metadata.network">
-						<h3>Network issues</h3>
+						<h3>网络问题</h3>
 						<p>
 							It looks like there were issues with the Modrinth App connecting to Microsoft's
 							servers. This is often the result of a poor connection, so we recommend trying again
@@ -168,13 +168,13 @@ async function copyToClipboard(text) {
 							<a
 								href="https://support.modrinth.com/en/articles/9038231-minecraft-sign-in-issues#h_e71a5f805f"
 							>
-								our support article
+								我们的支持文章
 							</a>
 							to troubleshoot.
 						</p>
 					</template>
 					<template v-else-if="metadata.hostsFile">
-						<h3>Network issues</h3>
+						<h3>网络问题</h3>
 						<p>
 							The Modrinth App tried to connect to Microsoft / Xbox / Minecraft services, but the
 							remote server rejected the connection. This may indicate that these services are
@@ -182,7 +182,7 @@ async function copyToClipboard(text) {
 							<a
 								href="https://support.modrinth.com/en/articles/9038231-minecraft-sign-in-issues#h_d694a29256"
 							>
-								our support article
+								我们的支持文章
 							</a>
 							for steps on how to fix the issue.
 						</p>
@@ -190,8 +190,7 @@ async function copyToClipboard(text) {
 					<template v-else>
 						<h3>Try another Microsoft account</h3>
 						<p>
-							Double check you've signed in with the right account. You may own Minecraft on a
-							different Microsoft account.
+                            再次检查你是否登录了正确的账号，你可能在另一个微软账号上拥有Minecraft
 						</p>
 						<div class="cta-button">
 							<button class="btn btn-primary" :disabled="loadingMinecraft" @click="loginMinecraft">
@@ -248,12 +247,12 @@ async function copyToClipboard(text) {
 						To play this instance, you must sign in through Microsoft below. If you don't have a
 						Minecraft account, you can purchase the game on the
 						<a href="https://www.minecraft.net/en-us/store/minecraft-java-bedrock-edition-pc"
-							>Minecraft website</a
+							>Minecraft 官网</a
 						>.
 					</p>
 					<div class="cta-button">
 						<button class="btn btn-primary" :disabled="loadingMinecraft" @click="loginMinecraft">
-							<LogInIcon /> Sign in to Minecraft
+							<LogInIcon /> 登录 Minecraft
 						</button>
 					</div>
 				</div>

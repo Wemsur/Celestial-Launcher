@@ -240,7 +240,7 @@ async fn auto_install_java_inner(
         let mut archive = zip::ZipArchive::new(std::io::Cursor::new(file))
             .map_err(|_| {
                 crate::Error::from(crate::ErrorKind::InputError(
-                    "Failed to read java zip".to_string(),
+                    "无法读取 Java 压缩包".to_string(),
                 ))
             })?;
 
@@ -267,7 +267,7 @@ async fn auto_install_java_inner(
         .await?;
         archive.extract(&path).map_err(|_| {
             crate::Error::from(crate::ErrorKind::InputError(
-                "Failed to extract java zip".to_string(),
+                "无法解压 Java 压缩包".to_string(),
             ))
         })?;
         if let Some(loading_bar) = &loading_bar {
@@ -299,7 +299,7 @@ async fn auto_install_java_inner(
         Ok(base_path)
     } else {
         Err(crate::ErrorKind::LauncherError(format!(
-                    "No Java Version found for Java version {}, OS {}, and Architecture {}",
+                    "未找到适用于 Java 版本 {0}、操作系统 {1} 和架构 {2} 的 Java",
                     java_version, std::env::consts::OS, std::env::consts::ARCH,
                 )).into())
     }

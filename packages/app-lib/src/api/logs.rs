@@ -102,7 +102,7 @@ async fn resolve_instance_path(
     .await?
     .ok_or_else(|| {
         crate::ErrorKind::InputError(format!(
-            "Unknown instance id or path: {instance}"
+            "未知的实例 ID 或路径: {instance}"
         ))
         .as_error()
     })
@@ -226,7 +226,7 @@ async fn maybe_emit_log_compaction_warning(
     }
 
     let _ = crate::event::emit::emit_warning(&format!(
-        "Modrinth App has compacted {} repeated log lines in {} before displaying it for performance reasons.",
+        "出于性能考虑，Modrinth App 在显示之前已将 {} 中重复的 {} 行日志合并。",
         format_count(stats.compacted_lines),
         file_name,
     ))
@@ -407,7 +407,7 @@ async fn get_output_by_filename_from_path(
         }
     }
     Err(crate::ErrorKind::OtherError(format!(
-        "File extension not supported: {}",
+        "不支持的文件扩展名: {}",
         path.display()
     ))
     .into())

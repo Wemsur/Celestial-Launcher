@@ -18,7 +18,7 @@
 			<StyledInput
 				v-model="searchQuery"
 				:icon="SearchIcon"
-				placeholder="Search logs"
+				placeholder="搜索日志"
 				wrapper-class="flex-1"
 				input-class="!h-10"
 				clearable
@@ -82,13 +82,13 @@
 				<ButtonStyled type="outlined">
 					<button @click="deleteModal?.hide()">
 						<XIcon />
-						Cancel
+						取消
 					</button>
 				</ButtonStyled>
 				<ButtonStyled color="red">
 					<button :disabled="isDeleting" @click="confirmDelete">
 						<TrashIcon />
-						Delete
+						删除
 					</button>
 				</ButtonStyled>
 			</div>
@@ -411,10 +411,10 @@ async function confirmDelete() {
 		await ctx.onDelete()
 		deleteModal.value?.hide()
 	} catch (err) {
-		console.error('Failed to delete log file:', err)
+		console.error('无法删除日志文件:', err)
 		addNotification({
 			type: 'error',
-			title: 'Failed to delete log file',
+			title: '日志文件删除失败',
 			text: typeof err === 'string' ? err : 'Unknown error.',
 		})
 	} finally {
@@ -434,10 +434,10 @@ async function handleShare() {
 			shareModal.value?.show(data.url)
 		}
 	} catch (err) {
-		console.error('Failed to share logs:', err)
+		console.error('分享日志失败:', err)
 		addNotification({
 			type: 'error',
-			title: 'Failed to share logs',
+			title: '分享日志失败',
 			text: typeof err === 'string' ? err : 'Unknown error.',
 		})
 	} finally {
@@ -466,6 +466,15 @@ async function handleShare() {
 
 .modrinth-console-fullscreen-active .app-grid-navbar,
 .modrinth-console-fullscreen-active .app-grid-statusbar {
-	z-index: 0 !important;
+	z-index: -1 !important;
+}
+.modrinth-console-fullscreen-active .app-grid-navbar {
+    display: none;
+}
+
+.flex.min-h-0.flex-1.flex-col.gap-4.fixed.inset-0.bg-surface-1.p-6.py-8.pt-12 {
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    background-color: color-mix(in srgb, var(--surface-1) 54%, transparent) !important;
 }
 </style>

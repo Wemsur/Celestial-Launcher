@@ -54,7 +54,7 @@ const handleSearchContent = async () => {
 				<DropdownIcon />
 				<template #from_file>
 					<FolderOpenIcon />
-					<span class="no-wrap"> Add from file </span>
+					<span class="no-wrap"> 从文件添加 </span>
 				</template>
 			</OverflowMenu>
 		</ButtonStyled>

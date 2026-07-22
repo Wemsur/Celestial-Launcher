@@ -165,7 +165,7 @@ pub async fn login_finish(
     let online_profile = credentials
         .online_profile()
         .await
-        .ok_or(io::Error::other("Failed to fetch player profile"))?;
+        .ok_or(io::Error::other("无法获取玩家资料"))?;
     credentials.offline_profile = MinecraftProfile {
         id: online_profile.id,
         name: online_profile.name.clone(),
@@ -301,12 +301,12 @@ impl Credentials {
         let username = username.trim();
         let username_regex = regex::Regex::new(r"^[A-Za-z0-9_]{3,16}$")
             .map_err(|e| {
-                crate::ErrorKind::OtherError(format!("Invalid username regex: {e}"))
+                crate::ErrorKind::OtherError(format!("无效的用户名正则表达式: {e}"))
             })?;
 
         if !username_regex.is_match(username) {
             return Err(crate::ErrorKind::OtherError(
-                "Offline username must be 3-16 characters long and contain only letters, numbers, or '_'"
+                "离线用户名必须为3-16个字符，且仅包含字母、数字或下划线"
                     .to_string(),
             ).into());
         }
@@ -1344,7 +1344,7 @@ impl MinecraftProfile {
             })
             // There should always be one active skin, even when the player uses their default skin
             .ok_or_else(|| {
-                ErrorKind::OtherError("No active skin found".into())
+                ErrorKind::OtherError("未找到当前使用的皮肤".into())
             })?)
     }
 

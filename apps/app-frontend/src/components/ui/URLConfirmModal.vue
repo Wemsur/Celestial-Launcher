@@ -70,7 +70,7 @@ async function install() {
 				</div>
 				<div class="button-group">
 					<ButtonStyled color="brand">
-						<button @click="install">Install</button>
+						<button @click="install">安装</button>
 					</ButtonStyled>
 				</div>
 			</div>
