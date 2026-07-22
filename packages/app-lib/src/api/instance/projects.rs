@@ -95,7 +95,7 @@ pub async fn install_project_with_dependencies(
 ) -> crate::Result<ResolveContentPlan> {
     let state = State::get().await?;
     let metadata = super::get::get(instance_id).await?.ok_or_else(|| {
-        crate::ErrorKind::InputError("Unknown instance".to_string())
+        crate::ErrorKind::InputError("未知的实例".to_string())
     })?;
     let plan = crate::state::instances::commands::resolve_install_plan(
         instance_id,
@@ -182,7 +182,7 @@ pub async fn switch_project_version_with_dependencies(
 ) -> crate::Result<String> {
     let state = State::get().await?;
     let metadata = super::get::get(instance_id).await?.ok_or_else(|| {
-        crate::ErrorKind::InputError("Unknown instance".to_string())
+        crate::ErrorKind::InputError("未知的实例".to_string())
     })?;
     let path =
         crate::state::instances::commands::switch_project_version_with_dependencies(
@@ -261,7 +261,7 @@ pub async fn update_managed_modrinth_version(
     )
     .await?
     .ok_or_else(|| {
-        crate::ErrorKind::InputError("Unknown instance".to_string())
+        crate::ErrorKind::InputError("未知的实例".to_string())
     })?;
 
     let post_install_edit = match &metadata.link {
@@ -318,7 +318,7 @@ pub async fn repair_managed_modrinth(
     )
     .await?
     .ok_or_else(|| {
-        crate::ErrorKind::InputError("Unknown instance".to_string())
+        crate::ErrorKind::InputError("未知的实例".to_string())
     })?;
 
     let post_install_edit = match &metadata.link {
@@ -362,7 +362,7 @@ pub async fn repair_managed_modrinth(
 
 fn unmanaged_pack_error(instance_id: &str) -> crate::ErrorKind {
     crate::ErrorKind::InputError(format!(
-        "Instance {instance_id} is not a managed Modrinth pack, or has been disconnected."
+        "实例 {instance_id} 不是受管理的 Modrinth 整合包，或已断开连接。"
     ))
 }
 
@@ -373,6 +373,6 @@ async fn get_instance_display_info(
     instance_rows::get_instance_display_info(instance_id, &state.pool)
         .await?
         .ok_or_else(|| {
-            crate::ErrorKind::InputError("Unknown instance".to_string()).into()
+            crate::ErrorKind::InputError("未知的实例".to_string()).into()
         })
 }

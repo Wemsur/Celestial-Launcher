@@ -169,7 +169,7 @@ onUnmounted(() => {
 					</span>
                 </p>
                 <p class="m-0 text-xs text-neutral-500">
-                    Supports JPG, PNG, WEBP
+                    支持 JPG、PNG、WEBP 格式
                 </p>
             </div>
 

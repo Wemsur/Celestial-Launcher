@@ -38,7 +38,7 @@ watch(
 						:disabled="themeStore.getFeatureFlag(option) === DEFAULT_FEATURE_FLAGS[option]"
 						@click="setFeatureFlag(option, DEFAULT_FEATURE_FLAGS[option])"
 					>
-						Reset to default
+						重置为默认值
 					</button>
 				</ButtonStyled>
 				<Toggle

@@ -188,9 +188,9 @@ onUnmounted(() => unlisten())
 				<TimerIcon />
 				<span class="text-sm">
 					<template v-if="instance.last_played">
-						Played {{ formatRelativeTime(dayjs(instance.last_played).toISOString()) }}
+                        {{ formatRelativeTime(dayjs(instance.last_played).toISOString()) }} 前游玩
 					</template>
-					<template v-else> Never played </template>
+					<template v-else> 从未游玩 </template>
 				</span>
 			</div>
 		</div>
@@ -223,7 +223,7 @@ onUnmounted(() => unlisten())
 					</ButtonStyled>
 					<SpinnerIcon
 						v-else-if="modLoading || installing"
-						v-tooltip="modLoading ? 'Instance is loading...' : 'Installing...'"
+						v-tooltip="modLoading ? '正在加载实例...' : '下载中...'"
 						class="animate-spin w-8 h-8"
 						tabindex="-1"
 					/>

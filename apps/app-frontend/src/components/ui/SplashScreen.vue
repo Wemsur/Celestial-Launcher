@@ -135,10 +135,10 @@ function fakeLoadingIncrease() {
 loading_listener(async (e) => {
 	if (e.event.type === 'directory_move') {
 		loadingProgress.value = 100 * (e.fraction ?? 1)
-		message.value = 'Updating app directory...'
+		message.value = '正在更新应用目录...'
 	} else if (e.event.type === 'checking_for_updates') {
 		loadingProgress.value = 100 * (e.fraction ?? 1)
-		message.value = 'Checking for updates...'
+		message.value = '正在检查更新...'
 	}
 })
 </script>

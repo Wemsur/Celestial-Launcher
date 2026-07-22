@@ -216,7 +216,7 @@ const messages = defineMessages({
 
 <template>
 	<ModalWrapper ref="friendInvitesModal" header="View friend requests">
-		<p v-if="incomingRequests.length === 0">You have no pending friend requests :C</p>
+		<p v-if="incomingRequests.length === 0">你没有待处理的好友请求 :C</p>
 		<div v-else class="flex flex-col gap-4 min-w-[40rem]">
 			<div v-for="friend in incomingRequests" :key="friend.username" class="flex gap-2">
 				<Avatar :src="friend.avatar" class="w-12 h-12 rounded-full" size="2.25rem" circle />

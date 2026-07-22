@@ -39,7 +39,7 @@
 									<template v-if="timePlayed > 0">
 										{{ timePlayedHumanized }}
 									</template>
-									<template v-else> Never played </template>
+									<template v-else> 从未游玩 </template>
 								</div>
 							</template>
 						</template>
@@ -115,13 +115,13 @@
 						>
 							<button @click="repairInstance()">
 								<DownloadIcon />
-								Repair
+								修复
 							</button>
 						</ButtonStyled>
 						<ButtonStyled v-else-if="playing === true" color="red" size="large">
 							<button :disabled="stopping" @click="stopInstance('InstancePage')">
 								<StopCircleIcon />
-								{{ stopping ? 'Stopping...' : 'Stop' }}
+								{{ stopping ? '正在停止...' : '停止' }}
 							</button>
 						</ButtonStyled>
 						<ButtonStyled
@@ -131,7 +131,7 @@
 						>
 							<button @click="startInstance('InstancePage')">
 								<PlayIcon />
-								Play
+								启动
 							</button>
 						</ButtonStyled>
 						<div
@@ -141,7 +141,7 @@
 							<ButtonStyled color="brand" size="large">
 								<button @click="handlePlayServer()">
 									<PlayIcon />
-									Play
+									启动
 								</button>
 							</ButtonStyled>
 							<ButtonStyled color="brand" size="large">
@@ -163,11 +163,11 @@
 
 									<template #join_server>
 										<PlayIcon />
-										Join server
+										加入服务器
 									</template>
 									<template #launch_instance>
 										<PlayIcon />
-										Launch instance
+										启动实例
 									</template>
 								</OverflowMenu>
 							</ButtonStyled>
@@ -177,7 +177,7 @@
 							color="brand"
 							size="large"
 						>
-							<button disabled>Starting...</button>
+							<button disabled>启动中...</button>
 						</ButtonStyled>
 						<ButtonStyled circular size="large">
 							<button v-tooltip="'Instance settings'" @click="settingsModal?.show()">
@@ -204,11 +204,11 @@
 								]"
 							>
 								<MoreVerticalIcon />
-								<template #share-instance> <UserPlusIcon /> Share instance </template>
-								<template #host-a-server> <ServerIcon /> Create a server </template>
-								<template #open-folder> <FolderOpenIcon /> Open folder </template>
-								<template #export-mrpack> <PackageIcon /> Export modpack </template>
-								<template #create-shortcut> <ExternalIcon /> Create shortcut </template>
+								<template #share-instance> <UserPlusIcon /> 分享实例  </template>
+								<template #host-a-server> <ServerIcon /> 创建服务器 </template>
+								<template #open-folder> <FolderOpenIcon /> 版本文件夹 </template>
+								<template #export-mrpack> <PackageIcon /> 导出整合包 </template>
+								<template #create-shortcut> <ExternalIcon /> 创建快捷方式 </template>
 							</OverflowMenu>
 						</ButtonStyled>
 					</div>
@@ -244,15 +244,15 @@
 			</RouterView>
 		</div>
 		<ContextMenu ref="options" @option-clicked="handleOptionsClick">
-			<template #play> <PlayIcon /> Play </template>
-			<template #stop> <StopCircleIcon /> Stop </template>
-			<template #add_content> <PlusIcon /> Add content </template>
-			<template #edit> <EditIcon /> Edit </template>
-			<template #copy_path> <ClipboardCopyIcon /> Copy path </template>
-			<template #open_folder> <FolderOpenIcon /> Open folder </template>
-			<template #copy_link> <ClipboardCopyIcon /> Copy link </template>
-			<template #open_link> <GlobeIcon /> Open in Modrinth <ExternalIcon /> </template>
-			<template #copy_names><EditIcon />Copy names</template>
+			<template #play> <PlayIcon /> 启动 </template>
+			<template #stop> <StopCircleIcon /> 停止 </template>
+			<template #add_content> <PlusIcon /> 添加内容 </template>
+			<template #edit> <EditIcon /> 编辑 </template>
+			<template #copy_path> <ClipboardCopyIcon /> 复制路径 </template>
+			<template #open_folder> <FolderOpenIcon /> 版本文件夹 </template>
+			<template #copy_link> <ClipboardCopyIcon /> 复制链接 </template>
+			<template #open_link> <GlobeIcon /> 在Modrinth中打开 <ExternalIcon /> </template>
+			<template #copy_names><EditIcon />复制名称</template>
 			<template #copy_slugs><HashIcon />Copy slugs</template>
 			<template #copy_links><GlobeIcon />Copy links</template>
 			<template #toggle><EditIcon />Toggle selected</template>
@@ -534,22 +534,22 @@ const contentSubpageProps = computed(() =>
 
 const tabs = computed(() => [
 	{
-		label: 'Content',
+		label: '内容',
 		href: `${basePath.value}`,
 		icon: BoxesIcon,
 	},
 	{
-		label: 'Files',
+		label: '文件',
 		href: `${basePath.value}/files`,
 		icon: FolderOpenIcon,
 	},
 	{
-		label: 'Worlds',
+		label: '世界',
 		href: `${basePath.value}/worlds`,
 		icon: GlobeIcon,
 	},
 	{
-		label: 'Logs',
+		label: '日志',
 		href: `${basePath.value}/logs`,
 		icon: TerminalSquareIcon,
 	},
@@ -644,12 +644,12 @@ const createShortcut = async () => {
 
 		addNotification({
 			type: 'success',
-			title: 'Shortcut created',
+			title: '快捷方式已创建',
 		})
 	} catch (error: unknown) {
 		addNotification({
 			type: 'error',
-			title: `Error creating shortcut`,
+			title: `创建快捷方式失败`,
 			text: `${error}`,
 		})
 	}

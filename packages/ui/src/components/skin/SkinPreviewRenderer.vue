@@ -13,7 +13,7 @@
 				class="flex items-center justify-center gap-1.5 text-base font-medium leading-6 text-primary"
 			>
 				<UnfoldHorizontalIcon class="size-5 shrink-0" />
-				Drag to rotate
+				拖拽以旋转
 			</span>
 		</div>
 		<div

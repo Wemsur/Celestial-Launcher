@@ -153,12 +153,12 @@ async function createShortcut() {
 
 		addNotification({
 			type: 'success',
-			title: 'Shortcut created',
+			title: '快捷方式已创建',
 		})
 	} catch (error) {
 		addNotification({
 			type: 'error',
-			title: 'Failed to create shortcut',
+			title: '创建快捷方式失败',
 			text: error instanceof Error ? error.message : '',
 		})
 	}

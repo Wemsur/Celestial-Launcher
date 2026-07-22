@@ -120,7 +120,7 @@ async function addServer(instance) {
 			</div>
 			<div class="input-group push-right">
 				<ButtonStyled>
-					<button @click="modal.hide()">Cancel</button>
+					<button @click="modal.hide()">取消</button>
 				</ButtonStyled>
 			</div>
 		</div>

@@ -196,7 +196,7 @@ fn missing_client_bytes(
         .get(&d::minecraft::DownloadType::Client)
         .ok_or(
             crate::ErrorKind::LauncherError(format!(
-                "No client downloads exist for version {}",
+                "版本 {0} 不存在客户端下载",
                 version.id
             ))
             .as_error(),
@@ -507,7 +507,7 @@ pub async fn download_client(
         .get(&d::minecraft::DownloadType::Client)
         .ok_or(
             crate::ErrorKind::LauncherError(format!(
-                "No client downloads exist for version {version}"
+                "版本 {version} 不存在客户端下载"
             ))
             .as_error(),
         )?;

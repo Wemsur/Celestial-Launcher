@@ -55,9 +55,9 @@ watch(
 		<div class="flex flex-col gap-6">
 			<div class="flex items-center justify-between gap-4">
 				<div class="flex flex-col gap-1">
-					<h3 class="m-0 text-lg font-semibold text-contrast">Fullscreen</h3>
+					<h3 class="m-0 text-lg font-semibold text-contrast">全屏</h3>
 					<p class="m-0 leading-tight">
-						Overwrites the options.txt file to start in full screen when launched.
+						覆盖 options.txt 文件，使游戏启动时全屏运行。
 					</p>
 				</div>
 
@@ -66,8 +66,8 @@ watch(
 
 			<div class="flex items-center justify-between gap-4">
 				<div class="flex flex-col gap-1">
-					<h3 class="m-0 text-lg font-semibold text-contrast">Width</h3>
-					<p class="m-0 leading-tight">The width of the game window when launched.</p>
+					<h3 class="m-0 text-lg font-semibold text-contrast">宽度</h3>
+					<p class="m-0 leading-tight">游戏启动时窗口宽度。</p>
 				</div>
 
 				<StyledInput
@@ -82,8 +82,8 @@ watch(
 
 			<div class="flex items-center justify-between gap-4">
 				<div class="flex flex-col gap-1">
-					<h3 class="m-0 text-lg font-semibold text-contrast">Height</h3>
-					<p class="m-0 leading-tight">The height of the game window when launched.</p>
+					<h3 class="m-0 text-lg font-semibold text-contrast">高度</h3>
+					<p class="m-0 leading-tight">游戏启动时窗口高度。</p>
 				</div>
 
 				<StyledInput
@@ -92,7 +92,7 @@ watch(
 					:disabled="settings.force_fullscreen"
 					autocomplete="off"
 					type="number"
-					placeholder="Enter height..."
+					placeholder="输入高度..."
 				/>
 			</div>
 		</div>
@@ -101,7 +101,7 @@ watch(
 
 		<div class="flex flex-col gap-6">
 			<div class="flex flex-col gap-2.5">
-				<h2 class="m-0 text-lg font-semibold text-contrast">Memory allocated</h2>
+				<h2 class="m-0 text-lg font-semibold text-contrast">内存分配</h2>
 				<Slider
 					id="max-memory"
 					v-model="settings.memory.maximum"
@@ -112,23 +112,23 @@ watch(
 					:snap-range="512"
 					unit="MB"
 				/>
-				<p class="m-0 mt-1 leading-tight">The memory allocated to each instance when it is ran.</p>
+				<p class="m-0 mt-1 leading-tight">每个实例运行时分配的内存大小。</p>
 			</div>
 
 			<div class="flex flex-col gap-2.5">
-				<h2 class="m-0 text-lg font-semibold text-contrast">Java arguments</h2>
+				<h2 class="m-0 text-lg font-semibold text-contrast">Java 参数</h2>
 				<StyledInput
 					id="java-args"
 					v-model="settings.launchArgs"
 					autocomplete="off"
 					type="text"
-					placeholder="Enter java arguments..."
+					placeholder="输入 Java 参数..."
 					wrapper-class="w-full"
 				/>
 			</div>
 
 			<div class="flex flex-col gap-2.5">
-				<h2 class="m-0 text-lg font-semibold text-contrast">Environmental variables</h2>
+				<h2 class="m-0 text-lg font-semibold text-contrast">环境变量</h2>
 				<StyledInput
 					id="env-vars"
 					v-model="settings.envVars"
@@ -144,42 +144,42 @@ watch(
 
 		<div class="flex flex-col gap-6">
 			<div class="flex flex-col gap-2.5">
-				<h3 class="m-0 text-lg font-semibold text-contrast">Pre launch hook</h3>
+				<h3 class="m-0 text-lg font-semibold text-contrast">启动前 Hook</h3>
 				<StyledInput
 					id="pre-launch"
 					v-model="settings.hooks.pre_launch"
 					autocomplete="off"
 					type="text"
-					placeholder="Enter pre-launch command..."
+					placeholder="输入启动前命令..."
 					wrapper-class="w-full"
 				/>
-				<p class="m-0 leading-tight">Ran before the instance is launched.</p>
+				<p class="m-0 leading-tight">在实例启动前运行。</p>
 			</div>
 
 			<div class="flex flex-col gap-2.5">
-				<h3 class="m-0 text-lg font-semibold text-contrast">Wrapper hook</h3>
+				<h3 class="m-0 text-lg font-semibold text-contrast">包装器命令</h3>
 				<StyledInput
 					id="wrapper"
 					v-model="settings.hooks.wrapper"
 					autocomplete="off"
 					type="text"
-					placeholder="Enter wrapper command..."
+					placeholder="输入包装器命令..."
 					wrapper-class="w-full"
 				/>
-				<p class="m-0 leading-tight">Wrapper command for launching Minecraft.</p>
+				<p class="m-0 leading-tight">用于启动 Minecraft 的包装器命令。</p>
 			</div>
 
 			<div class="flex flex-col gap-2.5">
-				<h3 class="m-0 text-lg font-semibold text-contrast">Post exit hook</h3>
+				<h3 class="m-0 text-lg font-semibold text-contrast">退出后 Hook</h3>
 				<StyledInput
 					id="post-exit"
 					v-model="settings.hooks.post_exit"
 					autocomplete="off"
 					type="text"
-					placeholder="Enter post-exit command..."
+					placeholder="输入退出后命令..."
 					wrapper-class="w-full"
 				/>
-				<p class="m-0 leading-tight">Ran after the game closes.</p>
+				<p class="m-0 leading-tight">在游戏关闭后运行。</p>
 			</div>
 		</div>
 	</div>

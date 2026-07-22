@@ -259,7 +259,7 @@ onUnmounted(() => {
 <template>
 	<div v-if="loading" class="flex flex-col gap-2">
 		<span class="flex mt-1 mb-3 leading-none items-center gap-1 text-primary text-lg font-bold">
-			Jump back in
+			返回上次游玩
 		</span>
 		<div class="text-center py-4">
 			<LoaderCircleIcon class="mx-auto size-8 animate-spin text-contrast" />
@@ -267,13 +267,13 @@ onUnmounted(() => {
 	</div>
 	<div v-else-if="jumpBackInItems.length > 0" class="flex flex-1 h-full flex-col gap-2">
 		<HeadingLink v-if="theme.getFeatureFlag('worlds_tab')" to="/worlds" class="mt-1">
-			Jump back in
+            返回上次游玩
 		</HeadingLink>
 		<span
 			v-else
 			class="flex mt-1 mb-3 leading-none items-center gap-1 text-primary text-lg font-bold"
 		>
-			Jump back in
+			返回上次游玩
 		</span>
 		<div class="grid-when-huge flex flex-col w-full gap-2 flex-1 overflow-y-auto">
 			<template

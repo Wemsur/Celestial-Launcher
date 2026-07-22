@@ -87,14 +87,14 @@ async function copyToClipboard(text: string) {
 			<div class="bg-surface-2 rounded-2xl p-4 px-5 flex flex-col gap-3">
 				<template v-if="matchedError">
 					<div class="flex flex-col gap-1.5">
-						<h3 class="text-base font-bold m-0">What we think happened</h3>
+						<h3 class="text-base font-bold m-0">我们推测的原因</h3>
 						<p class="text-sm text-secondary m-0">
 							{{ matchedError.whatHappened }}
 						</p>
 					</div>
 
 					<div class="flex flex-col gap-1.5">
-						<h3 class="text-base font-bold m-0">How to fix it</h3>
+						<h3 class="text-base font-bold m-0">解决方法</h3>
 						<ol class="list-none flex flex-col gap-2 m-0 pl-0">
 							<li
 								v-for="(step, index) in matchedError.stepsToFix"

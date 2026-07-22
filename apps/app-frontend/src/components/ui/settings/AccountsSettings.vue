@@ -169,11 +169,11 @@ function getOfflineAvatarColor(name: string): string {
 }
 
 function notifyError(msg: string) {
-    notificationManager.addNotification({ title: 'Error', text: msg, type: 'error' })
+    notificationManager.addNotification({ title: '错误', text: msg, type: 'error' })
 }
 
 function notifySuccess(msg: string) {
-    notificationManager.addNotification({ title: 'Success', text: msg, type: 'success' })
+    notificationManager.addNotification({ title: '成功', text: msg, type: 'success' })
 }
 
 // ===== 状态 =====
@@ -319,7 +319,7 @@ async function handleLogout() {
     try {
         await logout()
         modrinthUser.value = null
-        notifySuccess('Signed out of Modrinth')
+        notifySuccess('已退出 Modrinth 登录')
     } catch (err) {
         notifyError(err instanceof Error ? err.message : String(err))
     }

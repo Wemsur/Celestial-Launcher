@@ -71,12 +71,12 @@
   "app.action-bar.view-logs": {
     "message": "查看日志"
   },
-	"app.appearance-settings.blur-background.description": {
-		"message": "在自定义背景图片时启用背景模糊。"
-	},
-	"app.appearance-settings.blur-background.title": {
-		"message": "背景模糊"
-	},
+  "app.appearance-settings.blur-background.description": {
+    "message": "在自定义背景图片时启用背景模糊。"
+  },
+  "app.appearance-settings.blur-background.title": {
+    "message": "背景模糊"
+  },
   "app.appearance-settings.advanced-rendering.description": {
     "message": "启用模糊效果等高级渲染。可能会在没有硬件加速渲染的情况下造成性能问题。"
   },
@@ -804,16 +804,16 @@
     "message": "选择图标"
   },
   "instance.settings.tabs.general.library-groups": {
-    "message": "库分组"
+    "message": "标签"
   },
   "instance.settings.tabs.general.library-groups.create": {
-    "message": "创建新的分组"
+    "message": "创建新的标签"
   },
   "instance.settings.tabs.general.library-groups.description": {
-    "message": "库分组功能可以让你将实例整理到库中的不同部分。"
+    "message": "标签功能可以让你将实例整理到版本库中的不同部分。"
   },
   "instance.settings.tabs.general.library-groups.enter-name": {
-    "message": "输入分组名称"
+    "message": "输入标签名称"
   },
   "instance.settings.tabs.general.name": {
     "message": "名称"
@@ -1063,5 +1063,377 @@
   },
   "unknown-pack-warning-modal.warning.title": {
     "message": "未知文件警告"
+  },
+  "app.project.version.download-in-browser": {
+    "message": "在浏览器中下载"
+  },
+  "app.project.install-button.switch-version": {
+    "message": "切换版本"
+  },
+  "app.skins.section.chaos-cubed": {
+    "message": "混沌立方"
+  },
+  "app.project.versions.already-installed": {
+    "message": "已安装"
+  },
+  "app.project.version.all-versions": {
+    "message": "所有版本"
+  },
+  "app.project.version.installing": {
+    "message": "安装中"
+  },
+  "app.nav.worlds": {
+    "message": "世界"
+  },
+  "app.nav.discover-content": {
+    "message": "发现内容"
+  },
+  "app.nav.skin-selector": {
+    "message": "皮肤选择器"
+  },
+  "app.nav.library": {
+    "message": "库"
+  },
+  "app.nav.create-new-instance": {
+    "message": "创建新实例"
+  },
+  "app.nav.modrinth-account": {
+    "message": "Modrinth 账户"
+  },
+  "app.nav.signed-in-as": {
+    "message": "已登录"
+  },
+  "app.nav.sign-out": {
+    "message": "退出登录"
+  },
+  "app.nav.sign-in-modrinth": {
+    "message": "登录 Modrinth 账户"
+  },
+  "app.splash.updating-directory": {
+    "message": "正在更新应用目录..."
+  },
+  "app.splash.checking-updates": {
+    "message": "正在检查更新..."
+  },
+  "app.home.welcome-back": {
+    "message": "欢迎回来！"
+  },
+  "app.home.welcome": {
+    "message": "欢迎来到 Modrinth App！"
+  },
+  "app.home.discover-modpack": {
+    "message": "发现整合包"
+  },
+  "app.home.discover-mods": {
+    "message": "发现模组"
+  },
+  "app.account.add-offline": {
+    "message": "添加离线账户"
+  },
+  "app.account.username": {
+    "message": "用户名"
+  },
+  "app.account.cancel": {
+    "message": "取消"
+  },
+  "app.account.add": {
+    "message": "添加"
+  },
+  "app.account.username-required": {
+    "message": "用户名不能为空"
+  },
+  "app.account.username-format": {
+    "message": "用户名必须为3-16个字符（仅字母、数字和下划线）"
+  },
+  "app.account.success": {
+    "message": "成功"
+  },
+  "app.account.offline-created": {
+    "message": "离线账户创建成功"
+  },
+  "app.restart": {
+    "message": "正在重启..."
+  },
+  "app.survey.title": {
+    "message": "你好，Modrinth 用户！"
+  },
+  "app.survey.question": {
+    "message": "您愿意花几分钟回答关于 Modrinth App 使用体验的问题吗？"
+  },
+  "app.survey.feedback": {
+    "message": "您的反馈将直接发送给 Modrinth 团队，帮助指导未来的更新！"
+  },
+  "app.survey.take": {
+    "message": "参与调查"
+  },
+  "app.survey.decline": {
+    "message": "不用了"
+  },
+  "app.news.title": {
+    "message": "新闻"
+  },
+  "app.news.view-all": {
+    "message": "查看全部新闻"
+  },
+  "app.upgrade-plus": {
+    "message": "升级到 Modrinth+"
+  },
+  "app.auth.error": {
+    "message": "错误"
+  },
+  "app.auth.failed-fetch-profile": {
+    "message": "无法获取玩家资料"
+  },
+  "app.auth.invalid-regex": {
+    "message": "无效的用户名正则表达式: {e}"
+  },
+  "app.auth.offline-username-format": {
+    "message": "离线用户名必须为3-16个字符，且仅包含字母、数字或下划线"
+  },
+  "app.auth.no-active-skin": {
+    "message": "未找到当前使用的皮肤"
+  },
+  "app.update.toast-title": {
+    "message": "版本 {version} 安装成功！"
+  },
+  "app.update.toast-text": {
+    "message": "点击此处查看更新日志。"
+  },
+  "app.update.available": {
+    "message": "有可用的更新"
+  },
+  "app.update.download-complete": {
+    "message": "下载完成"
+  },
+  "app.update.metered-body": {
+    "message": "Modrinth App v{version} 现已发布！由于你正在使用按流量计费的网络，该更新未自动下载。"
+  },
+  "app.update.complete-body": {
+    "message": "Modrinth App v{version} 更新已下载完成！立即重启更新，或退出时自动安装。"
+  },
+  "app.update.reload-to-update": {
+    "message": "重启以更新"
+  },
+  "app.update.download-size": {
+    "message": "下载（{size}）"
+  },
+  "app.update.changelog": {
+    "message": "更新日志"
+  },
+  "app.browse.adding-server-to-instance": {
+    "message": "正在将服务器添加到实例"
+  },
+  "app.browse.server-environment-warning": {
+    "message": "只能将客户端模组添加到服务器实例"
+  },
+  "app.browse.instance-game-version.title": {
+    "message": "游戏版本由实例提供"
+  },
+  "app.browse.server-game-version.title": {
+    "message": "游戏版本由服务器提供"
+  },
+  "app.browse.content-install-warning.body": {
+    "message": "加入服务器时，添加内容可能会破坏兼容性。当更新服务器实例内容时，任何添加的内容也将丢失。"
+  },
+  "app.browse.instance-loader.title": {
+    "message": "加载器版本由实例提供"
+  },
+  "app.browse.server-loader.title": {
+    "message": "加载器由服务器提供"
+  },
+  "app.browse.locked.instance": {
+    "message": "由该实例提供"
+  },
+  "app.browse.locked.server": {
+    "message": "由该服务器提供"
+  },
+  "app.browse.sync.with-instance": {
+    "message": "与实例同步"
+  },
+  "app.update.button.update": {
+    "message": "更新"
+  },
+  "app.update.button.downloading": {
+    "message": "正在下载更新"
+  },
+  "app.update.button.reload": {
+    "message": "重启以更新"
+  },
+  "app.background-settings.title": {
+    "message": "背景图片"
+  },
+  "app.background-settings.description": {
+    "message": "自定义 Modrinth App 的整体背景"
+  },
+  "app.background-settings.drop-hint": {
+    "message": "拖拽图片到这里..."
+  },
+  "app.background-settings.drag-drop-hint": {
+    "message": "拖放一张图片或点击来自定义应用背景。"
+  },
+  "app.world.world-item.hardcore": {
+    "message": "极限模式"
+  },
+  "app.world.world-item.linked-server": {
+    "message": "由服务器项目管理"
+  },
+  "app.world.world-item.cant-connect": {
+    "message": "无法连接至服务器"
+  },
+  "app.world.world-item.no-contact": {
+    "message": "无法连接服务器"
+  },
+  "app.world.world-item.incompatible-server": {
+    "message": "服务器不兼容"
+  },
+  "app.world.world-item.no-singleplayer-quick-play": {
+    "message": "只能在 Minecraft 1.20 及以后的版本中快速进入单人游戏世界"
+  },
+  "app.world.world-item.no-server-quick-play": {
+    "message": "只能在 Minecraft Alpha 1.0.5 及以后的版本中快速进入服务器"
+  },
+  "app.world.world-item.game-already-open": {
+    "message": "实例已启动"
+  },
+  "app.world.world-item.world-in-use": {
+    "message": "世界正在使用中"
+  },
+  "app.world.world-item.a-minecraft-server": {
+    "message": "Minecraft 服务器"
+  },
+  "app.world.world-item.copy-address": {
+    "message": "复制地址"
+  },
+  "app.world.world-item.create-shortcut": {
+    "message": "创建快捷方式"
+  },
+  "app.world.world-item.dont-show-on-home": {
+    "message": "在主界面隐藏"
+  },
+  "app.world.world-item.play-instance": {
+    "message": "游玩实例"
+  },
+  "app.world.world-item.view-instance": {
+    "message": "查看实例"
+  },
+  "app.instance.export-mrpack": {
+    "message": "导出整合包"
+  },
+  "app.instance.open-folder": {
+    "message": "打开文件夹"
+  },
+  "app.instance.launch-instance": {
+    "message": "启动实例"
+  },
+  "app.instance.create-shortcut": {
+    "message": "创建快捷方式"
+  },
+  "app.project.version.already-installed": {
+    "message": "已安装"
+  },
+  "app.project.install-context.install-button": {
+    "message": "安装"
+  },
+  "app.instance.settings.tabs.general.update-channel": {
+    "message": "更新渠道"
+  },
+  "app.instance.settings.tabs.general.update-channel.release": {
+    "message": "正式版"
+  },
+  "app.instance.settings.tabs.general.update-channel.beta": {
+    "message": "Beta 测试版"
+  },
+  "app.instance.settings.tabs.general.update-channel.alpha": {
+    "message": "Alpha 测试版"
+  },
+  "app.instance.settings.tabs.general.update-channel.release.description": {
+    "message": "只有正式版会被显示为可用更新。"
+  },
+  "app.instance.settings.tabs.general.update-channel.beta.description": {
+    "message": "正式版和 beta 测试版会被显示为可用更新。"
+  },
+  "app.instance.settings.tabs.general.update-channel.alpha.description": {
+    "message": "正式版，beta 和 alpha 测试版会被显示为可用更新。"
+  },
+  "app.instance.settings.tabs.general.update-channel.select": {
+    "message": "选择更新渠道"
+  },
+  "app.instance.settings.tabs.general.edit-icon": {
+    "message": "编辑图标"
+  },
+  "app.instance.settings.tabs.general.edit-icon.replace": {
+    "message": "替换图标"
+  },
+  "app.instance.settings.tabs.general.edit-icon.select": {
+    "message": "选择图标"
+  },
+  "app.instance.settings.tabs.general.edit-icon.remove": {
+    "message": "移除图标"
+  },
+  "app.instance.settings.tabs.general.duplicate-instance": {
+    "message": "复制实例"
+  },
+  "app.instance.settings.tabs.general.duplicate-instance.description": {
+    "message": "创建此实例的副本，包含世界、配置、模组等内容。"
+  },
+  "app.instance.settings.tabs.general.duplicate-button": {
+    "message": "复制"
+  },
+  "app.instance.settings.tabs.general.duplicate-button.tooltip.installing": {
+    "message": "安装时无法复制。"
+  },
+  "app.instance.settings.tabs.general.library-groups": {
+    "message": "库分组"
+  },
+  "app.instance.settings.tabs.general.library-groups.description": {
+    "message": "库分组功能可以让你将实例整理到库中的不同部分。"
+  },
+  "app.instance.settings.tabs.general.library-groups.enter-name": {
+    "message": "输入分组名称"
+  },
+  "app.instance.settings.tabs.general.library-groups.create": {
+    "message": "创建新的分组"
+  },
+  "app.instance.settings.tabs.general.delete": {
+    "message": "删除实例"
+  },
+  "app.instance.settings.tabs.general.delete.button": {
+    "message": "删除实例"
+  },
+  "app.instance.settings.tabs.general.deleting.button": {
+    "message": "删除中..."
+  },
+  "app.instance.settings.tabs.general.delete.description": {
+    "message": "将从设备中永久删除该实例，包括存档、配置文件及已安装内容。此操作不可撤销，请谨慎操作。"
+  },
+  "app.instance.settings.tabs.general.name": {
+    "message": "名称"
+  },
+  "app.browse.locked.instance-game-version.title": {
+    "message": "游戏版本由实例提供"
+  },
+  "app.browse.locked.server-game-version.title": {
+    "message": "游戏版本由服务器提供"
+  },
+  "app.browse.locked.instance-loader.title": {
+    "message": "加载器版本由实例提供"
+  },
+  "app.browse.locked.server-loader.title": {
+    "message": "加载器由服务器提供"
+  },
+  "app.browse.locked.instance.sync": {
+    "message": "与实例同步"
+  },
+  "app.appearance-settings.background-image.title": {
+    "message": "背景图片"
+  },
+  "app.appearance-settings.background-image.description": {
+    "message": "自定义 Modrinth App 的整体背景"
+  },
+  "app.appearance-settings.background-image.drop-active": {
+    "message": "拖放图片到这里..."
+  },
+  "app.appearance-settings.background-image.hint": {
+    "message": "拖放一张图片或点击来自定义应用背景。"
   }
 }

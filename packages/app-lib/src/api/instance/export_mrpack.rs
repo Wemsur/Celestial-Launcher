@@ -32,7 +32,7 @@ pub async fn export_mrpack(
         state.io_semaphore.0.acquire().await?;
     let metadata = get(instance_id).await?.ok_or_else(|| {
         crate::ErrorKind::OtherError(format!(
-            "Tried to export a nonexistent instance {instance_id}!"
+            "尝试导出不存在的实例 {instance_id}!"
         ))
     })?;
     let included_export_candidates = included_export_candidates
@@ -164,7 +164,7 @@ fn pack_get_relative_path(
         path.strip_prefix(instance_path)
             .map_err(|_| {
                 crate::ErrorKind::FSError(format!(
-                    "Path {path:?} does not correspond to an instance"
+                    "路径 {path:?} 不对应任何实例"
                 ))
             })?
             .components()
@@ -239,7 +239,7 @@ pub async fn create_mrpack_json(
                 env.insert(EnvType::Server, SideType::Required);
                 let Some(primary_file) = version.files.first() else {
                     return Some(Err(crate::ErrorKind::OtherError(format!(
-                        "No primary file found for mod at: {path}"
+                        "未在 {path} 找到模组的主文件"
                     ))
                     .as_error()));
                 };
@@ -257,7 +257,7 @@ pub async fn create_mrpack_json(
                         Ok(path) => path,
                         Err(_) => {
                             return Some(Err(crate::ErrorKind::OtherError(
-                                "Invalid file path in project".into(),
+                                "项目中存在无效的文件路径".into(),
                             )
                             .as_error()));
                         }

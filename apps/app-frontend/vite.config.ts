@@ -74,8 +74,9 @@ export default defineConfig({
 	clearScreen: false,
 	// tauri expects a fixed port, fail if that port is not available
 	server: {
-		port: 5173,
+		port: 8080,
 		strictPort: true,
+		host: '127.0.0.1',
 		headers: {
 			'content-security-policy': Object.entries(tauriConf.app.security.csp)
 				.map(([directive, sources]) => {

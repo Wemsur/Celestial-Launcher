@@ -110,12 +110,12 @@
 	</Accordion>
     <NewModal
         ref="offlineModalRef"
-        header="Add Offline Account"
+        header="添加离线账户"
         :max-width="'500px'"
     >
         <form @submit.prevent="handleCreateOffline" class="space-y-6 min-w-[400px]">
             <label class="flex flex-col gap-2">
-                <span class="font-semibold text-contrast">Username</span>
+                <span class="font-semibold text-contrast">用户名</span>
                 <StyledInput
                     ref="offlineInputRef"
                     v-model="offlineUsername"
@@ -358,9 +358,9 @@ function getOfflineAvatarColor(name: string) {
 /** 校验用户名 */
 function validateOfflineUsername(name: string): string {
     const trimmed = name.trim()
-    if (!trimmed) return 'Username is required'
+    if (!trimmed) return '用户名不能为空'
     if (!/^[A-Za-z0-9_]{3,16}$/.test(trimmed)) {
-        return 'Must be 3-16 characters (letters, numbers, underscore only)'
+        return '用户名必须为3-16个字符（仅字母、数字和下划线）'
     }
     return ''
 }
@@ -386,8 +386,8 @@ async function handleCreateOffline() {
         hideOfflineModal()
         // 通知
         notificationManager.addNotification({
-            title: 'Success',
-            text: 'Offline account created',
+            title: '成功',
+            text: '离线账户创建成功',
             type: 'success',
         })
     } catch (err) {

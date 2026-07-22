@@ -69,7 +69,7 @@ async function findLauncherDir() {
 	const newDir = await open({
 		multiple: false,
 		directory: true,
-		title: 'Select a new app directory',
+		title: '选择新的应用目录',
 	})
 
 	if (newDir) {
@@ -81,7 +81,7 @@ async function findLauncherDir() {
 <template>
 	<div class="flex flex-col gap-6">
 		<div class="flex flex-col gap-2.5">
-			<h2 class="m-0 text-lg font-semibold text-contrast">App directory</h2>
+			<h2 class="m-0 text-lg font-semibold text-contrast">应用目录</h2>
 			<StyledInput
 				id="appDir"
 				v-model="settings.custom_dir"
@@ -109,7 +109,7 @@ async function findLauncherDir() {
 				title="Are you sure you want to purge the cache?"
 				description="If you proceed, your entire cache will be purged. This may slow down the app temporarily."
 				:has-to-type="false"
-				proceed-label="Purge cache"
+				proceed-label="清除缓存"
 				:show-ad-on-close="false"
 				@proceed="purgeCache"
 			/>

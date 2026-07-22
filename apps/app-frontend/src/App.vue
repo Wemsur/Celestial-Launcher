@@ -472,7 +472,7 @@ async function setupApp() {
 
 	await warning_listener((e) =>
 		addNotification({
-			title: 'Warning',
+			title: '警告',
 			text: e.message,
 			type: 'warn',
 		}),
@@ -1460,7 +1460,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 					class="flex items-center gap-4 text-contrast font-semibold text-xl select-none cursor-default"
 				>
 					<RefreshCwIcon data-tauri-drag-region class="animate-spin w-6 h-6" />
-					Restarting...
+					正在重启...
 				</span>
 			</div>
 		</Transition>
@@ -1488,22 +1488,22 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			<NavButton v-if="false" v-tooltip.right="'Home'" to="/">
 				<HomeIcon />
 			</NavButton>
-			<NavButton v-if="true" v-tooltip.right="'Worlds'" to="/Worlds">
+			<NavButton v-if="true" v-tooltip.right="'世界'" to="/Worlds">
 				<WorldIcon />
 			</NavButton>
 			<NavButton
-				v-tooltip.right="'Discover content'"
+				v-tooltip.right="'发现内容'"
 				to="/browse/modpack"
 				:is-primary="() => route.path.startsWith('/browse') && !route.query.i"
 				:is-subpage="(route) => route.path.startsWith('/project') && !route.query.i"
 			>
 				<CompassIcon />
 			</NavButton>
-			<NavButton v-tooltip.right="'Skin selector'" to="/skins">
+			<NavButton v-tooltip.right="'皮肤'" to="/skins">
 				<ChangeSkinIcon />
 			</NavButton>
 			<NavButton
-				v-tooltip.right="'Library'"
+				v-tooltip.right="'版本'"
 				to="/library"
 				:is-primary="(r) => r.path === '/library' || r.path === '/library'"
 				:is-subpage="
@@ -1528,7 +1528,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 				<QuickInstanceSwitcher />
 			</suspense>
 			<NavButton
-				v-tooltip.right="'Create new instance'"
+				v-tooltip.right="'创建新实例'"
 				:to="() => installationModal?.show()"
 				:disabled="offline"
 			>
@@ -1543,7 +1543,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			</NavButton>
 			<OverflowMenu
 				v-if="credentials?.user"
-				v-tooltip.right="`Modrinth account`"
+				v-tooltip.right="`Modrinth 账户`"
 				class="w-12 h-12 text-primary rounded-full flex items-center justify-center text-2xl transition-all bg-transparent hover:bg-button-bg hover:text-contrast border-0 cursor-pointer"
 				:options="[
 					{
@@ -1562,7 +1562,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 				<template #view-profile>
 					<UserIcon />
 					<span class="inline-flex items-center gap-1">
-						Signed in as
+						登录为
 						<span class="inline-flex items-center gap-1 text-contrast font-semibold">
 							<Avatar :src="credentials?.user?.avatar_url" alt="" size="20px" circle />
 							{{ credentials?.user?.username }}
@@ -1570,9 +1570,9 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 					</span>
 					<ExternalIcon />
 				</template>
-				<template #sign-out> <LogOutIcon /> Sign out </template>
+				<template #sign-out> <LogOutIcon /> 退出登录 </template>
 			</OverflowMenu>
-			<NavButton v-else v-tooltip.right="'Sign in to a Modrinth account'" :to="() => signIn()">
+			<NavButton v-else v-tooltip.right="'登录 Modrinth 账户'" :to="() => signIn()">
 				<LogInIcon class="text-brand" />
 			</NavButton>
 		</div>
@@ -1629,22 +1629,22 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 		<div class="app-viewport flex-grow router-view">
 			<transition name="popup-survey">
 				<div
-					v-if="availableSurvey"
+					v-if="false"
 					class="w-[400px] z-20 fixed -bottom-12 pb-16 right-[--right-bar-width] mr-4 rounded-t-2xl card-shadow bg-bg-raised border-surface-5 border-[1px] border-solid border-b-0 p-4"
 				>
-					<h2 class="text-lg font-extrabold mt-0 mb-2">Hey there Modrinth user!</h2>
+					<h2 class="text-lg font-extrabold mt-0 mb-2">你好，Modrinth 用户！</h2>
 					<p class="m-0 leading-tight">
-						Would you mind answering a few questions about your experience with Modrinth App?
+						您愿意花几分钟回答关于 Modrinth App 使用体验的问题吗？
 					</p>
 					<p class="mt-3 mb-4 leading-tight">
-						This feedback will go directly to the Modrinth team and help guide future updates!
+						您的反馈将直接发送给 Modrinth 团队，帮助指导未来的更新！
 					</p>
 					<div class="flex gap-2">
 						<ButtonStyled color="brand">
-							<button @click="openSurvey"><NotepadTextIcon /> Take survey</button>
+							<button @click="openSurvey"><NotepadTextIcon /> 参与调查</button>
 						</ButtonStyled>
 						<ButtonStyled>
-							<button @click="dismissSurvey"><XIcon /> No thanks</button>
+							<button @click="dismissSurvey"><XIcon /> 不用了</button>
 						</ButtonStyled>
 					</div>
 				</div>
@@ -1726,7 +1726,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 						class="p-4 border-0 border-b-[1px] border-[--brand-gradient-border] border-solid"
 					/>
 					<div v-if="news && news.length > 0" class="p-4 flex flex-col items-center">
-						<h3 class="text-base mb-4 text-primary font-medium m-0 text-left w-full">News</h3>
+						<h3 class="text-base mb-4 text-primary font-medium m-0 text-left w-full">新闻</h3>
 						<div class="space-y-4 flex flex-col items-center w-full">
 							<NewsArticleCard
 								v-for="(item, index) in news"
@@ -1735,7 +1735,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 							/>
 							<ButtonStyled color="brand" size="large">
 								<a href="https://modrinth.com/news" target="_blank" class="my-4">
-									<NewspaperIcon /> View all news
+									<NewspaperIcon /> 查看全部新闻
 								</a>
 							</ButtonStyled>
 						</div>
@@ -1748,7 +1748,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 					class="absolute bottom-[250px] w-full flex justify-center items-center gap-1 px-4 py-3 text-purple font-medium hover:underline z-10"
 					target="_blank"
 				>
-					<ArrowBigUpDashIcon class="text-2xl" /> Upgrade to Modrinth+
+					<ArrowBigUpDashIcon class="text-2xl" /> 升级到 Modrinth+
 				</a>
 				<PromotionWrapper />
 			</template>

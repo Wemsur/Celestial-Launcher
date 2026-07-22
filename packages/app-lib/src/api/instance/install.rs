@@ -12,7 +12,7 @@ pub async fn get_optimal_jre_key(
         .await?
         .ok_or_else(|| {
             crate::ErrorKind::OtherError(format!(
-                "Tried to resolve a nonexistent instance {instance_id}!"
+                "尝试解析不存在的实例 {instance_id}!"
             ))
         })?;
     let (minecraft, version_index) =

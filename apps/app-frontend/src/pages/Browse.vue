@@ -557,12 +557,12 @@ const selectableProjectTypes = computed(() => {
 	}
 
 	return [
-		{ label: 'Modpacks', href: `/browse/modpack${suffix}`, shown: modpacks },
-		{ label: 'Mods', href: `/browse/mod${suffix}`, shown: mods },
-		{ label: 'Resource Packs', href: `/browse/resourcepack${suffix}` },
-		{ label: 'Data Packs', href: `/browse/datapack${suffix}`, shown: dataPacks },
-		{ label: 'Shaders', href: `/browse/shader${suffix}` },
-		{ label: 'Servers', href: `/browse/server${suffix}`, shown: !instance.value },
+		{ label: '整合包', href: `/browse/modpack${suffix}`, shown: modpacks },
+		{ label: '模组', href: `/browse/mod${suffix}`, shown: mods },
+		{ label: '资源包', href: `/browse/resourcepack${suffix}` },
+		{ label: '数据包', href: `/browse/datapack${suffix}`, shown: dataPacks },
+		{ label: '光影', href: `/browse/shader${suffix}` },
+		{ label: '服务器', href: `/browse/server${suffix}`, shown: !instance.value },
 	]
 })
 

@@ -60,7 +60,7 @@ function daysLeft() {
 		>
 			<div class="flex w-full items-center justify-between gap-2">
 				<h2 class="m-0 min-w-0 truncate text-base font-semibold text-contrast">
-					Pride Fundraiser 2026
+					骄傲月慈善筹款 2026
 				</h2>
 				<button
 					type="button"
