@@ -329,6 +329,7 @@ pub enum Theme {
     Light,
     Oled,
     Elegant,
+    Customdark,
     #[serde(rename = "antiquedark")] // 告诉 Serde：当前端传包进 "antiquedark" 字符串时，映射到此处的枚举
     AntiqueDark,
     System,
@@ -342,6 +343,7 @@ impl Theme {
             Theme::Oled => "oled",
             Theme::Elegant => "elegant",
             Theme::AntiqueDark => "antiquedark",
+            Theme::Customdark => "customdark",
             Theme::System => "system",
         }
     }
@@ -353,6 +355,7 @@ impl Theme {
             "oled" => Theme::Oled,
             "elegant" => Theme::Elegant,
             "antiquedark" => Theme::AntiqueDark,
+            "customdark" => Theme::Customdark,
             "system" => Theme::System,
             _ => Theme::Dark,
         }

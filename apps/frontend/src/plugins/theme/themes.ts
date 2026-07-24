@@ -2,7 +2,7 @@ export const LightThemes = ['light'] as const
 
 export type LightTheme = (typeof LightThemes)[number]
 
-export const DarkThemes = ['dark', 'oled', 'retro', 'elegant', 'antiquedark'] as const
+export const DarkThemes = ['dark', 'oled', 'retro', 'elegant', 'antiquedark', 'customdark'] as const
 
 export type DarkTheme = (typeof DarkThemes)[number]
 

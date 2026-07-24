@@ -2,7 +2,7 @@
 import {
 ButtonStyled, Combobox, defineMessages, ThemeSelector, Toggle, useVIntl
 } from '@modrinth/ui'
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted} from 'vue'
 
 import { get, set } from '@/helpers/settings.ts'
 import { getOS } from '@/helpers/utils'
@@ -15,10 +15,16 @@ import {TrashIcon} from "@modrinth/assets";
 const themeStore = useTheming()
 const { formatMessage } = useVIntl()
 
+// 组件挂载时加载已保存的 hueValue
+onMounted(async () => {
+    await themeStore.loadHueValue()
+})
+
 const worldsInHomeFlag: FeatureFlag = 'worlds_in_home'
 const skipNonEssentialWarningsFlag: FeatureFlag = 'skip_non_essential_warnings'
 const skipUnknownPackWarningFlag: FeatureFlag = 'skip_unknown_pack_warning'
 const showPlayTimeFlag: FeatureFlag = 'show_instance_play_time'
+const hueValue = ref(0)
 
 const delete_background = async() => {
     try {
@@ -52,7 +58,11 @@ const disableCustomMode = () => {
     document.body.classList.remove('custom-bg-active');
 };
 
-
+// 存储自定义主题色
+function onHueChange(event: Event) {
+    const val = Number((event.target as HTMLInputElement).value)
+    themeStore.saveHueValue(val)
+}
 
 const messages = defineMessages({
 	colorThemeTitle: {
@@ -201,6 +211,23 @@ watch(
 		:theme-options="themeStore.getThemeOptions()"
 		system-theme-color="system"
 	/>
+    <!-- 色相条 -->
+    <div class="mt-4 mb-8">
+        <h2 class="m-0 text-lg font-semibold text-contrast">自定义颜色</h2>
+        <p class="m-0 mt-1">
+            在支持自定义颜色的主题下自定义主题色
+        </p>
+        <div class="relative mt-2 h-4 w-full select-none" style="height:10px">
+            <input
+                type="range"
+                min="0"
+                max="360"
+                :value="themeStore.hueValue"
+                @input="onHueChange"
+                class="h-5 w-full appearance-none rounded-full bg-transparent cursor-pointer focus:shadow-[0_0_0_4px_hsl(var(--brand-hue,217),91%,60%)] [&::-webkit-slider-runnable-track]:rounded-full [&::-moz-range-track]:rounded-full"
+            />
+        </div>
+    </div>
     <BackgroundImageSettings/>
     <button id="purge-cache" class="btn min-w-max m-2" @click="delete_background">
         <TrashIcon/>
@@ -221,8 +248,6 @@ watch(
 			:model-value="themeStore.customBgBlur"
 			@update:model-value="
 			(e) => {
-				// 只做一件事：把最新的布尔值状态传给 action
-				// 里面会自动帮你修改 customBgBlur、设置 class 并通过 invoke 告诉 Rust
 				themeStore.toggleBgBlur(!!e)
 			}
 			"
@@ -415,3 +440,54 @@ watch(
 		/>
 	</div>
 </template>
+
+<style lang="scss" scoped>
+/* 轨道高度 */
+input[type="range"] {
+    &::-webkit-slider-runnable-track {
+        height: 16px;
+        border-radius: 9999px;
+
+    }
+    &::-moz-range-track {
+        height: 6px;
+        border-radius: 9999px;
+    }
+
+    /* 轨道背景色 = 渐变条 */
+    &::-webkit-slider-runnable-track {
+        background: linear-gradient(to right,
+        hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
+        hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%),
+        hsl(360,100%,50%));
+    }
+
+    &::-moz-range-track {
+        background: linear-gradient(to right,
+        hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
+        hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%),
+        hsl(360,100%,50%));
+    }
+
+    /* Thumb */
+    &::-webkit-slider-thumb {
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        border: 2px solid #ffffff;
+        box-shadow: 0 0 0 2px rgba(0,0,0,0.45);
+        cursor: pointer;
+    }
+
+    &::-moz-range-thumb {
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        border: 2px solid #ffffff;
+        box-shadow: 0 0 0 2px rgba(0,0,0,0.45);
+        cursor: pointer;
+    }
+}
+</style>

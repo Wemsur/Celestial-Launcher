@@ -527,3 +527,54 @@ html {
 	}
 	--color-brand-highlight: rgb(140 129 82 / 0.25);
 }
+
+.customdark-mode {
+	@extend .dark-mode;
+
+	--surface-1: #1a1a1a;
+	--surface-1-5: #1b1b1b;
+	--surface-2: #202020;
+	--surface-2-5: #303030;
+	--surface-3: hsl(var(--brand-hue, 217), 1%, 14%);
+	--surface-4: #262626;
+	--surface-5: #42444a; //这玩意是用在哪的
+
+	--color-ad: #0d1828; //或许没用
+
+	--color-focus-ring: hsl(var(--brand-hue, 217), 59%, 83%);
+
+	--brand-gradient-bg: linear-gradient(
+					0deg,
+					hsla(var(--brand-hue, 217), 56%, 24%, 0.25) 0%,
+					hsla(var(--brand-hue, 217), 5%, 28%, 0.1) 100%
+	);
+	--brand-gradient-strong-bg: linear-gradient(
+					270deg,
+					rgb(41 38 20 / 0.6) 10%,
+					rgb(74 70 46 / 0.5) 100%
+	);
+
+	--color-green-50: hsl(var(--brand-hue, 217), 88%, 97%);
+	--color-green-100: hsl(var(--brand-hue, 217), 81%, 92%);
+	--color-green-200: hsl(var(--brand-hue, 217), 87%, 85%);
+	--color-green-300: hsl(var(--brand-hue, 217), 72%, 75%);
+	--color-green-400: hsl(var(--brand-hue, 217), 56%, 56%);
+	--color-green-500: hsl(var(--brand-hue, 217), 56%, 62%);
+	--color-green-600: hsl(var(--brand-hue, 217), 31%, 59%);
+	--color-green-700: hsl(var(--brand-hue, 217), 24%, 55%);
+	--color-green-800: hsl(var(--brand-hue, 217), 30%, 33%);
+	--color-green-900: hsl(var(--brand-hue, 217), 21%, 25%);
+	--color-green-950: hsl(var(--brand-hue, 217), 74%, 10%);
+	--color-green: var(--color-green-500);
+
+	--color-text-primary: hsl(var(--brand-hue, 217), 26%, 93%);
+	--color-text-default: hsl(var(--brand-hue, 217), 12%, 60%);
+	--color-text-tertiary: hsl(var(--brand-hue, 217), 14%, 64%);
+
+	--brand-gradient-button: rgba(255, 255, 255, 0.08);
+	--brand-gradient-border: hsl(var(--brand-hue, 217), 5%, 29%);
+	--brand-gradient-fade-out-color: linear-gradient(to bottom, hsl(var(--brand-hue, 217), 14%, 16%), hsl(var(--brand-hue, 217), 13%, 10%) 80%);
+
+	--color-gradient-button-bg: linear-gradient(180deg, hsl(var(--brand-hue, 217), 8%, 12%) 0%, hsl(var(--brand-hue, 217), 18%, 42%) 100%);
+	--color-brand-highlight: hsl(var(--brand-hue, 217), 9%, 30%);
+}

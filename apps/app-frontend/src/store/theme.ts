@@ -23,7 +23,7 @@ export const DEFAULT_FEATURE_FLAGS = {
 	advanced_filters_collapsed: true,
 }
 
-export const THEME_OPTIONS = ['dark', 'light', 'oled', 'elegant', 'antiquedark', 'system'] as const
+export const THEME_OPTIONS = ['dark', 'light', 'oled', 'elegant', 'antiquedark', 'customdark', 'system'] as const
 
 export type FeatureFlag = keyof typeof DEFAULT_FEATURE_FLAGS
 export type FeatureFlags = Record<FeatureFlag, boolean>
@@ -35,6 +35,7 @@ export type ThemeStore = {
 	customBgBlur: boolean
 	hideNametagSkinsPage: boolean
 	toggleSidebar: boolean
+	hueValue: number
 
 	devMode: boolean
 	featureFlags: FeatureFlags
@@ -54,7 +55,7 @@ export const DEFAULT_THEME_STORE: ThemeStore = {
 export const useTheming = defineStore('themeStore', {
 	state: () => DEFAULT_THEME_STORE,
 	actions: {
-		// 1. 刷新或启动时，直接找 Rust 问文件内容
+		// 刷新或启动时，向 Rust 问文件内容
 		async loadCustomSettings() {
 			try {
 				// 调用 Rust 侧的加载命令
@@ -66,7 +67,7 @@ export const useTheming = defineStore('themeStore', {
 			this.setBgBlurClass()
 		},
 
-		// 2. 切换开关时，直接把布尔值丢给 Rust 让它去写 AppData
+		// 切换开关时， 让Rust去写 AppData
 		async toggleBgBlur(isActive: boolean) {
 			this.customBgBlur = isActive
 			this.setBgBlurClass()
@@ -78,6 +79,29 @@ export const useTheming = defineStore('themeStore', {
 				console.error('[Frontend] 无法通过 Rust 保存模糊配置:', e)
 			}
 		},
+		// 加载色相值
+		async loadHueValue() {
+			try {
+				this.hueValue = await invoke<number>('load_hue_value')
+				document.documentElement.style.setProperty('--brand-hue', String(this.hueValue))
+			} catch (e) {
+				console.error('[Frontend] 从 Rust 加载色相配置失败，降级为默认值', e)
+				this.hueValue = 0
+			}
+		},
+
+		// 保存色相值
+		async saveHueValue(value: number) {
+			this.hueValue = value
+			document.documentElement.style.setProperty('--brand-hue', String(value))
+
+			try {
+				await invoke('save_hue_value', { hueValue: value })
+			} catch (e) {
+				console.error('[Frontend] 无法通过 Rust 保存色相配置:', e)
+			}
+		},
+
 		setThemeState(newTheme: ColorTheme) {
 			if (THEME_OPTIONS.includes(newTheme)) {
 				this.selectedTheme = newTheme
