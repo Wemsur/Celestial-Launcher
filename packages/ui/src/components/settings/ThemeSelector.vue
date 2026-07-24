@@ -52,6 +52,10 @@ const colorTheme = defineMessages({
         id: 'settings.display.theme.customdark',
         defaultMessage: 'Customdark',
     },
+    customlight: {
+        id: 'settings.display.theme.customlight',
+        defaultMessage: 'Customlight',
+    },
 	preferredLight: {
 		id: 'settings.display.theme.preferred-light-theme',
 		defaultMessage: 'Preferred light theme',
@@ -138,6 +142,9 @@ function getPreviewClass(option: T): string {
         }
         &.customdark-mode {
             @extend .customdark-mode;
+        }
+        &.customlight-mode {
+            @extend .customlight-mode;
         }
 	}
 

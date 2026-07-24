@@ -23,7 +23,7 @@ export const DEFAULT_FEATURE_FLAGS = {
 	advanced_filters_collapsed: true,
 }
 
-export const THEME_OPTIONS = ['dark', 'light', 'oled', 'elegant', 'antiquedark', 'customdark', 'system'] as const
+export const THEME_OPTIONS = ['dark', 'light', 'oled', 'elegant', 'antiquedark', 'customdark', 'customlight', 'system'] as const
 
 export type FeatureFlag = keyof typeof DEFAULT_FEATURE_FLAGS
 export type FeatureFlags = Record<FeatureFlag, boolean>

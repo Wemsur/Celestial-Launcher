@@ -4922,6 +4922,9 @@
   "settings.display.theme.customdark": {
     "defaultMessage": "自定义深色颜色"
   },
+  "settings.display.theme.customlight": {
+    "defaultMessage": "自定义浅色颜色"
+  },
   "settings.display.theme.preferred-dark-theme": {
     "defaultMessage": "首选深色主题"
   },

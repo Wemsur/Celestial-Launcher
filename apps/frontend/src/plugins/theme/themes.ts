@@ -1,4 +1,4 @@
-export const LightThemes = ['light'] as const
+export const LightThemes = ['light', 'customlight'] as const
 
 export type LightTheme = (typeof LightThemes)[number]
 
