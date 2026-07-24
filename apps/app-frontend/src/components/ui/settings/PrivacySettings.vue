@@ -27,11 +27,10 @@ watch(
         <div>
             <h2 class="m-0 text-lg font-semibold text-contrast">遥测数据</h2>
             <p class="m-0 mt-1 text-sm">
-                Modrinth 会收集匿名分析数据和使用数据，以改善我们的用户体验并为您提供个性化体验。
-                禁用此选项后，您将选择退出，您的数据将不再被收集。
+                Celestial已禁用遥测，启动器不会发送您的任何数据
             </p>
         </div>
-        <Toggle id="opt-out-analytics" v-model="settings.telemetry" />
+        <Toggle id="opt-out-analytics" v-model="settings.telemetry"/>
     </div>
 
     <div class="mt-4 flex items-center justify-between gap-4">
