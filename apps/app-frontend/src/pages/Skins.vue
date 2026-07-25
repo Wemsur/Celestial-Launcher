@@ -1,23 +1,23 @@
 <script setup lang="ts">
 import {
-	CheckIcon,
-	EditIcon,
-	ExcitedRinthbot,
-	EyeIcon,
-	LogInIcon,
-	RotateCounterClockwiseIcon,
-	SpinnerIcon,
+    CheckIcon,
+    EditIcon,
+    ExcitedRinthbot,
+    EyeIcon,
+    LogInIcon,
+    RotateCounterClockwiseIcon,
+    SpinnerIcon, XIcon,
 } from '@modrinth/assets'
 import {
-	ButtonStyled,
-	commonMessages,
-	ConfirmModal,
-	defineMessages,
-	injectAuth,
-	injectModrinthClient,
-	injectNotificationManager,
-	SkinPreviewRenderer,
-	useVIntl,
+    ButtonStyled,
+    commonMessages,
+    ConfirmModal,
+    defineMessages,
+    injectAuth,
+    injectModrinthClient,
+    injectNotificationManager, NewModal,
+    SkinPreviewRenderer, StyledInput,
+    useVIntl,
 } from '@modrinth/ui'
 import { arrayBufferToBase64 } from '@modrinth/utils'
 import { useQuery } from '@tanstack/vue-query'
@@ -30,8 +30,15 @@ import type AccountsCard from '@/components/ui/AccountsCard.vue'
 import EditSkinModal from '@/components/ui/skin/EditSkinModal.vue'
 import VirtualSkinSectionList from '@/components/ui/skin/VirtualSkinSectionList.vue'
 import { trackEvent } from '@/helpers/analytics'
-import { check_reachable, get_default_user, login as login_flow, users } from '@/helpers/auth'
-import type { RenderResult } from '@/helpers/rendering/batch-skin-renderer.ts'
+import {
+    check_reachable,
+    create_offline_user,
+    get_default_user,
+    login as login_flow,
+    set_default_user,
+    users
+} from '@/helpers/auth'
+import {getPlayerHeadUrl, RenderResult} from '@/helpers/rendering/batch-skin-renderer.ts'
 import { generateSkinPreviews, skinBlobUrlMap } from '@/helpers/rendering/batch-skin-renderer.ts'
 import type { Cape, Skin, SkinTextureUrl } from '@/helpers/skins.ts'
 import {
@@ -299,6 +306,16 @@ const isSkinManagementReadOnly = computed(
 const hasPendingSkinChange = computed(
 	() => !skinsMatch(selectedSkin.value, originalSelectedSkin.value),
 )
+
+// 离线账户弹窗
+const notificationManager = injectNotificationManager()
+
+const offlineModalRef = ref<InstanceType<typeof NewModal>>()
+const offlineInputRef = ref<InstanceType<typeof StyledInput>>()
+const offlineUsername = ref('')
+const offlineSubmitting = ref(false)
+const offlineError = ref('')
+
 
 let userCheckInterval: number | null = null
 let pendingSkinRefreshTimeout: number | null = null
@@ -998,6 +1015,56 @@ async function checkUserChanges() {
 	}
 }
 
+
+
+/** 校验用户名 */
+function validateOfflineUsername(name: string): string {
+    const trimmed = name.trim()
+    if (!trimmed) return '用户名不能为空'
+    if (!/^[A-Za-z0-9_]{3,16}$/.test(trimmed)) {
+        return '用户名必须为3-16个字符（仅字母、数字和下划线）'
+    }
+    return ''
+}
+
+/** 创建离线账户 */
+async function handleCreateOffline() {
+    const error = validateOfflineUsername(offlineUsername.value)
+    if (error) {
+        offlineError.value = error
+        return
+    }
+
+    offlineSubmitting.value = true
+    offlineError.value = ''
+    try {
+        // 创建离线账户
+        const newCred = await create_offline_user(offlineUsername.value.trim())
+        // 设为默认激活账户
+        await set_default_user(newCred.profile.id)
+        // 关闭弹窗
+        hideOfflineModal()
+        // 通知
+        notificationManager.addNotification({
+            title: '成功',
+            text: '离线账户创建成功',
+            type: 'success',
+        })
+    } catch (err) {
+        offlineError.value = err instanceof Error ? err.message : String(err)
+    } finally {
+        offlineSubmitting.value = false
+    }
+}
+
+/** 关闭弹窗 */
+function hideOfflineModal() {
+    offlineModalRef.value?.hide()
+    offlineUsername.value = ''
+    offlineError.value = ''
+}
+
+
 await Promise.all([loadCapes(), loadCurrentUser()])
 await loadSkins()
 </script>
@@ -1107,15 +1174,10 @@ await loadSkins()
 		</div>
 	</div>
 
-	<div v-else class="box-border flex min-h-full items-center justify-center pt-[25%]">
+	<div v-else class="box-border flex min-h-full items-center justify-center">
 		<div
 			class="relative mx-auto flex w-full max-w-xl flex-col gap-5 rounded-lg bg-bg-raised p-7 shadow-lg"
 		>
-			<img
-				:src="ExcitedRinthbot"
-				:alt="formatMessage(messages.excitedRinthbotAlt)"
-				class="absolute -top-28 right-8 md:right-20 h-28 w-auto"
-			/>
 			<div
 				class="absolute top-0 left-0 w-full h-[1px] opacity-40 bg-gradient-to-r from-transparent via-green-500 to-transparent"
 				style="
@@ -1138,12 +1200,53 @@ await loadSkins()
 					<button :disabled="accountsCard.loginDisabled" @click="login">
 						<LogInIcon v-if="!accountsCard.loginDisabled" />
 						<SpinnerIcon v-else class="animate-spin" />
-						{{ formatMessage(messages.signInButton) }}
+						正版登录
 					</button>
 				</ButtonStyled>
+                <ButtonStyled v-show="accountsCard" color="primary" :disabled="accountsCard.loginDisabled">
+                    <button :disabled="accountsCard.loginDisabled" @click="offlineModalRef?.show()">
+                        <LogInIcon v-if="!accountsCard.loginDisabled" />
+                        <SpinnerIcon v-else class="animate-spin" />
+                        离线登录
+                    </button>
+                </ButtonStyled>
 			</div>
 		</div>
 	</div>
+    <NewModal
+        ref="offlineModalRef"
+        header="添加离线账户"
+        :max-width="'500px'"
+    >
+        <form @submit.prevent="handleCreateOffline" class="space-y-6 min-w-[400px]">
+            <label class="flex flex-col gap-2">
+                <span class="font-semibold text-contrast">用户名</span>
+                <StyledInput
+                    ref="offlineInputRef"
+                    v-model="offlineUsername"
+                    wrapper-class="w-full"
+                    placeholder="请输入玩家名..."
+                />
+                <div v-if="offlineError" class="text-sm text-red">{{ offlineError }}</div>
+            </label>
+        </form>
+        <template #actions>
+            <div class="flex gap-2 justify-end">
+                <ButtonStyled type="outlined">
+                    <button @click="hideOfflineModal">
+                        <XIcon class="h-5 w-5" />
+                        取消
+                    </button>
+                </ButtonStyled>
+                <ButtonStyled color="brand">
+                    <button :disabled="offlineSubmitting" @click="handleCreateOffline">
+                        <EditIcon class="h-5 w-5" />
+                        添加
+                    </button>
+                </ButtonStyled>
+            </div>
+        </template>
+    </NewModal>
 </template>
 
 <style lang="scss" scoped>

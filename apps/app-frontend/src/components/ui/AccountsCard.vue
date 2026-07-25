@@ -8,8 +8,10 @@
 			<button color="primary" :disabled="loginDisabled" @click="login()">
 				<LogInIcon v-if="!loginDisabled" />
 				<SpinnerIcon v-else class="animate-spin" />
-				{{ formatMessage(messages.signInToMinecraft) }}
+				正版登录
 			</button>
+        </ButtonStyled>
+        <ButtonStyled color="primary">
             <button color="primary" :disabled="loginDisabled" @click="offlineModalRef?.show()">
                 <LogInIcon v-if="!loginDisabled" />
                 <SpinnerIcon v-else class="animate-spin" />
@@ -135,13 +137,13 @@
                 <ButtonStyled type="outlined">
                     <button @click="hideOfflineModal">
                         <XIcon class="h-5 w-5" />
-                        Cancel
+                        取消
                     </button>
                 </ButtonStyled>
                 <ButtonStyled color="brand">
                     <button :disabled="offlineSubmitting" @click="handleCreateOffline">
                         <EditIcon class="h-5 w-5" />
-                        Add
+                        添加
                     </button>
                 </ButtonStyled>
             </div>

@@ -264,7 +264,7 @@ async fn save_hue_value(app_handle: tauri::AppHandle, hue_value: u32) -> Result<
     fs::write(&config_path, serde_json::to_string_pretty(&updated).map_err(|e| format!("序列化失败: {}", e))?)
         .map_err(|e| format!("写入配置文件失败: {}", e))?;
 
-    println!("[Rust Backend] 色相值已保存到 celestial_settings.json: {}", hue_value);
+/*    println!("[Rust Backend] 色相值已保存到 celestial_settings.json: {}", hue_value);*/
     Ok(())
 }
 
