@@ -55,13 +55,7 @@ import {
 	useVIntl,
 } from '@modrinth/ui'
 
-import {
-    users,
-    remove_user,
-    set_default_user,
-    create_offline_user,
-    minecraft_login,
-} from '@/helpers/auth.js'
+import ImportModal from '@/components/ui/modal/ImportModal.vue'
 
 import { renderString } from '@modrinth/utils'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
@@ -159,6 +153,8 @@ const INTERCOM_BUBBLE_DEFAULT_PADDING = 20
 const PRIDE_FUNDRAISER_END_DATE = new Date('2026-07-01T00:00:00Z').getTime()
 const credentials = ref()
 const sidebarToggled = ref(true)
+const importModal = ref(null)
+
 const unsubscribeSidebarToggle = themeStore.$subscribe(() => {
 	sidebarToggled.value = !themeStore.toggleSidebar
 })
@@ -365,6 +361,18 @@ onMounted(async () => {
         console.error("Invoke 调用失败，错误原因:", e);
     }
 	themeStore.loadCustomSettings()
+    // 检查是否应该显示导入弹窗
+    try {
+        const instances = await invoke('plugin:instance|instance_list');
+        if (!Array.isArray(instances) || instances.length === 0) {
+            const dontShow = await invoke('get_import_banner_setting');
+            if (!dontShow) {
+                importModal.value?.show();
+            }
+        }
+    } catch (err) {
+        console.error('Failed to check for import:', err);
+    }
 	/*checkUpdates()*/
 })
 
@@ -815,19 +823,24 @@ watch(showAd, () => {
 	}
 })
 
-onMounted(() => {
-	invoke('show_window')
+onMounted(async () => {
+    try {
+        await invoke('show_window')
+    } catch (e) {
+        console.error('Failed to show window:', e)
+    }
+    error.setErrorModal(errorModal.value)
 
-	error.setErrorModal(errorModal.value)
-	error.setMinecraftAuthErrorModal(minecraftAuthErrorModal.value)
+    error.setErrorModal(errorModal.value)
+    error.setMinecraftAuthErrorModal(minecraftAuthErrorModal.value)
 
-	setContentIncompatibilityWarningModal(incompatibilityWarningModal.value)
-	setContentInstallModal(modInstallModal.value)
-	setContentInstallModpackAlreadyInstalledModal(contentInstallModpackAlreadyInstalledModal.value)
-	setModpackAlreadyInstalledModal(modpackAlreadyInstalledModal.value)
-	setServerAddServerToInstanceModal(addServerToInstanceModal.value)
-	setServerInstallToPlayModal(installToPlayModal.value)
-	setServerUpdateToPlayModal(updateToPlayModal.value)
+    setContentIncompatibilityWarningModal(incompatibilityWarningModal.value)
+    setContentInstallModal(modInstallModal.value)
+    setContentInstallModpackAlreadyInstalledModal(contentInstallModpackAlreadyInstalledModal.value)
+    setModpackAlreadyInstalledModal(modpackAlreadyInstalledModal.value)
+    setServerAddServerToInstanceModal(addServerToInstanceModal.value)
+    setServerInstallToPlayModal(installToPlayModal.value)
+    setServerUpdateToPlayModal(updateToPlayModal.value)
 })
 
 const accounts = ref(null)
@@ -1776,6 +1789,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 	/>
 	<InstallToPlayModal ref="installToPlayModal" />
 	<UpdateToPlayModal ref="updateToPlayModal" />
+    <ImportModal ref="importModal" />
 </template>
 
 <style lang="scss" scoped>

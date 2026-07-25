@@ -5,12 +5,13 @@
 #![recursion_limit = "256"]
 
 use native_dialog::{DialogBuilder, MessageLevel};
-use std::env;
+use std::{env, io};
 use std::sync::atomic::Ordering;
 use tauri::{Listener, Manager};
 use tauri_plugin_fs::FsExt;
 use theseus::prelude::*;
 use std::fs;
+use std::path::PathBuf;
 use base64::{Engine as _, engine::general_purpose};
 
 mod api;
@@ -97,6 +98,190 @@ async fn toggle_decorations(b: bool, window: tauri::Window) -> api::Result<()> {
 #[tauri::command]
 fn restart_app(app: tauri::AppHandle) {
     app.restart();
+}
+
+
+#[derive(serde::Serialize)]
+struct CheckImportResponse {
+    should_show: bool,
+}
+// ──────────────── Import commands ────────────────
+
+#[tauri::command]
+async fn check_for_import(
+    app_handle: tauri::AppHandle,
+) -> Result<CheckImportResponse, String> {
+    // 获取 Celestial Launcher 的路径
+    let new_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 AppData 目录: {}", e))?;
+
+    // 检查数据库是否存在实例（直接查实例文件夹）
+    let mut instances_dir = new_data_dir.clone();
+    instances_dir.push("instances");
+
+    if instances_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&instances_dir) {
+            let has_instances = entries.flatten().any(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false));
+            if has_instances {
+                return Ok(CheckImportResponse { should_show: false });
+            }
+        }
+    }
+
+    // 没有实例，检查 ModrinthApp 的旧路径是否存在
+    let old_base = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 AppData 目录: {}", e))?;
+
+    // old_base 已经是 CelestialLauncher 所在目录
+    // 需要到上一级去找 "ModrinthApp"
+    let mut modrinth_app_dir = old_base.parent()
+        .ok_or_else(|| "无法获取父目录".to_string())?
+        .to_path_buf();
+    modrinth_app_dir.push("ModrinthApp");
+
+    // 检查 app.db 是否存在
+    let db_path = modrinth_app_dir.join("app.db");
+    if !db_path.exists() {
+        return Ok(CheckImportResponse { should_show: false });
+    }
+
+    Ok(CheckImportResponse { should_show: true })
+}
+
+#[tauri::command]
+async fn import_old_data(
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let new_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 AppData 目录: {}", e))?;
+
+    let mut modrinth_app_dir = new_data_dir.parent()
+        .ok_or_else(|| "无法获取父目录".to_string())?
+        .to_path_buf();
+    modrinth_app_dir.push("ModrinthApp");
+
+    // 复制 app.db
+    let old_db = modrinth_app_dir.join("app.db");
+    // 先刷新文件系统缓存，让 SQLite 文件锁释放
+    if old_db.exists() {
+        let mut new_db = new_data_dir.join("app.db");
+        fs::copy(&old_db, &new_db).map_err(|e| format!("复制 app.db 失败: {}", e))?;
+
+        // 复制 WAL/SHM 前等待系统释放文件锁
+
+        let old_shm = modrinth_app_dir.join("app.db-shm");
+        if old_shm.exists() {
+            let new_shm = new_data_dir.join("app.db-shm");
+            // 先暂停一下让系统自动释放文件锁
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            fs::copy(&old_shm, &new_shm).map_err(|e| format!("复制 app.db-shm 失败: {}", e))?;
+        }
+
+        let old_wal = modrinth_app_dir.join("app.db-wal");
+        if old_wal.exists() {
+            let new_wal = new_data_dir.join("app.db-wal");
+            // 先暂停一下让系统自动释放文件锁
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            fs::copy(&old_wal, &new_wal).map_err(|e| format!("复制 app.db-wal 失败: {}", e))?;
+        }
+    }
+
+    // 复制 custom_backgrounds 目录及全部内容
+    let old_bg = modrinth_app_dir.join("custom_backgrounds");
+    if old_bg.exists() {
+        copy_dir_all(&old_bg, &new_data_dir.join("custom_backgrounds"))
+            .map_err(|e| format!("复制 custom_backgrounds 失败: {}", e))?;
+    }
+
+    Ok(())
+}
+
+fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> io::Result<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_all(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn set_dont_show_import_modal(
+    app_handle: tauri::AppHandle,
+    value: bool,
+) -> Result<(), String> {
+    let mut config_path = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 AppData 目录: {}", e))?;
+
+    config_path.push("custom_backgrounds");
+    if !config_path.exists() {
+        fs::create_dir_all(&config_path)
+            .map_err(|e| format!("创建配置文件夹失败: {}", e))?;
+    }
+
+    config_path.push("celestial_settings.json");
+
+    // 读取现有 JSON
+    let existing = if config_path.exists() {
+        let content = fs::read_to_string(&config_path).unwrap_or_else(|_| "{}".to_string());
+        serde_json::from_str::<serde_json::Value>(&content).unwrap_or_else(|_| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    // 写入 new_import_banner
+    let mut updated = existing.clone();
+    updated["new_import_banner"] = serde_json::json!(value); // true = 不再显示
+
+    fs::write(&config_path, serde_json::to_string_pretty(&updated).map_err(|e| format!("序列化失败: {}", e))?)
+        .map_err(|e| format!("写入配置文件失败: {}", e))?;
+
+    println!("[Rust Backend] 已保存不再显示标记: {}", value);
+    Ok(())
+}
+
+
+#[tauri::command]
+async fn get_import_banner_setting(
+    app_handle: tauri::AppHandle,
+) -> Result<bool, String> {
+    let mut config_path = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 AppData 目录: {}", e))?;
+
+    config_path.push("custom_backgrounds");
+    config_path.push("celestial_settings.json");
+
+    if !config_path.exists() {
+        return Ok(false); // 没有设置文件，说明是首次启动或无记录
+    }
+
+    let content = fs::read_to_string(&config_path)
+        .map_err(|e| format!("读取配置文件失败: {}", e))?;
+
+    let json: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("JSON解析失败: {}", e))?;
+
+    // new_import_banner 为 true 表示"不再显示"
+    Ok(json.get("new_import_banner")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false))
 }
 
 #[tauri::command]
@@ -532,7 +717,11 @@ fn main() {
             save_bg_blur_status,
             load_bg_blur_status,
             save_hue_value,
-            load_hue_value
+            load_hue_value,
+            check_for_import,
+            import_old_data,
+            set_dont_show_import_modal,
+            get_import_banner_setting,
         ]);
 
     tracing::info!("Initializing app...");
