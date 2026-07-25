@@ -2,7 +2,7 @@
 import {
 ButtonStyled, Combobox, defineMessages, ThemeSelector, Toggle, useVIntl
 } from '@modrinth/ui'
-import { ref, watch, onMounted} from 'vue'
+import { ref, watch, onMounted, computed} from 'vue'
 
 import { get, set } from '@/helpers/settings.ts'
 import { getOS } from '@/helpers/utils'
@@ -63,6 +63,11 @@ function onHueChange(event: Event) {
     const val = Number((event.target as HTMLInputElement).value)
     themeStore.saveHueValue(val)
 }
+
+//剔除light、dark主题
+const filteredThemeOptions = computed(() =>
+    themeStore.getThemeOptions().filter(t => !['light', 'dark'].includes(t))
+)
 
 const messages = defineMessages({
 	colorThemeTitle: {
@@ -200,17 +205,17 @@ watch(
 	</h2>
 	<p class="m-0 mt-1">{{ formatMessage(messages.colorThemeDescription) }}</p>
 
-	<ThemeSelector
-		:update-color-theme="
-			(theme: ColorTheme) => {
-				themeStore.setThemeState(theme)
-				settings.theme = theme
-			}
-		"
-		:current-theme="settings.theme"
-		:theme-options="themeStore.getThemeOptions()"
-		system-theme-color="system"
-	/>
+    <ThemeSelector
+        :update-color-theme="
+        (theme: ColorTheme) => {
+            themeStore.setThemeState(theme)
+            settings.theme = theme
+        }
+    "
+        :current-theme="settings.theme"
+        :theme-options="filteredThemeOptions"
+        system-theme-color="system"
+    />
     <!-- 色相条 -->
     <div class="mt-4 mb-8">
         <h2 class="m-0 text-lg font-semibold text-contrast">自定义颜色</h2>

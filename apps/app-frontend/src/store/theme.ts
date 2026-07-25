@@ -23,7 +23,7 @@ export const DEFAULT_FEATURE_FLAGS = {
 	advanced_filters_collapsed: true,
 }
 
-export const THEME_OPTIONS = ['dark', 'light', 'oled', 'elegant', 'antiquedark', 'customdark', 'customlight', 'system'] as const
+export const THEME_OPTIONS = ['customdark', 'customlight', 'dark', 'light', 'oled', 'elegant', 'antiquedark', 'system'] as const
 
 export type FeatureFlag = keyof typeof DEFAULT_FEATURE_FLAGS
 export type FeatureFlags = Record<FeatureFlag, boolean>
@@ -42,11 +42,11 @@ export type ThemeStore = {
 }
 
 export const DEFAULT_THEME_STORE: ThemeStore = {
-	selectedTheme: 'dark',
-	customBgBlur: true,
-	advancedRendering: true,
+	selectedTheme: 'customdark',
+	customBgBlur: false,
+	advancedRendering: false,
 	hideNametagSkinsPage: false,
-	toggleSidebar: false,
+	toggleSidebar: true,
 
 	devMode: false,
 	featureFlags: DEFAULT_FEATURE_FLAGS,
@@ -86,7 +86,7 @@ export const useTheming = defineStore('themeStore', {
 				document.documentElement.style.setProperty('--brand-hue', String(this.hueValue))
 			} catch (e) {
 				console.error('[Frontend] 从 Rust 加载色相配置失败，降级为默认值', e)
-				this.hueValue = 0
+				this.hueValue = 38
 			}
 		},
 

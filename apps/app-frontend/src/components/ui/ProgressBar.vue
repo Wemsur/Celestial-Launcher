@@ -4,7 +4,7 @@
 			class="progress-bar__fill"
 			:style="{
 				width: `${progress}%`,
-				'background-color': error ? 'var(--color-red)' : 'var(--color-brand)',
+				'background-color': error ? 'var(--color-red)' : '#feb95a',
 			}"
 		></div>
 	</div>

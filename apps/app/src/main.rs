@@ -280,7 +280,7 @@ async fn load_hue_value(app_handle: tauri::AppHandle) -> Result<u32, String> {
     config_path.push("celestial_settings.json");
 
     if !config_path.exists() {
-        return Ok(0); // 默认值
+        return Ok(38); // 默认值
     }
 
     let content = fs::read_to_string(&config_path)

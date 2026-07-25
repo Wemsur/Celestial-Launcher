@@ -12,7 +12,7 @@
                 <StyledInput
                     :model-value="newOfflineUsername"
                     @update:model-value="newOfflineUsername = $event"
-                    placeholder="请输入玩家名..."
+
                     wrapper-class="flex-1 w-full"
                     :disabled="creatingOffline"
                     clearable

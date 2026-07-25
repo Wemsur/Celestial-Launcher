@@ -76,7 +76,7 @@ import { $fetch } from 'ofetch'
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 
-import ModrinthAppLogo from '@/assets/modrinth_app.svg?component'
+import CelestialLogo from '@/assets/celestial.svg?component'
 import AccountsCard from '@/components/ui/AccountsCard.vue'
 import AppActionBar from '@/components/ui/AppActionBar.vue'
 import Breadcrumbs from '@/components/ui/Breadcrumbs.vue'
@@ -322,6 +322,7 @@ const handleDeleteBackground = async () => {
 
 onMounted(async () => {
 	await useCheckDisableMouseover()
+    await themeStore.loadHueValue()
 
 	document.querySelector('body').addEventListener('click', handleClick)
 	document.querySelector('body').addEventListener('auxclick', handleAuxClick)
@@ -1578,7 +1579,10 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 		</div>
 		<div data-tauri-drag-region class="app-grid-statusbar bg-bg-raised h-[--top-bar-height] flex">
 			<div data-tauri-drag-region class="flex min-w-0 flex-1 overflow-hidden p-3">
-				<ModrinthAppLogo class="h-full w-auto shrink-0 text-contrast pointer-events-none" />
+                <div data-tauri-drag-region class="h-full w-auto shrink-0 text-contrast pointer-events-none" style="margin-top: -2px; margin-left: -2px">
+                    <CelestialLogo class="h-7 w-auto shrink-0 text-contrast pointer-events-none" style="margin-top: 0;margin-bottom: -6px" />
+                    <span class="inline ml-1 mt-0 text-contrast font-semibold text-xl select-none translate-y-[-4px]">Celestial</span>
+                </div>
 				<div data-tauri-drag-region class="flex shrink-0 items-center gap-1 ml-3">
 					<button
 						class="cursor-pointer p-0 m-0 text-contrast border-none outline-none bg-button-bg rounded-full flex items-center justify-center w-6 h-6 hover:brightness-75 transition-all"
@@ -1627,28 +1631,6 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 		}"
 	>
 		<div class="app-viewport flex-grow router-view">
-			<transition name="popup-survey">
-				<div
-					v-if="false"
-					class="w-[400px] z-20 fixed -bottom-12 pb-16 right-[--right-bar-width] mr-4 rounded-t-2xl card-shadow bg-bg-raised border-surface-5 border-[1px] border-solid border-b-0 p-4"
-				>
-					<h2 class="text-lg font-extrabold mt-0 mb-2">你好，Modrinth 用户！</h2>
-					<p class="m-0 leading-tight">
-						您愿意花几分钟回答关于 Modrinth App 使用体验的问题吗？
-					</p>
-					<p class="mt-3 mb-4 leading-tight">
-						您的反馈将直接发送给 Modrinth 团队，帮助指导未来的更新！
-					</p>
-					<div class="flex gap-2">
-						<ButtonStyled color="brand">
-							<button @click="openSurvey"><NotepadTextIcon /> 参与调查</button>
-						</ButtonStyled>
-						<ButtonStyled>
-							<button @click="dismissSurvey"><XIcon /> 不用了</button>
-						</ButtonStyled>
-					</div>
-				</div>
-			</transition>
 			<div
 				class="loading-indicator-container h-8 fixed z-50 pointer-events-none"
 				:style="{
@@ -1742,16 +1724,6 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 					</div>
 				</div>
 			</div>
-			<template v-if="showAd">
-				<a
-					href="https://modrinth.plus?app"
-					class="absolute bottom-[250px] w-full flex justify-center items-center gap-1 px-4 py-3 text-purple font-medium hover:underline z-10"
-					target="_blank"
-				>
-					<ArrowBigUpDashIcon class="text-2xl" /> 升级到 Modrinth+
-				</a>
-				<PromotionWrapper />
-			</template>
 		</div>
 	</div>
 	<I18nDebugPanel />

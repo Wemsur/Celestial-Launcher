@@ -58,7 +58,7 @@ onUnmounted(() => {
 			<ButtonStyled color="brand">
 				<button :disabled="offline" @click="showCreationModal?.()">
 					<PlusIcon />
-					Create new instance
+					添加新的版本
 				</button>
 			</ButtonStyled>
 		</div>

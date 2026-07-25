@@ -62,15 +62,15 @@
 			}
 		]
 	},
-	"productName": "Modrinth App",
+	"productName": "Celestial Launcher",
 	"version": "../app-frontend/package.json",
-	"mainBinaryName": "Modrinth App",
-	"identifier": "ModrinthApp",
+	"mainBinaryName": "Celestial Launcher",
+	"identifier": "CelestialLauncher",
 	"plugins": {
 		"deep-link": {
 			"desktop": {
 				"schemes": [
-					"modrinth"
+					"Celestial"
 				]
 			},
 			"mobile": []
@@ -86,7 +86,7 @@
 				"fullscreen": false,
 				"height": 800,
 				"resizable": true,
-				"title": "Modrinth App",
+				"title": "Celestial",
 				"label": "main",
 				"width": 1280,
 				"minHeight": 700,
@@ -104,7 +104,7 @@
 					"$APPDATA/caches/icons/*",
 					"$APPCONFIG/caches/icons/*",
 					"$CONFIG/caches/icons/*",
-					"$APPDATA/ModrinthApp/custom_backgrounds/*",
+					"$APPDATA/CelestialLauncher/custom_backgrounds/*",
 					"$APPDATA/profiles/*/saves/*/icon.png",
 					"$APPCONFIG/profiles/*/saves/*/icon.png",
 					"$CONFIG/profiles/*/saves/*/icon.png",

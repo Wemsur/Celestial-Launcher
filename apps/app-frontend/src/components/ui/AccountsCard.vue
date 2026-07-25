@@ -10,6 +10,11 @@
 				<SpinnerIcon v-else class="animate-spin" />
 				{{ formatMessage(messages.signInToMinecraft) }}
 			</button>
+            <button color="primary" :disabled="loginDisabled" @click="offlineModalRef?.show()">
+                <LogInIcon v-if="!loginDisabled" />
+                <SpinnerIcon v-else class="animate-spin" />
+                离线登录
+            </button>
 		</ButtonStyled>
 	</div>
 	<Accordion
@@ -120,6 +125,7 @@
                     ref="offlineInputRef"
                     v-model="offlineUsername"
                     wrapper-class="w-full"
+                    placeholder="请输入玩家名..."
                 />
                 <div v-if="offlineError" class="text-sm text-red">{{ offlineError }}</div>
             </label>

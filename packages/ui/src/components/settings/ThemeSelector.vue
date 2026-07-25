@@ -81,6 +81,7 @@ function getPreviewClass(option: T): string {
 		<button
 			v-for="option in themeOptions"
 			:key="option"
+            v-if="!['light', 'dark'].includes(option)"
 			class="preview-radio button-base"
 			:class="{ selected: currentTheme === option }"
 			@click="() => updateColorTheme(option)"
@@ -97,15 +98,27 @@ function getPreviewClass(option: T): string {
 				<RadioButtonIcon v-else class="radio shrink-0" />
 				{{ colorTheme[asString(option)] ? formatMessage(colorTheme[asString(option)]) : option }}
 				<SunIcon
-					v-if="'light' === option"
+					v-if="'customlight' === option"
 					v-tooltip="formatMessage(colorTheme.preferredLight)"
 					class="theme-icon shrink-0"
 				/>
 				<MoonIcon
-					v-else-if="'dark' === option"
+					v-else-if="'customdark' === option"
 					v-tooltip="formatMessage(colorTheme.preferredDark)"
 					class="theme-icon shrink-0"
 				/>
+                <span
+                    v-if="'customlight' === option"
+                    class="rounded-full px-1.5 py-0.5 text-xs ml-8 font-bold bg-brand-highlight text-brand-green"
+                >
+						自定义颜色
+					</span>
+                <span
+                    v-else-if="'customdark' === option"
+                    class="rounded-full px-1.5 py-0.5 text-xs ml-8 font-bold bg-brand-highlight text-brand-green"
+                >
+						自定义颜色
+					</span>
 			</div>
 		</button>
 	</div>
