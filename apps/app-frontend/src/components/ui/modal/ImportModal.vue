@@ -35,9 +35,9 @@ async function doRestart() {
         if (dontShowAgain.value) {
             await setDontShowAgain(true)
         }
-        await invoke('restart_app')  // ← 加 await
+        await invoke('do_import_and_restart')
     } catch (err) {
-        console.error('Restart failed:', err)
+        console.error('Import and restart failed:', err)
     }
 }
 
@@ -95,7 +95,7 @@ defineExpose({
 
             <!-- 阶段 3: 完成，提示重启 -->
             <p v-if="showRestartMessage" class="m-0 max-w-[35rem]">
-                数据导入已完成。请重启应用以生效。
+                数据导入已完成。请点击重启应用，稍后手动打开应用以生效。
             </p>
 
             <!-- 不再显示复选框（只在阶段 1 和 3 显示） -->

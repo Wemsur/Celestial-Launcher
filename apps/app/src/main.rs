@@ -156,46 +156,20 @@ async fn check_for_import(
 async fn import_old_data(
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
-    let new_data_dir = app_handle
+    let data_dir = app_handle
         .path()
         .app_data_dir()
         .map_err(|e| format!("无法获取 AppData 目录: {}", e))?;
 
-    let mut modrinth_app_dir = new_data_dir.parent()
+    let mut modrinth_app_dir = data_dir.parent()
         .ok_or_else(|| "无法获取父目录".to_string())?
         .to_path_buf();
     modrinth_app_dir.push("ModrinthApp");
 
-    // 复制 app.db
-    let old_db = modrinth_app_dir.join("app.db");
-    // 先刷新文件系统缓存，让 SQLite 文件锁释放
-    if old_db.exists() {
-        let mut new_db = new_data_dir.join("app.db");
-        fs::copy(&old_db, &new_db).map_err(|e| format!("复制 app.db 失败: {}", e))?;
-
-        // 复制 WAL/SHM 前等待系统释放文件锁
-
-        let old_shm = modrinth_app_dir.join("app.db-shm");
-        if old_shm.exists() {
-            let new_shm = new_data_dir.join("app.db-shm");
-            // 先暂停一下让系统自动释放文件锁
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            fs::copy(&old_shm, &new_shm).map_err(|e| format!("复制 app.db-shm 失败: {}", e))?;
-        }
-
-        let old_wal = modrinth_app_dir.join("app.db-wal");
-        if old_wal.exists() {
-            let new_wal = new_data_dir.join("app.db-wal");
-            // 先暂停一下让系统自动释放文件锁
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            fs::copy(&old_wal, &new_wal).map_err(|e| format!("复制 app.db-wal 失败: {}", e))?;
-        }
-    }
-
-    // 复制 custom_backgrounds 目录及全部内容
+    // 复制 custom_backgrounds 目录（不被锁，直接复制）
     let old_bg = modrinth_app_dir.join("custom_backgrounds");
     if old_bg.exists() {
-        copy_dir_all(&old_bg, &new_data_dir.join("custom_backgrounds"))
+        copy_dir_all(&old_bg, &data_dir.join("custom_backgrounds"))
             .map_err(|e| format!("复制 custom_backgrounds 失败: {}", e))?;
     }
 
@@ -282,6 +256,87 @@ async fn get_import_banner_setting(
     Ok(json.get("new_import_banner")
         .and_then(|v| v.as_bool())
         .unwrap_or(false))
+}
+
+#[tauri::command]
+async fn do_import_and_restart(
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 AppData 目录: {}", e))?;
+
+    let mut modrinth_app_dir = data_dir.parent()
+        .ok_or_else(|| "无法获取父目录".to_string())?
+        .to_path_buf();
+    modrinth_app_dir.push("ModrinthApp");
+
+    // --- 阶段1: 写入 PowerShell 脚本（硬编码完整复制+关闭+重启逻辑）---
+    let temp_dir = std::env::temp_dir();
+    let script_path = temp_dir.join("celestial_import.ps1");
+    let modrinth_str = modrinth_app_dir.to_string_lossy().replace('\\', "\\\\").replace('"', "\\\"");
+    let data_str = data_dir.to_string_lossy().replace('\\', "\\\\").replace('"', "\\\"");
+
+    let script = format!(
+        r#"Start-Sleep -Seconds 3
+
+# 复制 app.db
+$srcDb = "{modrinth}\app.db"
+$dstDb = "{data}\app.db"
+if (Test-Path $srcDb) {{
+    if (Test-Path $dstDb) {{ Remove-Item $dstDb -Force }}
+    Copy-Item $srcDb $dstDb -Force
+}}
+
+# 复制 app.db-shm
+$srcShm = "{modrinth}\app.db-shm"
+$dstShm = "{data}\app.db-shm"
+if (Test-Path $srcShm) {{
+    if (Test-Path $dstShm) {{ Remove-Item $dstShm -Force }}
+    Copy-Item $srcShm $dstShm -Force
+}}
+
+# 复制 app.db-wal
+$srcWal = "{modrinth}\app.db-wal"
+$dstWal = "{data}\app.db-wal"
+if (Test-Path $srcWal) {{
+    if (Test-Path $dstWal) {{ Remove-Item $dstWal -Force }}
+    Copy-Item $srcWal $dstWal -Force
+}}
+
+Write-Host "Import completed successfully"
+"#,
+        modrinth = modrinth_str,
+        data = data_str,
+    );
+
+    std::fs::write(&script_path, &script)
+        .map_err(|e| format!("写入脚本失败: {}", e))?;
+
+    // --- 阶段2: 后台启动脚本 ---
+    std::process::Command::new("powershell")
+        .arg("-ExecutionPolicy")
+        .arg("Bypass")
+        .arg("-WindowStyle")
+        .arg("Hidden")
+        .arg("-File")
+        .arg(&script_path)
+        .spawn()
+        .map_err(|e| format!("启动脚本失败: {}", e))?;
+
+    // --- 阶段3: 退出当前应用（不做 restart，因为 dev 模式下 restart 不会重启 Vite）---
+    std::process::exit(0);
+}
+
+fn copy_file_exclusive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
+    // 如果目标文件已被占用，先尝试删除（覆盖式复制）
+    if dst.exists() {
+        let _ = fs::remove_file(dst);
+    }
+    fs::copy(src, dst)
+        .map_err(|e| format!("复制 {} 失败: {}", src.file_name().unwrap_or_default().to_string_lossy(), e))?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -722,6 +777,7 @@ fn main() {
             import_old_data,
             set_dont_show_import_modal,
             get_import_banner_setting,
+            do_import_and_restart,
         ]);
 
     tracing::info!("Initializing app...");
