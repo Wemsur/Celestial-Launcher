@@ -1,0 +1,1 @@
+// CSS reset for Remotionexport const resetCSS = () => (  <style>    {`      * {        margin: 0;        padding: 0;        box-sizing: border-box;      }      body {        font-family: Inter, sans-serif;        background: #1a1a1a;      }      @keyframes spin {        from { transform: rotate(0deg); }        to { transform: rotate(360deg); }      }`  </style>);

@@ -1,0 +1,1 @@
+import { resetCSS } from "./reset-css";import { Video } from "./components/Video";export const App = () => {  return (    <>      {resetCSS()}      <div style={{ width: "100%", height: "100%" }}>        <Video />      </div>    </>  );};export default App;

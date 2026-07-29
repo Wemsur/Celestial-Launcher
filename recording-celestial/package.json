@@ -1,0 +1,27 @@
+{
+  "name": "celestial-remotion",
+  "version": "1.0.0",
+  "description": "Remotion project for Celestial Launcher promotional video",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "remotion dev",
+    "render": "remotion render",
+    "playback": "remotion playback"
+  },
+  "dependencies": {
+    "@remotion/cli": "*",
+    "@remotion/core": "*",
+    "@remotion/fonts": "*",
+    "@remotion/react": "*",
+    "@remotion/shapes": "*",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "typescript": "*"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "@types/react": "*",
+    "@types/react-dom": "*",
+    "ts-node": "*"
+  }
+}
