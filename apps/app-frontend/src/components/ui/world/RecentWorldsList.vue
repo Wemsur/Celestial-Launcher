@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { LoaderCircleIcon } from '@modrinth/assets'
 import type { GameVersion } from '@modrinth/ui'
-import { GAME_MODES, HeadingLink, injectNotificationManager } from '@modrinth/ui'
+import { GAME_MODES, injectNotificationManager } from '@modrinth/ui'
 import { platform } from '@tauri-apps/plugin-os'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
@@ -176,6 +176,7 @@ function refreshServer(address: string, instanceId: string) {
 }
 
 async function joinWorld(world: WorldWithInstance, instance?: GameInstance) {
+	if (instance?.quarantined) return
 	console.log(`Joining world ${getWorldIdentifier(world)}`)
 	if (world.type === 'server') {
 		await start_join_server(world.instance_id, world.address).catch(handleError)
@@ -192,6 +193,7 @@ async function joinWorld(world: WorldWithInstance, instance?: GameInstance) {
 }
 
 async function playInstance(instance: GameInstance) {
+	if (instance.quarantined) return
 	await run(instance.id)
 		.catch((err) => handleSevereError(err, { instanceId: instance.id }))
 		.finally(() => {
@@ -259,23 +261,17 @@ onUnmounted(() => {
 <template>
 	<div v-if="loading" class="flex flex-col gap-2">
 		<span class="flex mt-1 mb-3 leading-none items-center gap-1 text-primary text-lg font-bold">
-			返回上次游玩
+			Jump back in
 		</span>
 		<div class="text-center py-4">
 			<LoaderCircleIcon class="mx-auto size-8 animate-spin text-contrast" />
 		</div>
 	</div>
-	<div v-else-if="jumpBackInItems.length > 0" class="flex flex-1 h-full flex-col gap-2">
-		<HeadingLink v-if="theme.getFeatureFlag('worlds_tab')" to="/worlds" class="mt-1">
-            返回上次游玩
-		</HeadingLink>
-		<span
-			v-else
-			class="flex mt-1 mb-3 leading-none items-center gap-1 text-primary text-lg font-bold"
-		>
-			返回上次游玩
+	<div v-else-if="jumpBackInItems.length > 0" class="flex flex-col gap-2">
+		<span class="flex mt-1 mb-3 leading-none items-center gap-1 text-primary text-lg font-bold">
+			继续游玩
 		</span>
-		<div class="grid-when-huge flex flex-col w-full gap-2 flex-1 overflow-y-auto">
+		<div class="grid-when-huge flex flex-col w-full gap-2">
 			<template
 				v-for="item in jumpBackInItems"
 				:key="`${item.instance.id}-${item.type === 'world' ? getWorldIdentifier(item.world) : 'instance'}`"
@@ -300,6 +296,7 @@ onUnmounted(() => {
 						item.world.type === 'singleplayer' &&
 						hasWorldQuickPlaySupport(gameVersions, item.instance.game_version || '')
 					"
+					:quarantined="item.instance.quarantined"
 					:server-status="
 						item.world.type === 'server' ? serverData[item.world.address].status : undefined
 					"
@@ -343,6 +340,6 @@ onUnmounted(() => {
 <style scoped lang="scss">
 .grid-when-huge {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(690px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(670px, 1fr));
 }
 </style>

@@ -3,7 +3,6 @@ use crate::auth::checks::{filter_visible_versions, is_visible_version};
 use crate::auth::{filter_visible_projects, get_user_from_headers};
 use crate::database::PgPool;
 use crate::database::ReadOnlyPgPool;
-use crate::database::redis::RedisPool;
 use crate::models::ids::VersionId;
 use crate::models::pats::Scopes;
 use crate::models::projects::{ProjectStatus, VersionStatus, VersionType};
@@ -18,6 +17,7 @@ use futures::TryStreamExt;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use xredis::RedisPool;
 
 pub fn config(cfg: &mut actix_web::web::ServiceConfig) {
     cfg.service(get_version_from_hash_route)
@@ -910,9 +910,6 @@ pub async fn delete_file(
         }
 
         let mut transaction = pool.begin().await?;
-        let was_in_tech_review =
-            delphi::is_project_in_tech_review(row.project_id, &mut transaction)
-                .await?;
 
         sqlx::query!(
             "
@@ -937,9 +934,9 @@ pub async fn delete_file(
         database::models::version_item::cleanup_unused_attribution_files_and_groups(&mut transaction)
             .await?;
 
-        delphi::send_tech_review_exit_file_deleted_message_if_exited(
-            row.project_id,
-            was_in_tech_review,
+        delphi::tech_review_sync::sync_project_tech_review_state(
+            &[row.project_id],
+            delphi::tech_review_sync::TechReviewExitReason::FileDeleted,
             &mut transaction,
         )
         .await?;

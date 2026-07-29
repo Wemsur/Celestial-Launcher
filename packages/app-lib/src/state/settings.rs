@@ -65,6 +65,7 @@ pub enum FeatureFlag {
     ShowInstancePlayTime,
     SkipNonEssentialWarnings,
     AdvancedFiltersCollapsed,
+    AlwaysShowCopyDetails,
 }
 
 impl Settings {
@@ -333,6 +334,7 @@ pub enum Theme {
     Customlight,
     #[serde(rename = "antiquedark")] // 告诉 Serde：当前端传包进 "antiquedark" 字符串时，映射到此处的枚举
     AntiqueDark,
+    Retro,
     System,
 }
 
@@ -346,6 +348,7 @@ impl Theme {
             Theme::AntiqueDark => "antiquedark",
             Theme::Customdark => "customdark",
             Theme::Customlight => "customlight",
+            Theme::Retro => "retro",
             Theme::System => "system",
         }
     }
@@ -355,6 +358,7 @@ impl Theme {
             "dark" => Theme::Dark,
             "light" => Theme::Light,
             "oled" => Theme::Oled,
+            "retro" => Theme::Retro,
             "elegant" => Theme::Elegant,
             "antiquedark" => Theme::AntiqueDark,
             "customdark" => Theme::Customdark,

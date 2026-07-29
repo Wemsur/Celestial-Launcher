@@ -1,4 +1,4 @@
-use actix_web::{HttpRequest, get, patch, post, web};
+use actix_web::{HttpRequest, delete, get, patch, post, web};
 use chrono::{DateTime, Utc};
 use eyre::eyre;
 use serde::{Deserialize, Serialize};
@@ -6,15 +6,14 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{check_is_moderator_from_headers, get_user_from_headers};
 use crate::database::PgPool;
 use crate::database::models::{
-    DBFileId, DBOrganization, DBTeamMember, DBVersion,
+    DBFileId, DBOrganization, DBProject, DBTeamMember, DBVersion,
     ids::{
         DBAttributionGroupId, DBProjectId, DBVersionId,
         generate_attribution_group_id,
     },
 };
-use crate::database::redis::RedisPool;
 use crate::file_hosting::FileHost;
-use crate::models::ids::{FileId, ProjectId, VersionId};
+use crate::models::ids::{AttributionGroupId, FileId, ProjectId, VersionId};
 use crate::models::pats::Scopes;
 use crate::models::projects::{
     AttributionModerationStatusKind, AttributionResolution,
@@ -27,10 +26,13 @@ use crate::queue::moderation::ApprovalType;
 use crate::queue::session::AuthQueue;
 use crate::routes::ApiError;
 use crate::util::error::Context;
+use xredis::RedisPool;
 
 pub fn config(cfg: &mut actix_web::web::ServiceConfig) {
     cfg.service(list)
         .service(update_group)
+        .service(delete_groups)
+        .service(delete_all_groups)
         .service(scan)
         .service(force_scan_file)
         .service(assign)
@@ -46,6 +48,7 @@ struct AttributionGroupResponse {
     attributed_by: Option<ariadne::ids::UserId>,
     files: Vec<AttributionFileResponse>,
     versions: Vec<VersionInfo>,
+    override_files_on_platform: Vec<OverrideFileOnPlatformResponse>,
 }
 
 #[derive(Clone, Serialize, utoipa::ToSchema)]
@@ -65,6 +68,15 @@ struct AttributionFileResponse {
     moderation_external_license_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     moderation_external_license: Option<ModerationExternalLicenseResponse>,
+}
+
+#[derive(Clone, Serialize, utoipa::ToSchema)]
+struct OverrideFileOnPlatformResponse {
+    file_path: String,
+    sha1: String,
+    version_id: VersionId,
+    platform_version_id: VersionId,
+    platform_project_id: ProjectId,
 }
 
 #[derive(Clone, Serialize, utoipa::ToSchema)]
@@ -301,16 +313,39 @@ pub async fn list(
     path: web::Path<ProjectId>,
 ) -> Result<web::Json<Vec<AttributionGroupResponse>>, ApiError> {
     let project_id: DBProjectId = path.into_inner().into();
-    let requester_is_mod = get_user_from_headers(
+    let user = get_user_from_headers(
         &req,
         &**pool,
         &redis,
         &session_queue,
-        Scopes::PROJECT_READ,
+        Scopes::VERSION_READ,
     )
-    .await
-    .ok()
-    .is_some_and(|(_, user)| user.role.is_mod());
+    .await?
+    .1;
+    let requester_is_mod = user.role.is_mod();
+
+    let project = DBProject::get_id(project_id, pool.as_ref(), redis.as_ref())
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    let (team_member, organization_team_member) =
+        DBTeamMember::get_for_project_permissions(
+            &project.inner,
+            user.id.into(),
+            pool.as_ref(),
+        )
+        .await
+        .wrap_internal_err("failed to fetch project permissions")?;
+    if ProjectPermissions::get_permissions_by_role(
+        &user.role,
+        &team_member,
+        &organization_team_member,
+    )
+    .is_none()
+    {
+        return Err(ApiError::Auth(eyre!(
+            "you do not have permission to read versions for this project"
+        )));
+    }
 
     let groups = sqlx::query!(
         r#"
@@ -356,6 +391,48 @@ pub async fn list(
         .fetch_all(pool.as_ref())
         .await
         .wrap_internal_err("failed to fetch attribution group files")?
+    };
+
+    let override_files_on_platform = if requester_is_mod {
+        sqlx::query!(
+            r#"
+			SELECT
+				ofs.file_path AS "file_path!",
+				CONVERT_FROM(ofs.sha1, 'UTF8') AS "sha1!",
+				source_file.version_id AS "version_id: DBVersionId",
+				platform_file.version_id AS "platform_version_id: DBVersionId",
+				platform_version.mod_id AS "platform_project_id: DBProjectId"
+			FROM files source_file
+			INNER JOIN versions source_version
+				ON source_version.id = source_file.version_id
+			INNER JOIN override_file_sources ofs
+				ON ofs.file_id = source_file.id
+			INNER JOIN hashes h
+				ON h.algorithm = 'sha1' AND h.hash = ofs.sha1
+			INNER JOIN files platform_file
+				ON platform_file.id = h.file_id
+			INNER JOIN versions platform_version
+				ON platform_version.id = platform_file.version_id
+			WHERE source_version.mod_id = $1
+			"#,
+            project_id as DBProjectId,
+        )
+        .fetch_all(pool.as_ref())
+        .await
+        .wrap_internal_err(
+            "failed to fetch override files already on platform",
+        )?
+        .into_iter()
+        .map(|row| OverrideFileOnPlatformResponse {
+            file_path: row.file_path,
+            sha1: row.sha1,
+            version_id: row.version_id.into(),
+            platform_version_id: row.platform_version_id.into(),
+            platform_project_id: row.platform_project_id.into(),
+        })
+        .collect::<Vec<_>>()
+    } else {
+        Vec::new()
     };
 
     let moderation_external_licenses = if requester_is_mod {
@@ -497,6 +574,15 @@ pub async fn list(
             .filter(|version| group_version_ids.contains(&version.id))
             .cloned()
             .collect();
+        let group_file_sha1s = group_files
+            .iter()
+            .map(|file| file.sha1.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        let group_override_files_on_platform = override_files_on_platform
+            .iter()
+            .filter(|file| group_file_sha1s.contains(file.sha1.as_str()))
+            .cloned()
+            .collect();
 
         let mut attribution = group.attribution.and_then(|v| {
             serde_json::from_value::<AttributionResolution>(v).ok()
@@ -530,6 +616,7 @@ pub async fn list(
             attributed_by,
             files: group_files,
             versions: group_versions,
+            override_files_on_platform: group_override_files_on_platform,
         });
     }
 
@@ -616,6 +703,162 @@ pub async fn update_group(
 
     clear_group_version_cache(pool.as_ref(), redis.as_ref(), &[group_id])
         .await?;
+
+    Ok(())
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+struct DeleteGroupsBody {
+    groups: Vec<AttributionGroupId>,
+}
+
+/// Delete attribution groups and all files inside them.
+#[utoipa::path(
+	context_path = "/attribution",
+	tag = "attribution",
+	request_body = DeleteGroupsBody,
+	responses((status = NO_CONTENT))
+)]
+#[delete("/group")]
+pub async fn delete_groups(
+    req: HttpRequest,
+    pool: web::Data<PgPool>,
+    redis: web::Data<RedisPool>,
+    session_queue: web::Data<AuthQueue>,
+    web::Json(body): web::Json<DeleteGroupsBody>,
+) -> Result<(), ApiError> {
+    check_is_moderator_from_headers(
+        &req,
+        &**pool,
+        &redis,
+        &session_queue,
+        Scopes::PROJECT_READ,
+    )
+    .await?;
+
+    let group_ids = body
+        .groups
+        .into_iter()
+        .map(|id| DBAttributionGroupId::from(id).0)
+        .collect::<Vec<_>>();
+
+    delete_attribution_groups(pool.as_ref(), redis.as_ref(), group_ids).await
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+struct DeleteAllGroupsBody {
+    project_id: ProjectId,
+}
+
+/// Delete all attribution groups and files for a project.
+#[utoipa::path(
+	context_path = "/attribution",
+	tag = "attribution",
+	request_body = DeleteAllGroupsBody,
+	responses((status = NO_CONTENT))
+)]
+#[delete("/all-groups")]
+pub async fn delete_all_groups(
+    req: HttpRequest,
+    pool: web::Data<PgPool>,
+    redis: web::Data<RedisPool>,
+    session_queue: web::Data<AuthQueue>,
+    web::Json(body): web::Json<DeleteAllGroupsBody>,
+) -> Result<(), ApiError> {
+    check_is_moderator_from_headers(
+        &req,
+        &**pool,
+        &redis,
+        &session_queue,
+        Scopes::PROJECT_READ,
+    )
+    .await?;
+
+    let project_id = DBProjectId::from(body.project_id).0;
+    let group_ids = sqlx::query_scalar!(
+        r#"
+		SELECT id AS "id: DBAttributionGroupId"
+		FROM project_attribution_groups
+		WHERE project_id = $1
+		"#,
+        project_id,
+    )
+    .fetch_all(pool.as_ref())
+    .await
+    .wrap_internal_err("failed to fetch project attribution groups")?
+    .into_iter()
+    .map(|id| id.0)
+    .collect::<Vec<_>>();
+
+    delete_attribution_groups(pool.as_ref(), redis.as_ref(), group_ids).await
+}
+
+async fn delete_attribution_groups(
+    pool: &PgPool,
+    redis: &RedisPool,
+    mut group_ids: Vec<i64>,
+) -> Result<(), ApiError> {
+    group_ids.sort_unstable();
+    group_ids.dedup();
+
+    if group_ids.is_empty() {
+        return Ok(());
+    }
+
+    let mut txn = pool.begin().await.wrap_internal_err(
+        "failed to begin attribution group deletion transaction",
+    )?;
+
+    let version_ids = sqlx::query_scalar!(
+        r#"
+		SELECT DISTINCT f.version_id AS "version_id: DBVersionId"
+		FROM project_attribution_files paf
+		INNER JOIN project_attribution_groups pag ON pag.id = paf.group_id
+		INNER JOIN override_file_sources ofs ON ofs.sha1 = paf.sha1
+		INNER JOIN files f ON f.id = ofs.file_id
+		INNER JOIN versions v ON v.id = f.version_id
+		WHERE paf.group_id = ANY($1)
+			AND pag.project_id = v.mod_id
+		"#,
+        &group_ids,
+    )
+    .fetch_all(&mut txn)
+    .await
+    .wrap_internal_err("failed to fetch attribution group versions")?;
+
+    sqlx::query!(
+        "
+		DELETE FROM project_attribution_files
+		WHERE group_id = ANY($1)
+		",
+        &group_ids,
+    )
+    .execute(&mut txn)
+    .await
+    .wrap_internal_err("failed to delete attribution group files")?;
+
+    let result = sqlx::query!(
+        "
+		DELETE FROM project_attribution_groups
+		WHERE id = ANY($1)
+		",
+        &group_ids,
+    )
+    .execute(&mut txn)
+    .await
+    .wrap_internal_err("failed to delete attribution groups")?;
+
+    if result.rows_affected() != group_ids.len() as u64 {
+        return Err(ApiError::NotFound);
+    }
+
+    txn.commit().await.wrap_internal_err(
+        "failed to commit attribution group deletion transaction",
+    )?;
+
+    DBVersion::clear_cache_ids(&version_ids, redis)
+        .await
+        .wrap_internal_err("failed to clear version attribution cache")?;
 
     Ok(())
 }

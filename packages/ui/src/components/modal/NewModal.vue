@@ -31,7 +31,7 @@
 					<div
 						v-if="!hideHeader"
 						data-tauri-drag-region
-						class="grid grid-cols-[auto_min-content] items-center gap-4 p-6 border-solid border-0 border-b-[1px] border-surface-5 max-w-full"
+						class="grid grid-cols-[1fr_auto] items-center gap-4 p-6 border-solid border-0 border-b-[1px] border-surface-5 max-w-full"
 					>
 						<div class="flex text-wrap break-words items-center gap-3 min-w-0">
 							<slot name="title">
@@ -40,16 +40,19 @@
 								</span>
 							</slot>
 						</div>
-						<ButtonStyled v-if="closable" circular>
-							<button
-								v-tooltip="closeLabel"
-								:aria-label="closeLabel"
-								:disabled="disableClose"
-								@click="hide"
-							>
-								<XIcon aria-hidden="true" />
-							</button>
-						</ButtonStyled>
+						<div class="flex items-center gap-2">
+							<slot name="header-actions" />
+							<ButtonStyled v-if="closable" circular>
+								<button
+									v-tooltip="closeLabel"
+									:aria-label="closeLabel"
+									:disabled="disableClose"
+									@click="hide"
+								>
+									<XIcon aria-hidden="true" />
+								</button>
+							</ButtonStyled>
+						</div>
 					</div>
 
 					<ButtonStyled
@@ -86,11 +89,11 @@
 							ref="scrollContainer"
 							data-modal-content
 							:class="[
-								'flex-1 min-h-0',
-								props.noPadding ? '' : 'overflow-y-auto p-6 !pb-1 sm:pb-6',
+								'flex-1 min-h-0 overflow-y-auto',
+								props.noPadding ? '' : 'p-6 !pb-1 sm:pb-6',
 								{ 'pt-12': props.mergeHeader && closable && !props.noPadding },
 							]"
-							:style="props.noPadding ? {} : { maxHeight: maxContentHeight }"
+							:style="{ maxHeight: maxContentHeight }"
 							@scroll="checkScrollState"
 						>
 							<slot> You just lost the game.</slot>
@@ -170,7 +173,9 @@ const props = withDefaults(
 		header?: string
 		hideHeader?: boolean
 		onHide?: () => void
+		onAfterHide?: () => void
 		onShow?: () => void
+		beforeHide?: () => boolean
 		mergeHeader?: boolean
 		scrollable?: boolean
 		maxContentHeight?: string
@@ -196,7 +201,9 @@ const props = withDefaults(
 		header: undefined,
 		hideHeader: false,
 		onHide: () => {},
+		onAfterHide: () => {},
 		onShow: () => {},
+		beforeHide: undefined,
 		mergeHeader: false,
 		// TODO: migrate all modals to use scrollable and remove this prop
 		scrollable: false,
@@ -226,6 +233,7 @@ const visible = ref(false)
 const stackDepth = ref(0)
 const modalBodyRef = ref<HTMLElement | null>(null)
 let previousFocusEl: Element | null = null
+let hideTimeout: ReturnType<typeof setTimeout> | null = null
 
 const scrollContainer = ref<HTMLElement | null>(null)
 const { showTopFade, showBottomFade, checkScrollState } = useScrollIndicator(scrollContainer)
@@ -239,6 +247,10 @@ function getFocusableElements(): HTMLElement[] {
 }
 
 function show(event?: MouseEvent) {
+	if (hideTimeout) {
+		clearTimeout(hideTimeout)
+		hideTimeout = null
+	}
 	props.onShow?.()
 	const wasEmpty = modalStackSize() === 0
 	stackDepth.value = modalStackSize()
@@ -269,9 +281,12 @@ function show(event?: MouseEvent) {
 	}, 50)
 }
 
-function hide() {
+function hide(): boolean {
 	if (props.disableClose) {
-		return
+		return false
+	}
+	if (props.beforeHide?.() === false) {
+		return false
 	}
 	props.onHide?.()
 	resetMousePosition()
@@ -287,9 +302,12 @@ function hide() {
 		previousFocusEl.focus()
 	}
 	previousFocusEl = null
-	setTimeout(() => {
+	hideTimeout = setTimeout(() => {
 		open.value = false
+		hideTimeout = null
+		nextTick(() => props.onAfterHide?.())
 	}, 300)
+	return true
 }
 
 async function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
@@ -334,6 +352,10 @@ function resetMousePosition() {
 }
 
 onUnmounted(() => {
+	if (hideTimeout) {
+		clearTimeout(hideTimeout)
+		hideTimeout = null
+	}
 	if (open.value) {
 		popModal()
 		window.removeEventListener('keydown', handleWindowKeyDown)

@@ -18,12 +18,12 @@ export const DEFAULT_FEATURE_FLAGS = {
 	skip_non_essential_warnings: false,
 	skip_unknown_pack_warning: false,
 	pride_fundraiser: true,
-	i18n_debug: false,//false
+	i18n_debug: false,
 	show_instance_play_time: true,
 	advanced_filters_collapsed: true,
 }
 
-export const THEME_OPTIONS = ['customdark', 'customlight', 'dark', 'light', 'oled', 'elegant', 'antiquedark', 'system'] as const
+export const THEME_OPTIONS = ['customdark', 'customlight', 'dark', 'light', 'oled', 'elegant', 'antiquedark','retro', 'system'] as const
 
 export type FeatureFlag = keyof typeof DEFAULT_FEATURE_FLAGS
 export type FeatureFlags = Record<FeatureFlag, boolean>

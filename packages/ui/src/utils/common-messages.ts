@@ -111,6 +111,10 @@ export const commonMessages = defineMessages({
 		id: 'label.details',
 		defaultMessage: 'Details',
 	},
+	discoverContentLabel: {
+		id: 'label.discover-content',
+		defaultMessage: 'Discover content',
+	},
 	downloadButton: {
 		id: 'button.download',
 		defaultMessage: 'Download',
@@ -249,7 +253,7 @@ export const commonMessages = defineMessages({
 	},
 	removeButton: {
 		id: 'button.remove',
-		defaultMessage: 'Delete passkey',
+		defaultMessage: 'Remove',
 	},
 	removeImageButton: {
 		id: 'button.remove-image',
@@ -286,6 +290,10 @@ export const commonMessages = defineMessages({
 	scopesLabel: {
 		id: 'label.scopes',
 		defaultMessage: 'Scopes',
+	},
+	permissionsLabel: {
+		id: 'label.permissions',
+		defaultMessage: 'Permissions',
 	},
 	searchLabel: {
 		id: 'label.search',
@@ -1064,12 +1072,16 @@ export const commonSettingsMessages = defineMessages({
 		defaultMessage: 'Personal access tokens',
 	},
 	profile: {
-		id: 'settings.profile.title',
-		defaultMessage: 'Public profile',
+		id: 'settings.profile.navigation-title',
+		defaultMessage: 'Profile',
 	},
 	sessions: {
 		id: 'settings.sessions.title',
 		defaultMessage: 'Sessions',
+	},
+	social: {
+		id: 'settings.social.title',
+		defaultMessage: 'Social',
 	},
 })
 

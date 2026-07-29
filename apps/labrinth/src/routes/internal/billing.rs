@@ -1,4 +1,5 @@
 use self::payments::*;
+use self::update_subscriptions::*;
 use crate::auth::get_user_from_headers;
 use crate::database::models::charge_item::DBCharge;
 use crate::database::models::ids::DBUserSubscriptionId;
@@ -10,7 +11,6 @@ use crate::database::models::{
     DBAffiliateCodeId, charge_item, generate_charge_id, product_item,
     user_subscription_item,
 };
-use crate::database::redis::RedisPool;
 use crate::database::{PgPool, PgTransaction};
 use crate::env::ENV;
 use crate::models::billing::{
@@ -41,6 +41,7 @@ use stripe::{
     Webhook,
 };
 use tracing::warn;
+use xredis::RedisPool;
 
 pub fn config(cfg: &mut actix_web::web::ServiceConfig) {
     cfg.service(
@@ -56,6 +57,7 @@ pub fn config(cfg: &mut actix_web::web::ServiceConfig) {
             .service(charges)
             .service(credit)
             .service(active_servers)
+            .service(update_many)
             .service(initiate_payment)
             .service(stripe_webhook)
             .service(refund_charge)
@@ -63,7 +65,7 @@ pub fn config(cfg: &mut actix_web::web::ServiceConfig) {
     );
 }
 
-/// List products.  
+/// List products.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -106,7 +108,14 @@ struct SubscriptionsQuery {
     pub user_id: Option<ariadne::ids::UserId>,
 }
 
-/// List subscriptions.  
+#[derive(Serialize)]
+struct UserSubscriptionWithNextChargeTaxAmount {
+    #[serde(flatten)]
+    pub subscription: UserSubscription,
+    pub next_charge_tax_amount: Option<i64>,
+}
+
+/// List subscriptions.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -131,7 +140,7 @@ pub async fn subscriptions(
     .await?
     .1;
 
-    let subscriptions =
+    let db_subscriptions =
         user_subscription_item::DBUserSubscription::get_all_user(
             if let Some(user_id) = query.user_id {
                 if user.role.is_admin() {
@@ -147,10 +156,20 @@ pub async fn subscriptions(
             },
             &**pool,
         )
-        .await?
-        .into_iter()
-        .map(UserSubscription::from)
-        .collect::<Vec<_>>();
+        .await?;
+
+    let mut subscriptions = Vec::with_capacity(db_subscriptions.len());
+    for subscription in db_subscriptions {
+        let next_charge_tax_amount =
+            DBCharge::get_open_subscription(subscription.id, &**pool)
+                .await?
+                .map(|charge| charge.tax_amount);
+
+        subscriptions.push(UserSubscriptionWithNextChargeTaxAmount {
+            subscription: UserSubscription::from(subscription),
+            next_charge_tax_amount,
+        });
+    }
 
     Ok(HttpResponse::Ok().json(subscriptions))
 }
@@ -170,7 +189,7 @@ pub struct ChargeRefund {
     pub unprovision: Option<bool>,
 }
 
-/// Refund a charge.  
+/// Refund a charge.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -440,7 +459,7 @@ pub async fn refund_charge(
     Ok(HttpResponse::NoContent().finish())
 }
 
-/// Reprocess tax for a charge.  
+/// Reprocess tax for a charge.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -629,7 +648,7 @@ pub struct SubscriptionEditQuery {
     pub dry: Option<bool>,
 }
 
-/// Update a subscription.  
+/// Update a subscription.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -1129,7 +1148,7 @@ pub async fn edit_subscription(
     }
 }
 
-/// Get the current customer.  
+/// Get the current customer.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -1173,7 +1192,7 @@ pub struct ChargesQuery {
     pub user_id: Option<ariadne::ids::UserId>,
 }
 
-/// List payments.  
+/// List payments.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -1239,7 +1258,7 @@ pub async fn charges(
     ))
 }
 
-/// Start a payment method flow.  
+/// Start a payment method flow.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -1298,7 +1317,7 @@ pub struct EditPaymentMethod {
     pub primary: bool,
 }
 
-/// Update a payment method.  
+/// Update a payment method.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -1368,7 +1387,7 @@ pub async fn edit_payment_method(
     }
 }
 
-/// Remove a payment method.  
+/// Remove a payment method.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -1457,7 +1476,7 @@ pub async fn remove_payment_method(
     }
 }
 
-/// List payment methods.  
+/// List payment methods.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -1520,7 +1539,7 @@ struct ActiveServerResponse {
     pub region: Option<String>,
 }
 
-/// List active servers.  
+/// List active servers.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -1634,7 +1653,7 @@ pub struct PaymentRequest {
     pub metadata: Option<PaymentRequestMetadata>,
 }
 
-/// Initiate a payment.  
+/// Initiate a payment.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -1704,7 +1723,7 @@ pub async fn initiate_payment(
     }
 }
 
-/// Receive a Stripe webhook.  
+/// Receive a Stripe webhook.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -1950,7 +1969,7 @@ pub async fn stripe_webhook(
 
                                     if charge_status != ChargeStatus::Failed {
                                         subscription
-                                            .upsert(transaction)
+                                            .upsert(&mut *transaction)
                                             .await?;
                                     }
 
@@ -1992,7 +2011,7 @@ pub async fn stripe_webhook(
                         };
 
                         if charge_status != ChargeStatus::Failed {
-                            charge.upsert(transaction).await?;
+                            charge.upsert(&mut *transaction).await?;
                         }
 
                         (charge, price, product, subscription, new_region)
@@ -2627,7 +2646,7 @@ pub enum CreditTarget {
     },
 }
 
-/// Credit subscriptions.  
+/// Credit subscriptions.
 #[utoipa::path(
 	context_path = "/billing",
 	tag = "billing",
@@ -2756,3 +2775,4 @@ pub async fn credit(
 }
 
 pub mod payments;
+pub mod update_subscriptions;

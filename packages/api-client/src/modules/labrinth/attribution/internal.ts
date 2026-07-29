@@ -65,6 +65,38 @@ export class LabrinthAttributionInternalModule extends AbstractModule {
 	}
 
 	/**
+	 * Delete attribution groups and all files inside them.
+	 * DELETE /_internal/attribution/group
+	 *
+	 * @param groupIds - The base62 attribution group ids (as returned from listProjectAttribution).
+	 */
+	public async deleteGroups(groupIds: string[]): Promise<void> {
+		const body: Labrinth.Attribution.Internal.DeleteGroupsRequest = { groups: groupIds }
+		return this.client.request<void>('/attribution/group', {
+			api: 'labrinth',
+			version: 'internal',
+			method: 'DELETE',
+			body,
+		})
+	}
+
+	/**
+	 * Delete all attribution groups and files for a project.
+	 * DELETE /_internal/attribution/all-groups
+	 */
+	public async deleteAllGroups(projectId: string): Promise<void> {
+		const body: Labrinth.Attribution.Internal.DeleteAllGroupsRequest = {
+			project_id: projectId,
+		}
+		return this.client.request<void>('/attribution/all-groups', {
+			api: 'labrinth',
+			version: 'internal',
+			method: 'DELETE',
+			body,
+		})
+	}
+
+	/**
 	 * Reassign a file (by sha1) to another attribution group within the same project.
 	 * POST /_internal/attribution/assign
 	 *

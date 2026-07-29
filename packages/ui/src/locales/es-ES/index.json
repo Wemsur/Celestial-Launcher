@@ -482,15 +482,6 @@
   "content.inline-backup.world-label": {
     "defaultMessage": " mundo"
   },
-  "content.modpack-card.content-hint-description": {
-    "defaultMessage": "¡Ya puedes encontrar el contenido de tu modpack aquí!"
-  },
-  "content.modpack-card.content-hint-title": {
-    "defaultMessage": "Se ha trasladado el contenido del modpack"
-  },
-  "content.modpack-card.dismiss-hint": {
-    "defaultMessage": "No mostrar de nuevo"
-  },
   "content.page-layout.additional-content": {
     "defaultMessage": "Contenido adicional"
   },
@@ -880,9 +871,6 @@
   },
   "external-files.permissions-card.add-files-modal.no-search-results": {
     "defaultMessage": "No hay archivos que coincidan con tu búsqueda."
-  },
-  "external-files.permissions-card.add-files-modal.search-placeholder": {
-    "defaultMessage": "Buscar archivos…"
   },
   "external-files.permissions-card.add-files-modal.selected-count": {
     "defaultMessage": "{count, plural, one {# archivo seleccionado} other {# archivos seleccionados}}"
@@ -2152,9 +2140,6 @@
   },
   "label.game-version": {
     "defaultMessage": "Versión del juego"
-  },
-  "label.hide-installed-content": {
-    "defaultMessage": "Ocultar contenido ya instalado"
   },
   "label.hide-selected-content": {
     "defaultMessage": "Ocultar contenido seleccionado"
@@ -4945,9 +4930,6 @@
   },
   "settings.pats.title": {
     "defaultMessage": "Tokens de acceso personal"
-  },
-  "settings.profile.title": {
-    "defaultMessage": "Perfil público"
   },
   "settings.sessions.title": {
     "defaultMessage": "Sesiones"
