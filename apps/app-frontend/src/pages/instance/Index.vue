@@ -180,7 +180,7 @@
 							<button disabled>启动中...</button>
 						</ButtonStyled>
 						<ButtonStyled circular size="large">
-							<button v-tooltip="'Instance settings'" @click="settingsModal?.show()">
+							<button v-tooltip="'版本设置'" @click="settingsModal?.show()">
 								<SettingsIcon />
 							</button>
 						</ButtonStyled>
