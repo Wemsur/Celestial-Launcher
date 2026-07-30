@@ -289,159 +289,54 @@ watch(
         </div>
         <Toggle id="native-decorations" v-model="settings.native_decorations"/>
     </div>
-
-    <div class="mt-6 flex items-center justify-between">
-        <div>
-            <h2 class="m-0 text-lg font-semibold text-contrast">
-                {{ formatMessage(messages.minimizeLauncherTitle) }}
-            </h2>
-            <p class="m-0 mt-1">{{ formatMessage(messages.minimizeLauncherDescription) }}</p>
-        </div>
-        <Toggle id="minimize-launcher" v-model="settings.hide_on_process_start"/>
-    </div>
-
-    <div class="mt-6 flex items-center justify-between">
-        <div>
-            <h2 class="m-0 text-lg font-semibold text-contrast">
-                {{ formatMessage(messages.showPlayTimeTitle) }}
-            </h2>
-            <p class="m-0 mt-1">{{ formatMessage(messages.showPlayTimeDescription) }}</p>
-        </div>
-        <Toggle
-            :model-value="themeStore.getFeatureFlag(showPlayTimeFlag)"
-            @update:model-value="
-				() => {
-					const newValue = !themeStore.getFeatureFlag(showPlayTimeFlag)
-					themeStore.featureFlags[showPlayTimeFlag] = newValue
-					settings.feature_flags[showPlayTimeFlag] = newValue
-				}
-			"
-        />
-    </div>
-
-    <div class="mt-6 flex items-center justify-between">
-        <div>
-            <h2 class="m-0 text-lg font-semibold text-contrast">
-                {{ formatMessage(messages.hideNametagTitle) }}
-            </h2>
-            <p class="m-0 mt-1">{{ formatMessage(messages.hideNametagDescription) }}</p>
-        </div>
-        <Toggle
-            id="hide-nametag-skins-page"
-            :model-value="themeStore.hideNametagSkinsPage"
-            @update:model-value="
-				(e) => {
-					themeStore.hideNametagSkinsPage = !!e
-					settings.hide_nametag_skins_page = themeStore.hideNametagSkinsPage
-				}
-			"
-        />
-    </div>
-
-    <div class="mt-6 flex items-center justify-between">
-        <div>
-            <h2 class="m-0 text-lg font-semibold text-contrast">
-                {{ formatMessage(messages.defaultLandingPageTitle) }}
-            </h2>
-            <p class="m-0 mt-1">{{ formatMessage(messages.defaultLandingPageDescription) }}</p>
-        </div>
-        <Combobox
-            id="opening-page"
-            v-model="settings.default_page"
-            name="Opening page dropdown"
-            class="max-w-40"
-            :options="[
-				{
-					value: 'Home',
-					label: formatMessage(messages.defaultLandingPageHome),
-				},
-				{
-					value: 'Library',
-					label: formatMessage(messages.defaultLandingPageLibrary),
-				},
-				{
-					value: 'Worlds',
-					label: formatMessage(messages.defaultLandingPageWorlds),
-				},
-			]"
-            :display-value="settings.default_page ?? 'Select an option'"
-        />
-    </div>
-
-    <div class="mt-6 flex items-center justify-between">
-        <div>
-            <h2 class="m-0 text-lg font-semibold text-contrast">
-                {{ formatMessage(messages.jumpBackIntoWorldsTitle) }}
-            </h2>
-            <p class="m-0 mt-1">{{ formatMessage(messages.jumpBackIntoWorldsDescription) }}</p>
-        </div>
-        <Toggle
-            :model-value="themeStore.getFeatureFlag(worldsInHomeFlag)"
-            @update:model-value="
-				() => {
-					const newValue = !themeStore.getFeatureFlag(worldsInHomeFlag)
-					themeStore.featureFlags[worldsInHomeFlag] = newValue
-					settings.feature_flags[worldsInHomeFlag] = newValue
-				}
-			"
-        />
-    </div>
-
-    <div class="mt-6 flex items-center justify-between gap-4">
-        <div>
-            <h2 class="m-0 text-lg font-semibold text-contrast">
-                {{ formatMessage(messages.unknownPackWarningTitle) }}
-            </h2>
-            <p class="m-0 mt-1">{{ formatMessage(messages.unknownPackWarningDescription) }}</p>
-        </div>
-        <Toggle
-            :model-value="!themeStore.getFeatureFlag(skipUnknownPackWarningFlag)"
-            @update:model-value="
-				(e) => {
-					const warnBeforeUnknownPackInstall = !!e
-					const skipUnknownPackWarning = !warnBeforeUnknownPackInstall
-					themeStore.featureFlags[skipUnknownPackWarningFlag] = skipUnknownPackWarning
-					settings.feature_flags[skipUnknownPackWarningFlag] = skipUnknownPackWarning
-				}
-			"
-        />
-    </div>
-
-    <div class="mt-6 flex items-center justify-between gap-4">
-        <div>
-            <h2 class="m-0 text-lg font-semibold text-contrast">
-                {{ formatMessage(messages.skipNonEssentialWarningsTitle) }}
-            </h2>
-            <p class="m-0 mt-1">{{ formatMessage(messages.skipNonEssentialWarningsDescription) }}</p>
-        </div>
-        <Toggle
-            :model-value="themeStore.getFeatureFlag(skipNonEssentialWarningsFlag)"
-            @update:model-value="
-				() => {
-					const newValue = !themeStore.getFeatureFlag(skipNonEssentialWarningsFlag)
-					themeStore.featureFlags[skipNonEssentialWarningsFlag] = newValue
-					settings.feature_flags[skipNonEssentialWarningsFlag] = newValue
-				}
-			"
-        />
-    </div>
-
-    <div class="mt-6 flex items-center justify-between">
-        <div>
-            <h2 class="m-0 text-lg font-semibold text-contrast">
-                {{ formatMessage(messages.toggleSidebarTitle) }}
-            </h2>
-            <p class="m-0 mt-1">{{ formatMessage(messages.toggleSidebarDescription) }}</p>
-        </div>
-        <Toggle
-            id="toggle-sidebar"
-            :model-value="settings.toggle_sidebar"
-            @update:model-value="
-				(e) => {
-					settings.toggle_sidebar = !!e
-					themeStore.toggleSidebar = settings.toggle_sidebar
-				}
-			"
-        />
-    </div>
 </template>
+<style lang="scss" scoped>
+/* 轨道高度 */
+input[type="range"] {
+    &::-webkit-slider-runnable-track {
+        height: 16px;
+        border-radius: 9999px;
+
+    }
+    &::-moz-range-track {
+        height: 6px;
+        border-radius: 9999px;
+    }
+
+    /* 轨道背景色 = 渐变条 */
+    &::-webkit-slider-runnable-track {
+        background: linear-gradient(to right,
+        hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
+        hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%),
+        hsl(360,100%,50%));
+    }
+
+    &::-moz-range-track {
+        background: linear-gradient(to right,
+        hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
+        hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%),
+        hsl(360,100%,50%));
+    }
+
+    /* Thumb */
+    &::-webkit-slider-thumb {
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        border: 2px solid #ffffff;
+        box-shadow: 0 0 0 2px rgba(0,0,0,0.45);
+        cursor: pointer;
+    }
+
+    &::-moz-range-thumb {
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        border: 2px solid #ffffff;
+        box-shadow: 0 0 0 2px rgba(0,0,0,0.45);
+        cursor: pointer;
+    }
+}
+</style>

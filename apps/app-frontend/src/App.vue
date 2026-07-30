@@ -10,8 +10,7 @@ import {
 } from '@modrinth/api-client'
 import {
 	ArrowBigUpDashIcon,
-	ChangeSkinIcon,
-    ChevronLeftIcon,
+	ChevronLeftIcon,
     ChevronRightIcon,
 	CompassIcon,
 	ExternalIcon,
@@ -1576,7 +1575,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			<NavButton v-if="false" v-tooltip.right="'Home'" to="/">
 				<HomeIcon />
 			</NavButton>
-			<NavButton v-if="themeStore.featureFlags.worlds_tab" v-tooltip.right="'Worlds'" to="/worlds">
+			<NavButton v-if="true" v-tooltip.right="'Worlds'" to="/worlds">
 				<WorldIcon />
 			</NavButton>
 			<NavButton
@@ -1677,7 +1676,10 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 		</div>
 		<div data-tauri-drag-region class="app-grid-statusbar bg-bg-raised h-[--top-bar-height] flex">
 			<div data-tauri-drag-region class="flex min-w-0 flex-1 items-center overflow-hidden p-2">
-				<TextLogo class="h-7 w-auto shrink-0 text-contrast pointer-events-none" />
+                <div data-tauri-drag-region class="h-full w-auto shrink-0 text-contrast pointer-events-none" style="margin-top: 0px; margin-left: 3px">
+                    <CelestialLogo class="h-8 w-auto shrink-0 text-contrast pointer-events-none" style="margin-top: 0;margin-bottom: -8px" />
+                    <span class="inline ml-1 mt-0 text-contrast font-semibold text-xl select-none translate-y-[-4px]">Celestial</span>
+                </div>
 				<div data-tauri-drag-region class="ml-2 flex shrink-0 items-center gap-2">
 					<ButtonStyled type="outlined" circular>
 						<button
