@@ -1575,7 +1575,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			<NavButton v-if="false" v-tooltip.right="'Home'" to="/">
 				<HomeIcon />
 			</NavButton>
-			<NavButton v-if="true" v-tooltip.right="'Worlds'" to="/worlds">
+			<NavButton v-if="true" v-tooltip.right="'世界'" to="/worlds">
 				<WorldIcon />
 			</NavButton>
 			<NavButton

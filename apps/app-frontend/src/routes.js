@@ -18,6 +18,11 @@ export default new createRouter({
 			component: Pages.Index,
 		},
 		{
+			path: '/worlds',
+			name: 'Worlds',
+			component: Pages.Worlds,
+		},
+		{
 			path: '/hosting/manage/',
 			name: 'Servers',
 			component: Pages.Servers,

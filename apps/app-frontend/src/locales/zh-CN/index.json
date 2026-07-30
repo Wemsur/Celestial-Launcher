@@ -1952,5 +1952,8 @@
   },
   "app.appearance-settings.background-image.hint": {
     "message": "拖放一张图片或点击来自定义应用背景。"
+  },
+  "label.discover-content": {
+    "message": "发现内容"
   }
 }

@@ -2,6 +2,8 @@ import Browse from './Browse.vue'
 import Index from './Index.vue'
 import Servers from './Servers.vue'
 import Skins from './Skins.vue'
+import Worlds from './Worlds.vue'
 import User from './User.vue'
 
-export { Browse, Index, Servers, Skins, User }
+
+export { Browse, Index, Servers, Skins, User, Worlds }
