@@ -112,7 +112,7 @@ const tabs = [
 	{
 		name: commonSettingsMessages.profile,
 		category: tabCategories.account,
-		icon: UserIcon,
+		icon: UsersIcon,
 		content: ProfileSettings,
 	},
 	{
@@ -150,27 +150,13 @@ const tabs = [
 	},
     {
         name: defineMessage({
-            id: 'app.settings.tabs.accounts-manage',
-            defaultMessage: 'Accounts manager',
+            id: 'app.settings.tabs.resource-management',
+            defaultMessage: 'Resource management',
         }),
-        icon: UsersIcon,
-        content: AccountsSettings,
+        category: tabCategories.instances,
+        icon: GaugeIcon,
+        content: ResourceManagementSettings,
     },
-	{
-		name: defineMessage({
-			id: 'app.settings.tabs.resource-management',
-			defaultMessage: 'Resource management',
-		}),
-		category: tabCategories.instances,
-		icon: GaugeIcon,
-		content: ResourceManagementSettings,
-	},
-	{
-		name: commonSettingsMessages.featureFlags,
-		icon: ToggleRightIcon,
-		content: FeatureFlagSettings,
-		developerOnly: true,
-	},
 ]
 
 const availableTabs = computed(() => tabs.filter((tab) => !tab.developerOnly || themeStore.devMode))
