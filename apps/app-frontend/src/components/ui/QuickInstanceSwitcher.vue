@@ -35,7 +35,7 @@ const showOverdrag = ref(false)
 const updateMaxAuto = () => {
 	maxAuto.value = Math.max(
 		0,
-		Math.floor((window.innerHeight - APPROX_USED_VERTICAL_SPACE) / ITEM_SIZE),
+		Math.floor((window.innerHeight - APPROX_USED_VERTICAL_SPACE) / ITEM_SIZE) + 1,
 	)
 }
 
