@@ -180,7 +180,7 @@
     "message": "首页"
   },
   "app.appearance-settings.default-landing-page.library": {
-    "message": "库"
+    "message": "版本库"
   },
   "app.appearance-settings.default-landing-page.worlds": {
     "message": "世界"
@@ -909,13 +909,13 @@
     "message": "切换至开"
   },
   "app.update-popup.body.download-complete": {
-    "message": "Modrinth App v{version} 更新已下载完成！立即重启更新，或退出时自动安装。"
+    "message": "Celestial Launcher v{version} 更新已下载完成！立即重启更新，或退出时自动安装。"
   },
   "app.update-popup.body.linux": {
-    "message": "Modrinth App v{version} 现已发布。请使用你的软件包管理器进行更新，获取最新功能与修复！"
+    "message": "Celestial Launcher v{version} 现已发布。请使用你的软件包管理器进行更新，获取最新功能与修复！"
   },
   "app.update-popup.body.metered": {
-    "message": "Modrinth App v{version} 现已发布！由于你正在使用按流量计费的网络，该更新未自动下载。"
+    "message": "Celestial Launcher v{version} 现已发布！由于你正在使用按流量计费的网络，该更新未自动下载。"
   },
   "app.update-popup.changelog": {
     "message": "更新日志"
@@ -1086,7 +1086,7 @@
     "message": "解除共享实例关联"
   },
   "installation-settings.unpublish-shared-instance.modal.admonition-body": {
-    "message": "这将从 Modrinth 服务器上删除该共享实例。在 Modrinth App 中使用它的用户将停止接收更新，但你的本地实例及其内容仍会保留在此设备上。"
+    "message": "这将从 Modrinth 服务器上删除该共享实例。在 Celestial Launcher 中使用它的用户将停止接收更新，但你的本地实例及其内容仍会保留在此设备上。"
   },
   "installation-settings.unpublish-shared-instance.modal.admonition-header": {
     "message": "取消发布共享实例"
@@ -1518,7 +1518,7 @@
     "message": "登录 Microsoft 账户"
   },
   "modal.modrinth-account-required.browser-description": {
-    "message": "一个新的标签页已打开，你需要在那里完成登录，然后回到Modrinth app。"
+    "message": "一个新的标签页已打开，你需要在那里完成登录，然后回到 Celetial Launcher。"
   },
   "modal.modrinth-account-required.cancel-button": {
     "message": "取消"
@@ -1609,7 +1609,7 @@
     "message": "皮肤选择器"
   },
   "app.nav.library": {
-    "message": "库"
+    "message": "版本库"
   },
   "app.nav.create-new-instance": {
     "message": "创建新实例"
@@ -1636,7 +1636,7 @@
     "message": "欢迎回来！"
   },
   "app.home.welcome": {
-    "message": "欢迎来到 Modrinth App！"
+    "message": "欢迎来到 Celestial Launcher！"
   },
   "app.home.discover-modpack": {
     "message": "发现整合包"
@@ -1675,7 +1675,7 @@
     "message": "你好，Modrinth 用户！"
   },
   "app.survey.question": {
-    "message": "您愿意花几分钟回答关于 Modrinth App 使用体验的问题吗？"
+    "message": "您愿意花几分钟回答关于 Celestial Launcher 使用体验的问题吗？"
   },
   "app.survey.feedback": {
     "message": "您的反馈将直接发送给 Modrinth 团队，帮助指导未来的更新！"
@@ -1723,10 +1723,10 @@
     "message": "下载完成"
   },
   "app.update.metered-body": {
-    "message": "Modrinth App v{version} 现已发布！由于你正在使用按流量计费的网络，该更新未自动下载。"
+    "message": "Celestial Launcher v{version} 现已发布！由于你正在使用按流量计费的网络，该更新未自动下载。"
   },
   "app.update.complete-body": {
-    "message": "Modrinth App v{version} 更新已下载完成！立即重启更新，或退出时自动安装。"
+    "message": "Celestial Launcher v{version} 更新已下载完成！立即重启更新，或退出时自动安装。"
   },
   "app.update.reload-to-update": {
     "message": "重启以更新"
@@ -1780,7 +1780,7 @@
     "message": "背景图片"
   },
   "app.background-settings.description": {
-    "message": "自定义 Modrinth App 的整体背景"
+    "message": "自定义 Celestial Launcher 的整体背景"
   },
   "app.background-settings.drop-hint": {
     "message": "拖拽图片到这里..."
@@ -1945,7 +1945,7 @@
     "message": "背景图片"
   },
   "app.appearance-settings.background-image.description": {
-    "message": "自定义 Modrinth App 的整体背景"
+    "message": "自定义 Celetial Launcher 的整体背景"
   },
   "app.appearance-settings.background-image.drop-active": {
     "message": "拖放图片到这里..."
@@ -1955,5 +1955,54 @@
   },
   "label.discover-content": {
     "message": "发现内容"
+  },
+  "settings.sidebar.label.display": {
+    "message": "显示设置"
+  },
+  "settings.sidebar.label.account": {
+    "message": "账户设置"
+  },
+  "app.settings.sidebar.label.instances": {
+    "message": "实例设置"
+  },
+  "app.settings.tabs.behavior": {
+    "message": "行为"
+  },
+  "settings.profile.navigation-title": {
+  	"message": "账户"
+  },
+  "settings.social.title": {
+  	"message": "社交"
+  },
+  "app.behavior-settings.startup-and-navigation.title": {
+  	"message": "页面与导航"
+  },
+  "app.behavior-settings.content.title": {
+  	"message": "显示内容"
+  },
+  "app.behavior-settings.confirmations.title": {
+  	"message": "警告"
+  },
+  "settings.profile.profile-picture.title": {
+  	"message": "头像"
+  },
+  "settings.profile.username.description": {
+  	"message": "一个唯一的 不区分大小写的 名称 来标识您的Modrinth账户。"
+  },
+  "settings.profile.bio.description": {
+  	"message": "一个简短的自我介绍"
+  },
+  "settings.profile.bio.title": {
+  	"message": "个性签名"
+  },
+  "settings.tabs.navigation-title": {
+  	"message": "账号管理"
+  },
+  "settings.tabs.navigation-title": {
+  	"message": "账号管理"
+  },
+  "settings.tabs.navigation-title": {
+  	"message": "账号管理"
   }
+
 }

@@ -253,7 +253,7 @@ const messages = defineMessages({
 	},
 	appVersion: {
 		id: 'app.settings.app-version',
-		defaultMessage: 'Modrinth App {version}',
+		defaultMessage: 'Celetial Launcher {version}',
 	},
 	macos: {
 		id: 'app.settings.operating-system.macos',

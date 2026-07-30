@@ -1,3 +1,4 @@
+// src/plugins/i18n-debug.ts
 import {
 	annotateFullDocument,
 	clearAllAnnotations,

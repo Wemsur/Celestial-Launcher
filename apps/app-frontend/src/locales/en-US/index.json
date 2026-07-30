@@ -831,7 +831,7 @@
     "message": "Restarting..."
   },
   "app.settings.app-version": {
-    "message": "Modrinth App {version}"
+    "message": "Celetial Launcher {version}"
   },
   "app.settings.default-instance-options.environment-variables.description": {
     "message": "Environment variables set when launching an instance."

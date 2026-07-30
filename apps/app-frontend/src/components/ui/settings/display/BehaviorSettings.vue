@@ -189,27 +189,6 @@ watch(
 			{{ formatMessage(messages.contentTitle) }}
 		</h2>
 		<div class="mt-4 flex flex-col gap-6">
-			<div class="flex items-center justify-between gap-4">
-				<div>
-					<h3 class="m-0 text-lg font-semibold text-contrast">
-						{{ formatMessage(messages.jumpBackIntoWorldsTitle) }}
-					</h3>
-					<p class="m-0 mt-1">
-						{{ formatMessage(messages.jumpBackIntoWorldsDescription) }}
-					</p>
-				</div>
-				<Toggle
-					id="jump-back-into-worlds"
-					:model-value="themeStore.getFeatureFlag(worldsInHomeFlag)"
-					@update:model-value="
-						() => {
-							const newValue = !themeStore.getFeatureFlag(worldsInHomeFlag)
-							themeStore.featureFlags[worldsInHomeFlag] = newValue
-							settings.feature_flags[worldsInHomeFlag] = newValue
-						}
-					"
-				/>
-			</div>
 
 			<div class="flex items-center justify-between gap-4">
 				<div>

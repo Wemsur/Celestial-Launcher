@@ -508,7 +508,7 @@ const tabs = computed(() => {
 
 	if (showShareTab.value) {
 		instanceTabs.push({
-			label: 'Share',
+			label: '分享',
 			href: `${basePath.value}/share`,
 			icon: UserPlusIcon,
 		})
