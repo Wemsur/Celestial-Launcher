@@ -14,8 +14,8 @@ const skipNonEssentialWarningsFlag: FeatureFlag = 'skip_non_essential_warnings'
 const skipUnknownPackWarningFlag: FeatureFlag = 'skip_unknown_pack_warning'
 const showPlayTimeFlag: FeatureFlag = 'show_instance_play_time'
 
-type LandingPage = 'Home' | 'Library'
-const landingPageOptions: LandingPage[] = ['Home', 'Library']
+type LandingPage = 'Worlds' | 'Library'
+const landingPageOptions: LandingPage[] = ['Worlds', 'Library']
 
 const messages = defineMessages({
 	startupAndNavigationTitle: {
@@ -50,6 +50,10 @@ const messages = defineMessages({
 		id: 'app.appearance-settings.default-landing-page.home',
 		defaultMessage: 'Home',
 	},
+    defaultLandingPageWorlds: {
+        id: 'app.appearance-settings.default-landing-page.worlds',
+        defaultMessage: 'Worlds',
+    },
 	defaultLandingPageLibrary: {
 		id: 'app.appearance-settings.default-landing-page.library',
 		defaultMessage: 'Library',
@@ -108,8 +112,8 @@ const messages = defineMessages({
 
 function formatLandingPageLabel(page: LandingPage) {
 	switch (page) {
-		case 'Home':
-			return formatMessage(messages.defaultLandingPageHome)
+        case 'Worlds':
+			return formatMessage(messages.defaultLandingPageWorlds)
 		case 'Library':
 			return formatMessage(messages.defaultLandingPageLibrary)
 	}
