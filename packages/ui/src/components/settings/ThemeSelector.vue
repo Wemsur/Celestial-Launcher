@@ -109,15 +109,21 @@ function getPreviewClass(option: T): string {
 				/>
                 <span
                     v-if="'customlight' === option"
-                    class="rounded-full px-1.5 py-0.5 text-xs ml-8 font-bold bg-brand-highlight text-brand-green"
+                    class="rounded-full px-1.5 py-0.5 text-xs ml-auto mr-0 font-bold bg-brand-highlight text-brand-green"
                 >
 						自由配色
 					</span>
                 <span
                     v-else-if="'customdark' === option"
-                    class="rounded-full px-1.5 py-0.5 text-xs ml-8 font-bold bg-brand-highlight text-brand-green"
+                    class="rounded-full px-1.5 py-0.5 text-xs ml-auto mr-0 font-bold bg-brand-highlight text-brand-green"
                 >
 						自由配色
+					</span>
+                <span
+                    v-else-if="'system' === option"
+                    class="rounded-full px-1.5 py-0.5 text-xs ml-auto mr-0 font-bold bg-brand-highlight text-brand-green"
+                >
+                        自由配色
 					</span>
 			</div>
 		</button>

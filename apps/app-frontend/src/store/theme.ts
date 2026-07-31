@@ -131,7 +131,7 @@ export const useTheming = defineStore('themeStore', {
 			if (this.selectedTheme === 'system') {
 				systemThemeMq = window.matchMedia('(prefers-color-scheme: dark)')
 				systemThemeMq.addEventListener('change', this.setThemeClass)
-				theme = systemThemeMq.matches ? 'dark' : 'light'
+				theme = systemThemeMq.matches ? 'customdark' : 'customlight'
 			}
 
 			html.classList.add(`${theme}-mode`)
