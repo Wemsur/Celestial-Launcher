@@ -17,13 +17,10 @@ async function doImport() {
     importing.value = true
     try {
         await invoke('import_old_data')
-        // 复制完成，进入重启提示阶段
+        // 导入成功！无论用户之前是否勾选，都标记为不再显示提示
+        await setDontShowAgain(true)
         importing.value = false
         showRestartMessage.value = true
-        // 把不再显示的标记也存了
-        if (dontShowAgain.value) {
-            await setDontShowAgain(true)
-        }
     } catch (err) {
         console.error('Import failed:', err)
         importing.value = false
@@ -32,9 +29,8 @@ async function doImport() {
 
 async function doRestart() {
     try {
-        if (dontShowAgain.value) {
-            await setDontShowAgain(true)
-        }
+        // 先保存设置，再执行导入+重启
+        await setDontShowAgain(true)
         await invoke('do_import_and_restart')
     } catch (err) {
         console.error('Import and restart failed:', err)

@@ -413,16 +413,24 @@ onMounted(async () => {
         // 关键改动：把 e 打印出来，这是解决问题的唯一线索
         console.error("Invoke 调用失败，错误原因:", e);
     }
-	themeStore.loadCustomSettings()
-    // 检查是否应该显示导入弹窗
+// 检查是否应该显示导入弹窗
+    themeStore.loadCustomSettings()
+
+// 检查是否应该显示导入弹窗 —— 使用后端的完整检查逻辑
     try {
-        const instances = await invoke('plugin:instance|instance_list');
-        if (!Array.isArray(instances) || instances.length === 0) {
+        // 调用 Rust 函数：同时检查 "无实例" AND "旧数据存在"
+        const response = await invoke('check_for_import');
+
+        // 只有当后端确认需要导入时，才进一步检查用户偏好
+        if (response?.should_show === true) {
             const dontShow = await invoke('get_import_banner_setting');
+
+            // 只有当用户没有勾选"不再显示"时才弹出
             if (!dontShow) {
                 importModal.value?.show();
             }
         }
+        // 如果 should_show 为 false，说明已经有实例或没有旧数据，什么都不做
     } catch (err) {
         console.error('Failed to check for import:', err);
     }
@@ -1907,6 +1915,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 	<SharedInstanceInviteHandler ref="sharedInstanceInviteHandler" />
 	<InstallToPlayModal ref="installToPlayModal" :show-external-warnings="false" />
 	<UpdateToPlayModal ref="updateToPlayModal" :show-external-warnings="false" />
+    <ImportModal ref="importModal" />
 </template>
 
 <style lang="scss" scoped>
