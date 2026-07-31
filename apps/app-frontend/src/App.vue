@@ -563,22 +563,35 @@ const messages = defineMessages({
 })
 
 async function setupApp() {
-	const {
-		native_decorations,
-		theme,
-		locale,
-		telemetry,
-		collapsed_navigation,
-		hide_nametag_skins_page,
-		advanced_rendering,
-		custom_bgblur,
-		onboarded,
-		default_page,
-		toggle_sidebar,
-		developer_mode,
-		feature_flags,
-		pending_update_toast_for_version,
-	} = await getSettings()
+    const allSettings = await getSettings()
+    //主题转换
+    let rawTheme = allSettings.theme
+    if (rawTheme === 'dark') {
+        allSettings.theme = 'customdark'
+        await setSettings(allSettings)
+        console.log('Theme upgraded from dark to customdark')
+    } else if (rawTheme === 'light') {
+        allSettings.theme = 'customlight'
+        await setSettings(allSettings)
+        console.log('Theme upgraded from light to customlight')
+    }
+    // 从设置中提取各字段（使用转换后的 theme）
+    const {
+        native_decorations,
+        theme,               // 已是转换后的值
+        locale,
+        telemetry,
+        collapsed_navigation,
+        hide_nametag_skins_page,
+        advanced_rendering,
+        custom_bgblur,
+        onboarded,
+        default_page,
+        toggle_sidebar,
+        developer_mode,
+        feature_flags,
+        pending_update_toast_for_version,
+    } = allSettings
 
 	// Initialize locale from saved settings
 	if (locale) {
