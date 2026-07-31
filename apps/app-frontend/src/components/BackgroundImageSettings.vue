@@ -3,9 +3,10 @@ import { defineMessages, useVIntl } from '@modrinth/ui'
 import { computed, onUnmounted,ref } from 'vue'
 
 import {get_background_url, process_dragged_background} from '@/helpers/background'
-import {applyBackground} from "@/helpers/backgroundApply.ts";
+import { applyBackground, setApplyingState } from '@/helpers/backgroundApply'
 
 const { formatMessage } = useVIntl()
+const isSaving = ref(false)
 
 const messages = defineMessages({
     bgSettingsTitle: {
@@ -40,11 +41,15 @@ const triggerFileInput = () => {
 // 核心变更：改为 async 异步函数，执行二进制读取
 const handleFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-        console.warn('[Validation] 拒绝非图片格式文件:', file.type)
+        console.warn('[Validation] 拒绝非图片格式文件?', file.type)
         return
     }
 
-    // 1. 生成前端本地临时预览
+    // 【先禁用】设置界面进入加载状态
+    setApplyingState(true)
+    isSaving.value = true
+
+    // 原有的预览逻辑...
     if (previewUrl.value) {
         URL.revokeObjectURL(previewUrl.value)
     }
@@ -57,32 +62,23 @@ const handleFile = async (file: File) => {
 
         console.log('[Binary Success] 准备向后端投递二进制数据...')
 
+        // 持久化到后端
         const savedPath = await process_dragged_background(uint8Array, file.name)
         console.log('[IPC Success] 后端已成功持久化背景图，保存路径?', savedPath)
 
-        // 【移除】原有的手动 setProperty 和 class 添加（交给 applyBackground 统一处理）
-        // 【新增】调用统一的背景应用函数
+        // 【延迟】等待一下让文件写入完成（可选，根据 Rust 性能调整）
+        await new Promise(resolve => setTimeout(resolve, 1000))  // 1秒延迟
+
+        // 【应用新背景】
         await applyBackground()
 
-        // 原有的 style 注入检查可以保留，也可以让 applyBackground 统一管理
-        // 为了安全起见，先保留原有 style 注入逻辑不变
-        if (!document.getElementById('custom-bg-runtime-style')) {
-            const styleElement = document.createElement('style')
-            styleElement.id = 'custom-bg-runtime-style'
-            styleElement.innerHTML = `
-        #app, .app-container, body {
-            background-image: var(--app-custom-background) !important;
-            background-size: cover !important;
-            background-position: center !important;
-            background-repeat: no-repeat !important;
-            background-attachment: fixed !important;
-        }
-    `
-            document.head.appendChild(styleElement)
-        }
-
+        console.log('Background set successfully')
     } catch (error) {
-        console.error('[IPC Error] 向后端投递或持久化失败:', error)
+        console.error('[IPC Error] 向后端投递或持久化失败?', error)
+    } finally {
+        // 【恢复】不再禁用
+        setApplyingState(false)
+        isSaving.value = false
     }
 }
 
@@ -143,9 +139,8 @@ onUnmounted(() => {
         <div
             class="relative flex h-36 w-full items-center justify-center overflow-hidden rounded-[20px] border border-dashed transition-[background,border-color,box-shadow] duration-200 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand border-surface-5 bg-surface-2 hover:bg-surface-3 aspect-[31/40] box-border"
             :class="[
-				isHighlighted
-					? 'border-brand-500 bg-black/40 text-brand-400'
-					: 'border-neutral-700 bg-neutral-900/50 text-neutral-400 hover:border-neutral-500'
+				isHighlighted ? 'border-brand-500 bg-black/40 text-brand-400' : 'border-neutral-700 bg-neutral-900/50 text-neutral-400 hover:border-neutral-500',
+				isSaving ? 'opacity-30 pointer-events-none saving-background' : ''
 			]"
             @click="triggerFileInput"
             @dragenter="handleDragEnter"
@@ -163,7 +158,7 @@ onUnmounted(() => {
 						{{ formatMessage(messages.dropZoneActive) }}
 					</span>
                     <span v-else-if="previewUrl" class="text-primary">
-						已载入临时预览，如未应用背景请手动Ctrl+R刷新
+						已载入临时预览，如背景图片较大则可能需要更长的加载时间
 					</span>
                     <span v-else class="text-base font-semibold leading-6">
 						{{ formatMessage(messages.bgSettingsHint) }}
@@ -245,3 +240,15 @@ onUnmounted(() => {
         </div>
     </div>
 </template>
+<style>
+.saving-background {
+    z-index: 5;
+    box-shadow: 0 0 0 2px rgba(239,68,68,0.3), 0 0 20px 10px rgba(239,68,68,0.15);
+    background: #ff000030
+}
+.saving-background::before {
+    background-color: rgba(239, 68, 68, 0.3);
+    /* 可以加过渡效果 */
+    transition: background-color 0.3s ease;
+}
+</style>
