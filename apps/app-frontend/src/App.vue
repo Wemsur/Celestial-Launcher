@@ -413,28 +413,51 @@ onMounted(async () => {
         // 关键改动：把 e 打印出来，这是解决问题的唯一线索
         console.error("Invoke 调用失败，错误原因:", e);
     }
-// 检查是否应该显示导入弹窗
+
     themeStore.loadCustomSettings()
 
-// 检查是否应该显示导入弹窗 —— 使用后端的完整检查逻辑
+// 检查是否应该显示导入弹窗
     try {
-        // 调用 Rust 函数：同时检查 "无实例" AND "旧数据存在"
-        const response = await invoke('check_for_import');
+        // 方法一：优先使用后端 check_for_import（推荐，逻辑最完整）
+        const checkResponse = await invoke('check_for_import');
 
-        // 只有当后端确认需要导入时，才进一步检查用户偏好
-        if (response?.should_show === true) {
+        if (checkResponse?.should_show === true) {
+            console.log('[IMPORT] check_for_import says we should show');
+
             const dontShow = await invoke('get_import_banner_setting');
+            console.log('[IMPORT] dontShow value:', dontShow);
 
-            // 只有当用户没有勾选"不再显示"时才弹出
-            if (!dontShow) {
-                importModal.value?.show();
+            // 关键：确保 importModal.value 不是 null 再调用 show()
+            if (!dontShow && importModal.value !== null) {
+                console.log('[IMPORT] Showing modal');
+                importModal.value.show();
+            } else {
+                console.log('[IMPORT] Not showing modal (user preference or modal not mounted)');
             }
+        } else {
+            console.log('[IMPORT] check_for_import says we should NOT show');
         }
-        // 如果 should_show 为 false，说明已经有实例或没有旧数据，什么都不做
     } catch (err) {
-        console.error('Failed to check for import:', err);
+        console.error('Failed to check for import using check_for_import:', err);
+
+        // 回退方案：尝试使用 instance_list 作为后备
+        try {
+            const instances = await invoke('plugin:instance|instance_list');
+            console.log('Fallback: Instances result:', instances, 'length:', instances?.length);
+
+            if ((instances == null || instances.length === 0)) {
+                const dontShow = await invoke('get_import_banner_setting');
+                console.log('Fallback: dontShow:', dontShow);
+
+                if (!dontShow && importModal.value !== null) {
+                    importModal.value.show();
+                }
+            }
+        } catch (fallbackErr) {
+            console.error('Fallback also failed:', fallbackErr);
+        }
     }
-	/*checkUpdates()*/
+    /*checkUpdates()*/
 })
 
 onUnmounted(async () => {
