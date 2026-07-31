@@ -3,6 +3,7 @@ import { defineMessages, useVIntl } from '@modrinth/ui'
 import { computed, onUnmounted,ref } from 'vue'
 
 import {get_background_url, process_dragged_background} from '@/helpers/background'
+import {applyBackground} from "@/helpers/backgroundApply.ts";
 
 const { formatMessage } = useVIntl()
 
@@ -56,27 +57,27 @@ const handleFile = async (file: File) => {
 
         console.log('[Binary Success] 准备向后端投递二进制数据...')
 
-        // 1. 持久化存储到磁盘
         const savedPath = await process_dragged_background(uint8Array, file.name)
-        console.log('[IPC Success] 后端已成功持久化背景图，保存路径为:', savedPath)
-        document.body.classList.add('custom-bg-active');
-        const bgUrl = await get_background_url()
-        if (bgUrl) {
-            document.documentElement.style.setProperty('--app-custom-background', `url('${bgUrl}')`)
-        }
-        // 为全局注入背景样式（确保带上 cover 居中与半透明，防止遮挡文字）
+        console.log('[IPC Success] 后端已成功持久化背景图，保存路径?', savedPath)
+
+        // 【移除】原有的手动 setProperty 和 class 添加（交给 applyBackground 统一处理）
+        // 【新增】调用统一的背景应用函数
+        await applyBackground()
+
+        // 原有的 style 注入检查可以保留，也可以让 applyBackground 统一管理
+        // 为了安全起见，先保留原有 style 注入逻辑不变
         if (!document.getElementById('custom-bg-runtime-style')) {
             const styleElement = document.createElement('style')
             styleElement.id = 'custom-bg-runtime-style'
             styleElement.innerHTML = `
-				#app, .app-container, body {
-					background-image: var(--app-custom-background) !important;
-					background-size: cover !important;
-					background-position: center !important;
-					background-repeat: no-repeat !important;
-					background-attachment: fixed !important;
-				}
-			`
+        #app, .app-container, body {
+            background-image: var(--app-custom-background) !important;
+            background-size: cover !important;
+            background-position: center !important;
+            background-repeat: no-repeat !important;
+            background-attachment: fixed !important;
+        }
+    `
             document.head.appendChild(styleElement)
         }
 
@@ -162,7 +163,7 @@ onUnmounted(() => {
 						{{ formatMessage(messages.dropZoneActive) }}
 					</span>
                     <span v-else-if="previewUrl" class="text-primary">
-						已载入临时预览：点击或拖拽可更换新背景
+						已载入临时预览，如未应用背景请手动Ctrl+R刷新
 					</span>
                     <span v-else class="text-base font-semibold leading-6">
 						{{ formatMessage(messages.bgSettingsHint) }}

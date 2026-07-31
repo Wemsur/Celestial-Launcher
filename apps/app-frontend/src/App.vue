@@ -162,6 +162,7 @@ import { AppPopupNotificationManager } from './providers/app-popup-notifications
 import { appSettingsModalOpenProfileKey } from './providers/app-settings-modal'
 
 import { getAssetUrl } from '@/helpers/background';
+import {applyBackground} from "@/helpers/backgroundApply.ts";
 
 const themeStore = useTheming()
 const router = useRouter()
@@ -375,46 +376,10 @@ onMounted(async () => {
 
 	document.querySelector('body').addEventListener('click', handleClick)
 	document.querySelector('body').addEventListener('auxclick', handleAuxClick)
-
-    // 启动时自动从后端获取当前的背景路径
-    try {
-        // 删掉了 ": string" 等标注，IDE 不会再报错了
-        const base64Data = await invoke('get_background_as_base64');
-
-        // 注入到 CSS 变量
-        document.documentElement.style.setProperty('--app-custom-background', `url('${base64Data}')`);
-        document.body.classList.add('custom-bg-active');
-    } catch (e) {
-        console.log("没有检测到自定义背景，使用默认主题");
-    }
-    try {
-        const base64Data = await invoke('get_background_as_base64');
-
-        // 1. 创建一个新的 img 元素
-        const bgImg = document.createElement('img');
-        bgImg.src = base64Data;
-
-        // 2. 赋予它绝对定位，把它变成全屏覆盖
-        bgImg.style.position = 'fixed';
-        bgImg.style.top = '0';
-        bgImg.style.left = '0';
-        bgImg.style.width = '100vw';
-        bgImg.style.height = '100vh';
-        bgImg.style.objectFit = 'cover'; // 等同于 background-size: cover
-        bgImg.style.zIndex = '-9999';    // 强制把这个图片推到最底层
-        bgImg.style.pointerEvents = 'none'; // 防止遮挡点击操作
-		bgImg.classList.add('custom-user-bg-img');
-        // 3. 把它加到 body 的最前面
-        document.body.prepend(bgImg);
-        document.body.classList.add('custom-bg-active');
-
-        console.log("背景层注入完成");
-    } catch (e) {
-        // 关键改动：把 e 打印出来，这是解决问题的唯一线索
-        console.error("Invoke 调用失败，错误原因:", e);
-    }
-
-    themeStore.loadCustomSettings()
+    console.log('Calling applyBackground...')
+    await applyBackground()
+    console.log('applyBackground completed')
+    await themeStore.loadCustomSettings()
 
 // 检查是否应该显示导入弹窗
     try {
@@ -574,6 +539,11 @@ async function setupApp() {
         allSettings.theme = 'customlight'
         await setSettings(allSettings)
         console.log('Theme upgraded from light to customlight')
+    }
+    if (allSettings.default_page === "Home") {
+        allSettings.default_page = 'Worlds'
+        await setSettings(allSettings)
+        console.log('Default page upgraded from Home to Worlds')
     }
     // 从设置中提取各字段（使用转换后的 theme）
     const {

@@ -76,7 +76,7 @@ defineExpose({
         <div class="flex flex-col gap-4">
             <!-- 阶段 1: 提示导入 -->
             <p v-if="!importing && !showRestartMessage" class="m-0 max-w-[35rem]">
-                检测到您之前使用过 Modrinth App。是否导入您的游戏实例、背景图片和设置？
+                检测到您之前使用过 Modrinth App 或旧版 Celetial Launcher。是否导入您的游戏实例、背景图片和设置？
             </p>
             <p v-if="!importing && !showRestartMessage" class="m-0 max-w-[35rem] text-red">
                 这将覆盖现有的应用数据
@@ -91,7 +91,7 @@ defineExpose({
 
             <!-- 阶段 3: 完成，提示重启 -->
             <p v-if="showRestartMessage" class="m-0 max-w-[35rem]">
-                数据导入已完成。请点击重启应用，稍后手动打开应用以生效。
+                数据导入已完成。请点击关闭应用，稍后手动打开应用以生效。
             </p>
 
             <!-- 不再显示复选框（只在阶段 1 和 3 显示） -->
@@ -109,11 +109,8 @@ defineExpose({
                 </ButtonStyled>
 
                 <!-- 阶段 3: 取消 + 重启 -->
-                <ButtonStyled v-if="showRestartMessage" @click="emit('cancel')">
-                    <button class="!shadow-none">稍后重启</button>
-                </ButtonStyled>
                 <ButtonStyled v-if="showRestartMessage" color="brand">
-                    <button @click="doRestart">重启应用</button>
+                    <button @click="doRestart">关闭应用</button>
                 </ButtonStyled>
             </div>
         </div>
