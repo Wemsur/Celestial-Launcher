@@ -399,6 +399,17 @@ body.custom-bg-active .relative.min-h-0.flex-1.overflow-hidden {
 	opacity: 0.8;
 }
 
+// 右上角通知 样式
+body.custom-bg-active.custom-bgblur .flex.w-full.flex-col.gap-3.overflow-hidden.rounded-2xl.bg-bg-raised.shadow-xl.border-surface-5.border-solid.border {
+	background-color: color-mix(in srgb, var(--surface-1) 40%, transparent);
+	backdrop-filter: blur(20px) !important;
+	border: 1px solid color-mix(in srgb, var(--color-text-primary) 20%, transparent);
+}
+body.custom-bg-active:not(.custom-bgblur) .flex.w-full.flex-col.gap-3.overflow-hidden.rounded-2xl.bg-bg-raised.shadow-xl.border-surface-5.border-solid.border {
+	background-color: color-mix(in srgb, var(--surface-1) 40%, transparent);
+	border: 1px solid color-mix(in srgb, var(--color-text-primary) 20%, transparent);
+}
+
 /*body.custom-bg-active .v-popper--has-tooltip {
 	opacity: 0.8 !important;
 }*/

@@ -120,7 +120,7 @@
     "message": "主实例"
   },
   "app.action-bar.reload-to-update": {
-    "message": "重新加载以更新"
+    "message": "重启以应用更新"
   },
   "app.action-bar.show-more-running-instances": {
     "message": "显示更多运行中的实例"
