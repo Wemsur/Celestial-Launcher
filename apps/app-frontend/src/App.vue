@@ -421,6 +421,24 @@ onMounted(async () => {
     }
     /*checkUpdates()*/
     checkCelestialUpdates()
+    watch(
+        () => appUpdateState.downloadPercent,
+        (percent) => {
+            if (downloadingUpdateNotificationId == null) return
+            const notif = popupNotificationManager
+                .getNotifications()
+                .find(n => n.id === downloadingUpdateNotificationId)
+            if (!notif || !notif.progressItems?.length) return
+            notif.progressItems[0].progress = percent / 100
+            notif.progress = percent / 100
+        }
+    )
+    watch(finishedDownloading, (val) => {
+        if (val && downloadingUpdateNotificationId != null) {
+            popupNotificationManager.removeNotification(downloadingUpdateNotificationId)
+            downloadingUpdateNotificationId = null
+        }
+    })
 })
 
 onUnmounted(async () => {
@@ -1173,6 +1191,7 @@ const appUpdateDownload = {
 	version: ref(),
 }
 let unlistenUpdateDownload
+let downloadingUpdateNotificationId = null
 
 const {
 	metered,
@@ -1219,6 +1238,14 @@ const updatePopupMessages = defineMessages({
 		id: 'app.update-popup.changelog',
 		defaultMessage: 'Changelog',
 	},
+    downloading: {
+        id: 'app.update-popup.downloading',
+        defaultMessage: `正在下载Celestial更新…`,
+    },
+    downloadingBody: {
+        id: 'app.update-popup.downloading.body',
+        defaultMessage: `Celestial Launcher v{version}`,
+    },
 })
 
 function clearDelayedUpdatePopup() {
@@ -1292,28 +1319,33 @@ function showDelayedUpdatePopup() {
 				},
 			],
 		})
-	} else if (finishedDownloading.value) {
-		addPopupNotification({
-			title: formatMessage(updatePopupMessages.downloadComplete),
-			text: formatMessage(updatePopupMessages.downloadedBody, {
-				version: update.version,
-			}),
-			type: 'success',
-			autoCloseMs: null,
-			buttons: [
-				{
-					label: formatMessage(updatePopupMessages.reload),
-					action: () => installAvailableAppUpdate(),
-					color: 'brand',
-				},
-				{
-					label: formatMessage(updatePopupMessages.changelog),
-					action: () => openAppUpdateChangelog(),
-					keepOpen: true,
-				},
-			],
-		})
-	} else {
+    } else if (finishedDownloading.value) {
+        // 移除下载中通知
+        if (downloadingUpdateNotificationId != null) {
+            popupNotificationManager.removeNotification(downloadingUpdateNotificationId)
+            downloadingUpdateNotificationId = null
+        }
+        addPopupNotification({
+            title: formatMessage(updatePopupMessages.downloadComplete),
+            text: formatMessage(updatePopupMessages.downloadedBody, {
+                version: update.version,
+            }),
+            type: 'success',
+            autoCloseMs: null,
+            buttons: [
+                {
+                    label: formatMessage(updatePopupMessages.reload),
+                    action: () => installAvailableAppUpdate(),
+                    color: 'brand',
+                },
+                {
+                    label: formatMessage(updatePopupMessages.changelog),
+                    action: () => openAppUpdateChangelog(),
+                    keepOpen: true,
+                },
+            ],
+        })
+    } else {
 		scheduleDelayedUpdatePopup()
 		return
 	}
@@ -1398,12 +1430,24 @@ async function downloadCelestialUpdate(assetUrl, version) {
     console.log(`Downloading update ${version}`)
     downloading.value = true
 
+    downloadingUpdateNotificationId = addPopupNotification({
+        title: formatMessage(updatePopupMessages.downloading, { version }),
+        text: formatMessage(updatePopupMessages.downloadingBody, { version }),
+        type: 'info',
+        autoCloseMs: null,
+    })
+
     try {
         await downloadAndRunRelease(assetUrl, version)
     } catch (e) {
         downloading.value = false
         appUpdateDownload.progress.value = 0
         handleError(e)
+    } finally {
+        if (downloadingUpdateNotificationId != null) {
+            popupNotificationManager.removeNotification(downloadingUpdateNotificationId)
+            downloadingUpdateNotificationId = null
+        }
     }
 }
 
