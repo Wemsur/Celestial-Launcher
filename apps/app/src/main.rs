@@ -7,23 +7,19 @@
 use native_dialog::{DialogBuilder, MessageLevel};
 use std::{env, io};
 use std::sync::atomic::Ordering;
-use tauri::{Listener, Manager};
+use tauri::{Emitter, Listener, Manager};
 use tauri_plugin_fs::FsExt;
 use theseus::prelude::*;
 use std::fs;
 use std::path::PathBuf;
 use base64::{Engine as _, engine::general_purpose};
+use tauri_plugin_http::reqwest;
 
 mod api;
 mod error;
 
 #[cfg(target_os = "macos")]
 mod macos;
-
-#[cfg(feature = "updater")]
-mod updater_impl;
-#[cfg(not(feature = "updater"))]
-mod updater_impl_noop;
 
 // Should be called in launcher initialization
 #[tracing::instrument(skip_all)]
@@ -71,18 +67,6 @@ fn show_window(app: tauri::AppHandle) {
 fn is_dev() -> bool {
     cfg!(debug_assertions)
 }
-
-#[tauri::command]
-fn are_updates_enabled() -> bool {
-    cfg!(feature = "updater")
-        && env::var("MODRINTH_EXTERNAL_UPDATE_PROVIDER").is_err()
-}
-
-#[cfg(feature = "updater")]
-pub use updater_impl::*;
-
-#[cfg(not(feature = "updater"))]
-pub use updater_impl_noop::*;
 
 // Toggles decorations
 #[tauri::command]
@@ -340,17 +324,6 @@ fn copy_file_exclusive(src: &std::path::Path, dst: &std::path::Path) -> Result<(
 }
 
 #[tauri::command]
-async fn set_restart_after_pending_update(
-    should_restart: bool,
-) -> api::Result<()> {
-    let state = State::get().await?;
-    state
-        .restart_after_pending_update
-        .store(should_restart, Ordering::Relaxed);
-    Ok(())
-}
-
-#[tauri::command]
 async fn save_background_image(
     app_handle: tauri::AppHandle,
     background_blob: Vec<u8>,
@@ -578,6 +551,70 @@ async fn get_background_as_base64(app_handle: tauri::AppHandle) -> Result<String
     Ok(format!("data:image/{};base64,{}", mime_type, base64_str))
 }
 
+// msi静默安装
+#[tauri::command]
+async fn run_silent_msi(path: String) -> Result<(), String> {
+    std::process::Command::new("msiexec")
+        .args(["/i", &path, "/qn", "/norestart"])
+        .status()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// 下载 NSIS 安装包到缓存目录，返回文件名
+#[tauri::command]
+async fn download_and_run_msi(
+    asset_url: String,
+    app_handle: tauri::AppHandle,
+) -> Result<String, String> {
+    let resp = reqwest::get(&asset_url)
+        .await
+        .map_err(|e| format!("Download failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("HTTP error: {}", resp.status()));
+    }
+
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| format!("Read failed: {}", e))?;
+
+    let filename = asset_url
+        .split('/')
+        .rev()
+        .nth(0)
+        .unwrap_or("update.exe");
+
+    let cache_dir = app_handle.path().cache_dir().map_err(|e| e.to_string())?;
+    let full_path = cache_dir.join(filename);
+    std::fs::write(&full_path, &bytes).map_err(|e| e.to_string())?;
+
+    app_handle.emit_to("main", "app-update-event", "downloaded")
+        .map_err(|e| e.to_string())?;
+
+    Ok(filename.to_string())
+}
+
+// 运行缓存中的 NSIS 安装程序并退出 app
+#[tauri::command]
+async fn install_cached_msi(
+    filename: String,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let cache_dir = app_handle.path().cache_dir().map_err(|e| e.to_string())?;
+    let full_path = cache_dir.join(&filename);
+    if !full_path.exists() {
+        return Err(format!("Installer not found: {}", filename));
+    }
+    std::process::Command::new(&full_path)
+        .arg("/S")
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    app_handle.exit(0);
+    Ok(())
+}
+
 #[tauri::command]
 fn delete_background(app_handle: tauri::AppHandle) -> Result<(), String> {
     let mut path = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -638,21 +675,6 @@ fn main() {
     tracing::info!("Initialized tracing subscriber. Loading Modrinth App!");
 
     let mut builder = tauri::Builder::default();
-
-    #[cfg(feature = "updater")]
-    {
-        use tauri_plugin_http::reqwest::header::{HeaderValue, USER_AGENT};
-        use theseus::launcher_user_agent;
-        builder = builder.plugin(
-            tauri_plugin_updater::Builder::new()
-                .header(
-                    USER_AGENT,
-                    HeaderValue::from_str(&launcher_user_agent()).unwrap(),
-                )
-                .unwrap()
-                .build(),
-        );
-    }
 
     builder = builder
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
@@ -756,15 +778,9 @@ fn main() {
         .plugin(api::ads::init())
         .plugin(api::friends::init())
         .plugin(api::worlds::init())
-        .manage(PendingUpdateData::default())
         .invoke_handler(tauri::generate_handler![
             initialize_state,
             is_dev,
-            are_updates_enabled,
-            get_update_size,
-            enqueue_update_for_installation,
-            remove_enqueued_update,
-            set_restart_after_pending_update,
             toggle_decorations,
             show_window,
             restart_app,
@@ -780,6 +796,9 @@ fn main() {
             set_dont_show_import_modal,
             get_import_banner_setting,
             do_import_and_restart,
+            run_silent_msi,
+            download_and_run_msi,
+            install_cached_msi,
         ]);
 
     tracing::info!("Initializing app...");
@@ -788,7 +807,7 @@ fn main() {
     match app {
         Ok(app) => {
             app.run(|app, event| {
-                #[cfg(not(any(feature = "updater", target_os = "macos")))]
+                #[cfg(not(target_os = "macos"))]
                 let _ = app;
 
                 if matches!(&event, tauri::RunEvent::ExitRequested { .. })
@@ -801,69 +820,6 @@ fn main() {
                     );
                 }
 
-                #[cfg(feature = "updater")]
-                if matches!(&event, tauri::RunEvent::Exit) {
-                    let update_data = app.state::<PendingUpdateData>().inner();
-                    let should_restart = State::get_if_initialized()
-                        .map(|s| {
-                            s.restart_after_pending_update.load(Ordering::Relaxed)
-                        })
-                        .unwrap_or(false);
-                    if let Some((update, data)) = &*update_data.0.lock().unwrap()
-                    {
-                        fn set_changelog_toast(version: Option<String>) {
-                            let toast_result: theseus::Result<()> = tauri::async_runtime::block_on(async move {
-                                let mut settings = settings::get().await?;
-                                settings.pending_update_toast_for_version = version;
-                                settings::set(settings).await?;
-                                Ok(())
-                            });
-                            if let Err(e) = toast_result {
-                                tracing::warn!(
-                                    "Failed to set pending_update_toast: {e}"
-                                )
-                            }
-                        }
-
-                        set_changelog_toast(Some(update.version.clone()));
-                        let update = if should_restart {
-                            (**update).clone()
-                        } else {
-                            (**update).clone().restart_after_install(false)
-                        };
-                        match update.install(data) {
-                            Ok(()) => {
-                                if should_restart {
-                                    tracing::info!(
-                                        "Pending update installed successfully (version {}); restarting because user requested reload",
-                                        update.version
-                                    );
-                                    app.restart();
-                                } else {
-                                    tracing::info!(
-                                        "Pending update installed successfully (version {}); exiting without relaunch (user did not request reload)",
-                                        update.version
-                                    );
-                                }
-                            }
-                            Err(e) => {
-                                tracing::error!(
-                                    "Pending update install failed (version {}): {e}",
-                                    update.version
-                                );
-                                set_changelog_toast(None);
-
-                                DialogBuilder::message()
-                                    .set_level(MessageLevel::Error)
-                                    .set_title("Update error")
-                                    .set_text(format!("Failed to install update due to an error:\n{e}"))
-                                    .alert()
-                                    .show()
-                                    .unwrap();
-                            }
-                        }
-                    }
-                }
                 #[cfg(target_os = "macos")]
                 if let tauri::RunEvent::Opened { urls } = event {
                     tracing::info!("Handling webview open {urls:?}");

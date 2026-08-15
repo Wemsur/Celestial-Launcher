@@ -29,7 +29,6 @@ tauri-plugin-http = { workspace = true }
 tauri-plugin-opener = { workspace = true }
 tauri-plugin-os = { workspace = true }
 tauri-plugin-single-instance = { workspace = true }
-tauri-plugin-updater = { workspace = true }
 tauri-plugin-window-state = { workspace = true }
 theseus = { workspace = true, features = ["tauri"] }
 thiserror = { workspace = true }
@@ -40,6 +39,7 @@ url = { workspace = true }
 urlencoding = { workspace = true }
 uuid = { workspace = true, features = ["serde", "v4"] }
 base64 = "0.22.1"
+reqwest = { version = "0.11", features = ["json"] }
 
 [dependencies.tauri]
 workspace = true
@@ -47,9 +47,6 @@ features = ["devtools", "macos-private-api", "protocol-asset"]
 
 [build-dependencies]
 tauri-build = { workspace = true, features = ["codegen"] }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-tauri-plugin-updater = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation.workspace = true
@@ -78,7 +75,6 @@ default = ["custom-protocol"]
 # this feature is used for production builds where `devPath` points to the filesystem
 # DO NOT remove this
 custom-protocol = ["tauri/custom-protocol"]
-updater = []
 
 [lints]
 workspace = true

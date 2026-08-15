@@ -121,16 +121,13 @@ import { get_opening_command, initialize_state } from '@/helpers/state'
 import { hasActivePride26Midas, hasMidasBadge } from '@/helpers/user-campaigns.ts'
 import { parse_modrinth_user_link } from '@/helpers/users'
 import {
-	areUpdatesEnabled,
-	enqueueUpdateForInstallation,
-	getOS,
-	getUpdateSize,
-	isDev,
-	isNetworkMetered,
-	setRestartAfterPendingUpdate,
+    getOS,
+    isDev,
+    isNetworkMetered,
 } from '@/helpers/utils.js'
 import { start_join_server, start_join_singleplayer_world } from '@/helpers/worlds.ts'
 import i18n from '@/i18n.config'
+import { checkForUpdate, downloadAndRunRelease } from '@/helpers/update.ts'
 import {
 	appUpdateState,
 	downloadAvailableAppUpdate,
@@ -423,6 +420,7 @@ onMounted(async () => {
         }
     }
     /*checkUpdates()*/
+    checkCelestialUpdates()
 })
 
 onUnmounted(async () => {
@@ -1323,61 +1321,46 @@ function showDelayedUpdatePopup() {
 	markAppUpdatePopupShown(update.version, stage)
 }
 
-async function checkUpdates() {
-	if (!(await areUpdatesEnabled())) {
-		console.log('Skipping update check as updates are disabled in this build or environment')
-		updatesEnabled.value = false
+async function checkCelestialUpdates() {
+    async function performCheck() {
+        const result = await checkForUpdate()
+        if (!result) {
+            console.log('No update available')
+            return
+        }
 
-		if (os.value === 'Linux' && !isDevEnvironment.value) {
-			checkLinuxUpdates()
-			setInterval(checkLinuxUpdates, 5 * 60 * 1000)
-		}
-		return
-	}
+        const { latestVersion, asset } = result
+        const isExistingUpdate = latestVersion === availableUpdate.value?.version
 
-	async function performCheck() {
-		const update = await invoke('plugin:updater|check')
-		if (!update) {
-			console.log('No update available')
-			return
-		}
+        if (isExistingUpdate) {
+            console.log('Update is already known')
+            scheduleDelayedUpdatePopup()
+            return
+        }
 
-		const isExistingUpdate = update.version === availableUpdate.value?.version
+        appUpdateDownload.progress.value = 0
+        finishedDownloading.value = false
+        downloading.value = false
+        updateSize.value = asset.size
+        availableUpdate.value = { rid: 0, version: latestVersion }
 
-		if (isExistingUpdate) {
-			console.log('Update is already known')
-			scheduleDelayedUpdatePopup()
-			return
-		}
+        console.log(`Update ${latestVersion} is available.`)
 
-		appUpdateDownload.progress.value = 0
-		finishedDownloading.value = false
-		downloading.value = false
-		updateSize.value = null
-		availableUpdate.value = update
+        metered.value = await isNetworkMetered()
+        if (!metered.value) {
+            console.log('Starting download of update')
+            downloadCelestialUpdate(asset.browser_download_url, latestVersion)
+        } else {
+            console.log('Metered connection detected, not auto-downloading update.')
+            markAppUpdateActionable(latestVersion)
+            scheduleDelayedUpdatePopup()
+        }
+    }
 
-		console.log(`Update ${update.version} is available.`)
-
-		metered.value = await isNetworkMetered()
-		if (!metered.value) {
-			console.log('Starting download of update')
-			downloadUpdate(update)
-		} else {
-			console.log(`Metered connection detected, not auto-downloading update.`)
-			markAppUpdateActionable(update.version)
-			scheduleDelayedUpdatePopup()
-		}
-
-		getUpdateSize(update.rid).then((size) => (updateSize.value = size))
-	}
-
-	await performCheck()
-	setTimeout(
-		() => {
-			checkUpdates()
-		},
-		5 /* min */ * 60 /* sec */ * 1000 /* ms */,
-	)
+    await performCheck()
+    setTimeout(() => {
+        checkCelestialUpdates()
+    }, 5 * 60 * 1000)
 }
 
 async function checkLinuxUpdates() {
@@ -1411,67 +1394,37 @@ async function downloadAvailableUpdate() {
 	return downloadUpdate(availableUpdate.value)
 }
 
-async function downloadUpdate(versionToDownload) {
-	if (!versionToDownload) {
-		handleError(`Failed to download update: no version available`)
-		return
-	}
+async function downloadCelestialUpdate(assetUrl, version) {
+    console.log(`Downloading update ${version}`)
+    downloading.value = true
 
-	if (downloading.value || appUpdateDownload.progress.value !== 0) {
-		console.error(`Update ${versionToDownload.version} already downloading`)
-		return
-	}
-
-	console.log(`Downloading update ${versionToDownload.version}`)
-	downloading.value = true
-
-	try {
-		enqueueUpdateForInstallation(versionToDownload.rid)
-			.then(() => {
-				downloading.value = false
-				finishedDownloading.value = true
-				unlistenUpdateDownload?.().then(() => {
-					unlistenUpdateDownload = null
-				})
-				console.log('Finished downloading!')
-				markAppUpdateActionable(versionToDownload.version, 'downloaded')
-				scheduleDelayedUpdatePopup()
-			})
-			.catch((e) => {
-				downloading.value = false
-				appUpdateDownload.progress.value = 0
-				handleError(e)
-			})
-		unlistenUpdateDownload = await subscribeToDownloadProgress(
-			appUpdateDownload,
-			versionToDownload.version,
-		)
-	} catch (e) {
-		downloading.value = false
-		appUpdateDownload.progress.value = 0
-		handleError(e)
-	}
+    try {
+        await downloadAndRunRelease(assetUrl, version)
+    } catch (e) {
+        downloading.value = false
+        appUpdateDownload.progress.value = 0
+        handleError(e)
+    }
 }
 
 async function installUpdate() {
-	restarting.value = true
-
-	try {
-		await setRestartAfterPendingUpdate(true)
-	} catch (e) {
-		restarting.value = false
-		handleError(e)
-		return
-	}
-	setTimeout(async () => {
-		await handleClose()
-	}, 250)
+    restarting.value = true
+    try {
+        const filename = localStorage.getItem('celestial-last-msi-filename')
+        if (filename) {
+            await invoke('install_cached_msi', { filename })
+        } else {
+            await handleClose()
+        }
+    } catch (e) {
+        restarting.value = false
+    }
 }
 
 setAppUpdateActions({
 	download: downloadAvailableUpdate,
 	install: installUpdate,
-	changelog: () => openUrl('https://modrinth.com/news/changelog?filter=app'),
+    changelog: () => openUrl('https://git.gay/celestial-launcher/Celestial/releases'),
 })
 
 async function openModrinthProjectLinkInApp(parsed) {
