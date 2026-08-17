@@ -16,7 +16,7 @@ use crate::server_address::{ServerAddress, parse_server_address};
 use crate::state::server_join_log::JoinLogEntry;
 use crate::state::{
     Credentials, InstanceInstallStage, InstanceLaunchContext, InstanceLink,
-    JavaVersion, MemorySettings, ProcessMetadata, WindowSize,
+    JavaVersion, MemorySettings, ProcessMetadata, WindowSize, libraries,
 };
 use crate::util::io;
 use crate::util::rpc::RpcServerBuilder;
@@ -256,8 +256,8 @@ pub async fn resolve_minecraft_manifest(
 
 async fn get_instance_full_path(instance_path: &str) -> crate::Result<PathBuf> {
     let state = State::get().await?;
-    let instances_dir = state.directories.instances_dir();
-    let full_path = io::canonicalize(instances_dir.join(instance_path))?;
+    let instance_dir = libraries::resolve_instance_dir(&state, instance_path);
+    let full_path = io::canonicalize(instance_dir)?;
     Ok(full_path)
 }
 

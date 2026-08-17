@@ -43,7 +43,7 @@ type AnalyticsEventMap = {
 
 export type AnalyticsEvent = keyof AnalyticsEventMap
 
-let initialized = false
+const initialized = false
 
 export const initAnalytics = () => {
 	// 已禁用 PostHog，避免控制台报错刷屏

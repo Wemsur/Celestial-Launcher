@@ -1355,7 +1355,7 @@ await loadSkins()
         header="添加离线账户"
         :max-width="'500px'"
     >
-        <form @submit.prevent="handleCreateOffline" class="space-y-6 min-w-[400px]">
+        <form class="space-y-6 min-w-[400px]" @submit.prevent="handleCreateOffline">
             <label class="flex flex-col gap-2">
                 <span class="font-semibold text-contrast">用户名</span>
                 <StyledInput

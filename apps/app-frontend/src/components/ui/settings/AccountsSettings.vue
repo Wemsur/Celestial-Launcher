@@ -11,17 +11,17 @@
             <div class="mt-4 flex gap-2">
                 <StyledInput
                     :model-value="newOfflineUsername"
-                    @update:model-value="newOfflineUsername = $event"
-
                     wrapper-class="flex-1 w-full"
+
                     :disabled="creatingOffline"
                     clearable
+                    @update:model-value="newOfflineUsername = $event"
                     @keyup.enter="onCreateOffline"
                 />
                 <button
                     class="btn btn-brand"
-                    @click="onCreateOffline"
                     :disabled="!newOfflineUsername.trim()"
+                    @click="onCreateOffline"
                 >
                     添加
                 </button>
@@ -134,16 +134,16 @@
 
 <script setup lang="ts">
 import {Avatar, injectNotificationManager, StyledInput} from '@modrinth/ui'
-import { inject, ref, onMounted, onUnmounted } from 'vue'
+import { inject, onMounted, onUnmounted,ref } from 'vue'
 
 import {
-    users,
-    remove_user,
-    set_default_user,
     create_offline_user,
     minecraft_login,
+    remove_user,
+    set_default_user,
+    users,
 } from '@/helpers/auth.js'
-import { login, logout, get as getModrinthUser } from '@/helpers/mr_auth.ts'
+import { get as getModrinthUser,login, logout } from '@/helpers/mr_auth.ts'
 import { generatePlayerHeadBlob } from '@/helpers/rendering/batch-skin-renderer.ts'
 
 const notificationManager = injectNotificationManager()

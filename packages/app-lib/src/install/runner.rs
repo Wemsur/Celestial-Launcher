@@ -23,6 +23,7 @@ use crate::event::emit::emit_instance;
 use crate::state::instances::adapters::sqlite::content_rows;
 use crate::state::{
     ContentSourceKind, InstanceInstallStage, InstanceLink, ModLoader, State,
+    libraries,
 };
 use crate::util::fetch::DownloadReason;
 use std::collections::HashSet;
@@ -1126,10 +1127,7 @@ async fn remove_existing_imported_pack_content(
         .into_iter()
         .map(|file| (file.id.clone(), file))
         .collect::<std::collections::HashMap<_, _>>();
-    let base = state
-        .directories
-        .instances_dir()
-        .join(&metadata.instance.path);
+    let base = libraries::resolve_instance_dir(state, &metadata.instance.path);
 
     let mut removed_file_ids = HashSet::new();
     for entry in entries {

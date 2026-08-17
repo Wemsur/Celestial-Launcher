@@ -1,7 +1,9 @@
 use crate::state::InstanceInstallStage;
 use crate::state::instances::{
-    InstanceLaunchContext, adapters::sqlite::instance_rows, playtime_to_storage,
+    InstanceLaunchContext, adapters::sqlite::instance_rows,
+    playtime_to_storage,
 };
+use crate::state::{ModLoader, State};
 use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
 
@@ -9,7 +11,81 @@ pub(crate) async fn get_instance_launch_context(
     instance_id: &str,
     pool: &SqlitePool,
 ) -> crate::Result<Option<InstanceLaunchContext>> {
-    instance_rows::get_instance_launch_context(instance_id, pool).await
+    if let Some(context) =
+        instance_rows::get_instance_launch_context(instance_id, pool).await?
+    {
+        return Ok(Some(context));
+    }
+
+    let state = State::get().await?;
+    for instance in
+        crate::state::libraries::list_instances_from_json(&state).await?
+    {
+        if instance.id == instance_id {
+            return Ok(Some(json_backed_launch_context(&instance)));
+        }
+    }
+
+    Ok(None)
+}
+
+fn json_backed_launch_context(
+    instance: &crate::state::Instance,
+) -> InstanceLaunchContext {
+    use crate::state::{
+        ContentSet, ContentSetStatus, ContentSourceKind, InstanceLaunchOverrides,
+        InstanceLink,
+    };
+    // Try to read version info from instance.json
+    let dir = if let Some(state) = State::get_if_initialized() {
+        crate::state::libraries::resolve_instance_dir_with_dirs(&state.directories, &instance.path)
+    } else {
+        crate::state::libraries::resolve_instance_dir_with_dirs(
+            &crate::state::DirectoryInfo {
+                settings_dir: std::path::PathBuf::new(),
+                config_dir: std::path::PathBuf::new(),
+                app_identifier: String::new(),
+            },
+            &instance.path,
+        )
+    };
+    let (game_version, loader, loader_version) =
+        if let Ok(Some(json)) = crate::state::libraries::InstanceJson::read_from_dir(&dir) {
+            (json.game_version, json.loader, json.loader_version)
+        } else {
+            (None, None, None)
+        };
+
+    // Fallback: detect version and loader from the filesystem
+    let game_version = game_version.or_else(|| {
+        crate::state::libraries::detect_game_version_from_dir(&dir)
+    });
+    let loader = loader.or_else(|| {
+        if game_version.as_ref().is_some_and(|gv| gv.is_empty()) {
+            None
+        } else {
+            Some(crate::state::libraries::detect_loader_from_dir(&dir).as_str().to_string())
+        }
+    });
+
+    InstanceLaunchContext {
+        instance: instance.clone(),
+        applied_content_set: ContentSet {
+            id: instance.applied_content_set_id.clone().unwrap_or_default(),
+            instance_id: instance.id.clone(),
+            name: "Applied Content Set".to_string(),
+            source_kind: ContentSourceKind::Local,
+            status: ContentSetStatus::Available,
+            game_version: game_version.unwrap_or_default(),
+            protocol_version: None,
+            loader: ModLoader::from_string(&loader.unwrap_or_default()),
+            loader_version,
+            created: chrono::Utc::now(),
+            modified: chrono::Utc::now(),
+        },
+        link: InstanceLink::Unmanaged,
+        launch_overrides: InstanceLaunchOverrides::empty(instance.id.clone()),
+    }
 }
 
 pub(crate) async fn set_instance_install_stage(

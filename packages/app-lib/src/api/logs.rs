@@ -13,6 +13,7 @@ use crate::{
     State,
     prelude::Credentials,
     util::io::{self, IOError},
+    state::libraries,
 };
 
 #[derive(Serialize, Debug)]
@@ -86,7 +87,7 @@ async fn resolve_instance_path(
     instance: &str,
     state: &State,
 ) -> crate::Result<String> {
-    sqlx::query_scalar!(
+    if let Some(path) = sqlx::query_scalar!(
         "
         SELECT path
         FROM instances
@@ -100,12 +101,19 @@ async fn resolve_instance_path(
     )
     .fetch_optional(&state.pool)
     .await?
-    .ok_or_else(|| {
-        crate::ErrorKind::InputError(format!(
-            "未知的实例 ID 或路径: {instance}"
-        ))
-        .as_error()
-    })
+    {
+        return Ok(path);
+    }
+
+    // Fall back to JSON-backed instances from multi-library scan
+    if let Some(path_buf) = libraries::find_json_instance(state, instance).await? {
+        return Ok(path_buf.to_string_lossy().to_string());
+    }
+
+    Err(crate::ErrorKind::InputError(format!(
+        "未知的实例 ID 或路径: {instance}"
+    ))
+    .as_error())
 }
 
 fn split_line_ending(line: &str) -> (&str, &str) {
@@ -277,10 +285,14 @@ pub async fn get_logs_from_type(
     let instance_path = resolve_instance_path(instance_id, &state).await?;
 
     let logs_folder = match log_type {
-        LogType::InfoLog => state.directories.instance_logs_dir(&instance_path),
-        LogType::CrashReport => {
-            state.directories.crash_reports_dir(&instance_path)
+        LogType::InfoLog => {
+            libraries::resolve_instance_dir(&state, &instance_path).join("logs")
         }
+        LogType::CrashReport => libraries::resolve_instance_dir(
+            &state,
+            &instance_path,
+        )
+        .join("crash-reports"),
     };
 
     if logs_folder.exists() {
@@ -351,10 +363,14 @@ pub async fn get_logs_by_filename(
     let instance_path = resolve_instance_path(instance_id, &state).await?;
 
     let path = match log_type {
-        LogType::InfoLog => state.directories.instance_logs_dir(&instance_path),
-        LogType::CrashReport => {
-            state.directories.crash_reports_dir(&instance_path)
+        LogType::InfoLog => {
+            libraries::resolve_instance_dir(&state, &instance_path).join("logs")
         }
+        LogType::CrashReport => libraries::resolve_instance_dir(
+            &state,
+            &instance_path,
+        )
+        .join("crash-reports"),
     }
     .join(&filename);
 
@@ -371,10 +387,14 @@ async fn get_output_by_filename_from_path(
     file_name: &str,
 ) -> crate::Result<CensoredString> {
     let logs_folder = match log_type {
-        LogType::InfoLog => state.directories.instance_logs_dir(instance_path),
-        LogType::CrashReport => {
-            state.directories.crash_reports_dir(instance_path)
+        LogType::InfoLog => {
+            libraries::resolve_instance_dir(&state, instance_path).join("logs")
         }
+        LogType::CrashReport => libraries::resolve_instance_dir(
+            &state,
+            instance_path,
+        )
+        .join("crash-reports"),
     };
 
     let path = logs_folder.join(file_name);
@@ -435,7 +455,8 @@ pub async fn delete_logs(instance_id: &str) -> crate::Result<()> {
     let state = State::get().await?;
     let instance_path = resolve_instance_path(instance_id, &state).await?;
 
-    let logs_folder = state.directories.instance_logs_dir(&instance_path);
+    let logs_folder =
+        libraries::resolve_instance_dir(&state, &instance_path).join("logs");
     for entry in std::fs::read_dir(&logs_folder)
         .map_err(|e| IOError::with_path(e, &logs_folder))?
     {
@@ -458,10 +479,14 @@ pub async fn delete_logs_by_filename(
     let instance_path = resolve_instance_path(instance_id, &state).await?;
 
     let logs_folder = match log_type {
-        LogType::InfoLog => state.directories.instance_logs_dir(&instance_path),
-        LogType::CrashReport => {
-            state.directories.crash_reports_dir(&instance_path)
+        LogType::InfoLog => {
+            libraries::resolve_instance_dir(&state, &instance_path).join("logs")
         }
+        LogType::CrashReport => libraries::resolve_instance_dir(
+            &state,
+            &instance_path,
+        )
+        .join("crash-reports"),
     };
 
     let path = logs_folder.join(filename);
@@ -507,7 +532,8 @@ pub async fn get_generic_live_log_cursor(
 ) -> crate::Result<LatestLogCursor> {
     let state = State::get().await?;
     let instance_path = resolve_instance_path(instance_id, &state).await?;
-    let logs_folder = state.directories.instance_logs_dir(&instance_path);
+    let logs_folder =
+        libraries::resolve_instance_dir(&state, &instance_path).join("logs");
     let path = logs_folder.join(log_file_name);
     if !path.exists() {
         // Allow silent failure if latest.log doesn't exist (as the instance may have been launched, but not yet created the file)

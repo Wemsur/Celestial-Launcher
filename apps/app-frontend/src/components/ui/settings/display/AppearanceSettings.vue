@@ -1,16 +1,16 @@
 <script setup lang="ts">
+import {TrashIcon} from "@modrinth/assets";
 import {
     ButtonStyled, Combobox, defineMessages, ThemeSelector, Toggle, useVIntl
 } from '@modrinth/ui'
-import { ref, watch, onMounted, computed} from 'vue'
+import {invoke} from "@tauri-apps/api/core";
+import { computed,onMounted, ref, watch} from 'vue'
 
+import BackgroundImageSettings from '@/components/BackgroundImageSettings.vue'
 import { get, set } from '@/helpers/settings.ts'
 import { getOS } from '@/helpers/utils'
 import { useTheming } from '@/store/state'
 import type { ColorTheme, FeatureFlag } from '@/store/theme.ts'
-import BackgroundImageSettings from '@/components/BackgroundImageSettings.vue'
-import {invoke} from "@tauri-apps/api/core";
-import {TrashIcon} from "@modrinth/assets";
 
 const themeStore = useTheming()
 const { formatMessage } = useVIntl()
@@ -228,8 +228,8 @@ watch(
                 min="0"
                 max="360"
                 :value="themeStore.hueValue"
-                @input="onHueChange"
                 class="h-5 w-full appearance-none rounded-full bg-transparent cursor-pointer focus:shadow-[0_0_0_4px_hsl(var(--brand-hue,217),91%,60%)] [&::-webkit-slider-runnable-track]:rounded-full [&::-moz-range-track]:rounded-full"
+                @input="onHueChange"
             />
         </div>
     </div>

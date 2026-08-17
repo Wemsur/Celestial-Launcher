@@ -4,7 +4,7 @@ use crate::launcher::get_loader_version_from_profile;
 use crate::server_address::{parse_server_address, resolve_server_address};
 use crate::state::attached_world_data::AttachedWorldData;
 use crate::state::{
-    InstanceInstallStage, attached_world_data, server_join_log,
+    InstanceInstallStage, attached_world_data, libraries, server_join_log,
 };
 use crate::util::protocol_version::OLD_PROTOCOL_VERSIONS;
 pub use crate::util::protocol_version::ProtocolVersion;
@@ -193,7 +193,6 @@ pub async fn get_recent_worlds(
     display_statuses: EnumSet<DisplayStatus>,
 ) -> Result<Vec<WorldWithInstance>> {
     let state = State::get().await?;
-    let instances_dir = state.directories.instances_dir();
 
     let mut instances = crate::state::list_instances(&state.pool).await?;
     instances.sort_by_key(|x| Reverse(x.instance.last_played));
@@ -209,7 +208,8 @@ pub async fn get_recent_worlds(
         }
         let instance_id = &instance.instance.id;
         let instance_path = &instance.instance.path;
-        let instance_dir = instances_dir.join(instance_path);
+        let instance_dir =
+            libraries::resolve_instance_dir(&state, instance_path);
         let instance_worlds =
             get_all_worlds_in_instance(instance_id, &instance_dir).await;
         if let Err(e) = instance_worlds {
@@ -354,7 +354,8 @@ pub async fn get_singleplayer_world(
     let state = State::get().await?;
     let (instance_id, instance_path) =
         resolve_instance_identity(instance, &state).await?;
-    let instance_dir = state.directories.instances_dir().join(instance_path);
+    let instance_dir =
+        libraries::resolve_instance_dir(&state, &instance_path);
     let mut world =
         read_singleplayer_world(get_world_dir(&instance_dir, world)).await?;
 
@@ -768,7 +769,8 @@ pub async fn add_server_to_instance(
     let state = State::get().await?;
     let (instance_id, instance_path) =
         resolve_instance_identity(instance_id, &state).await?;
-    let instance_dir = state.directories.instances_dir().join(instance_path);
+    let instance_dir =
+        libraries::resolve_instance_dir(&state, &instance_path);
     let mut servers = servers_data::read(&instance_dir).await?;
     let insert_index = servers
         .iter()
@@ -822,7 +824,8 @@ pub async fn edit_server_in_instance(
     let state = State::get().await?;
     let (_, instance_path) =
         resolve_instance_identity(instance_id, &state).await?;
-    let instance_dir = state.directories.instances_dir().join(instance_path);
+    let instance_dir =
+        libraries::resolve_instance_dir(&state, &instance_path);
     let mut servers = servers_data::read(&instance_dir).await?;
     let server =
         servers
@@ -848,7 +851,8 @@ pub async fn remove_server_from_instance(
     let state = State::get().await?;
     let (_, instance_path) =
         resolve_instance_identity(instance_id, &state).await?;
-    let instance_dir = state.directories.instances_dir().join(instance_path);
+    let instance_dir =
+        libraries::resolve_instance_dir(&state, &instance_path);
     let mut servers = servers_data::read(&instance_dir).await?;
     if servers.get(index).as_ref().is_none_or(|x| x.hidden) {
         return Err(ErrorKind::InputError(format!(

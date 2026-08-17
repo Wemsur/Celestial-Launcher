@@ -51,6 +51,7 @@ mod mr_auth;
 pub use self::mr_auth::*;
 
 mod legacy_converter;
+pub mod libraries;
 
 pub mod attached_world_data;
 pub mod server_join_log;
@@ -152,6 +153,10 @@ impl State {
 
             if let Err(e) = crate::api::instance::migrate_legacy_icons().await {
                 tracing::error!("Error migrating legacy instance icons: {e}");
+            }
+
+            if let Err(e) = libraries::ensure_migration_done(state).await {
+                tracing::error!("Error ensuring migration done: {e}");
             }
 
             let res = tokio::try_join!(

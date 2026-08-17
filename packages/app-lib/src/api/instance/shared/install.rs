@@ -3,6 +3,7 @@ use super::diff::*;
 use super::publish::*;
 use super::types::*;
 use super::*;
+use crate::state::libraries;
 
 #[tracing::instrument]
 pub async fn install_shared_instance(
@@ -232,11 +233,11 @@ pub(crate) async fn check_shared_instance_availability_before_launch(
     instance_id: &str,
     state: &State,
 ) -> crate::Result<()> {
-    let metadata = crate::state::get_instance(instance_id, &state.pool)
-        .await?
-        .ok_or_else(|| {
-            crate::ErrorKind::InputError("Unknown instance".to_string())
-        })?;
+    let metadata = match crate::state::get_instance(instance_id, &state.pool).await? {
+        Some(m) => m,
+        None if libraries::find_json_instance(state, instance_id).await?.is_some() => return Ok(()),
+        None => return Err(crate::ErrorKind::InputError("Unknown instance".to_string()).into()),
+    };
     let Some(attachment) = metadata.shared_instance else {
         return Ok(());
     };

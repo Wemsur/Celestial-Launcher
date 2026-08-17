@@ -1543,10 +1543,9 @@ impl CachedEntry {
             CacheValueType::FileHash => {
                 // TODO: Replace state call here
                 let state = crate::State::get().await?;
-                let instances_dir = state.directories.instances_dir();
 
                 async fn hash_file(
-                    instances_dir: &Path,
+                    state: &crate::State,
                     key: String,
                 ) -> crate::Result<(CachedEntry, bool)> {
                     let path = file_hash_path_from_cache_key(&key).ok_or_else(
@@ -1557,7 +1556,10 @@ impl CachedEntry {
                         },
                     )?;
 
-                    let full_path = instances_dir.join(path);
+                    let full_path =
+                        crate::state::libraries::resolve_instance_dir(
+                            state, path,
+                        );
 
                     let mut file = tokio::fs::File::open(&full_path).await?;
                     let metadata = file.metadata().await?;
@@ -1597,7 +1599,7 @@ impl CachedEntry {
 
                 use futures::stream::StreamExt;
                 let results: Vec<_> = futures::stream::iter(keys)
-                    .map(|x| hash_file(&instances_dir, x.to_string()))
+                    .map(|x| hash_file(&state, x.to_string()))
                     .buffer_unordered(64) // hash 64 files at once
                     .collect::<Vec<_>>()
                     .await

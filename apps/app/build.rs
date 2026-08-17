@@ -237,6 +237,9 @@ fn main() {
                         "instance_share_unpublish",
                         "instance_export_mrpack",
                         "instance_get_pack_export_candidates",
+                        "library_list",
+                        "library_add",
+                        "library_remove",
                     ])
                     .default_permission(
                         DefaultPermissionRule::AllowAllCommands,

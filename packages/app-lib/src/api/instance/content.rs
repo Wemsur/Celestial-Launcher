@@ -71,7 +71,17 @@ pub async fn get_content_items(
     cache_behaviour: Option<CacheBehaviour>,
 ) -> crate::Result<Vec<ContentItem>> {
     let state = State::get().await?;
-    crate::state::list_content(instance_id, None, cache_behaviour, &state).await
+    tracing::info!(
+        "get_content_items called for instance '{}', cache={:?}",
+        instance_id,
+        cache_behaviour
+    );
+    let result = crate::state::list_content(instance_id, None, cache_behaviour, &state).await;
+    match &result {
+        Ok(items) => tracing::info!("get_content_items returned {} items for instance '{}'", items.len(), instance_id),
+        Err(e) => tracing::error!("get_content_items failed for instance '{}': {}", instance_id, e),
+    }
+    result
 }
 
 #[tracing::instrument]

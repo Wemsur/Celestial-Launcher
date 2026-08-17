@@ -17,6 +17,7 @@ use crate::state::instances::adapters::sqlite::content_rows;
 use crate::state::{
     CachedEntry, ContentSetSyncStatus, ContentSourceKind, InstanceLink,
     ProjectType, SharedInstanceAttachmentInput, SharedInstanceRole, State,
+    libraries,
 };
 use crate::util::fetch::{DownloadReason, REQWEST_CLIENT};
 use futures::StreamExt;
@@ -723,10 +724,7 @@ pub(super) async fn remove_existing_shared_instance_content(
         .into_iter()
         .map(|file| (file.id.clone(), file))
         .collect::<std::collections::HashMap<_, _>>();
-    let base = state
-        .directories
-        .instances_dir()
-        .join(&metadata.instance.path);
+    let base = libraries::resolve_instance_dir(state, &metadata.instance.path);
 
     let mut removed_file_ids = HashSet::new();
     for entry in entries {
@@ -936,11 +934,11 @@ async fn install_shared_instance_config_bundle(
     .ok_or_else(|| {
         crate::ErrorKind::InputError("Unknown instance".to_string())
     })?;
-    let config_path = state
-        .directories
-        .instances_dir()
-        .join(metadata.instance.path)
-        .join(CONFIG_DIRECTORY);
+    let config_path = libraries::resolve_instance_dir(
+        state,
+        &metadata.instance.path,
+    )
+    .join(CONFIG_DIRECTORY);
     crate::util::io::create_dir_all(&config_path).await?;
 
     for (relative_path, bytes) in files {

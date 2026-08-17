@@ -11,7 +11,7 @@ use crate::state::instances::adapters::sqlite::{content_rows, instance_rows};
 use crate::state::{
     ContentEntry, ContentSetRemoteRef, ContentSetRemoteRefType,
     ContentSetSyncProvider, ContentSetSyncState, InstanceFile,
-    InstanceMetadata, State,
+    InstanceMetadata, State, libraries,
 };
 use async_walkdir::WalkDir;
 use chrono::Utc;
@@ -56,10 +56,8 @@ pub(super) async fn prepare_shared_instance_update_backup(
         )
         .await?;
         let snapshot = SharedInstanceUpdateRollback { files, entries };
-        let instance_path = state
-            .directories
-            .instances_dir()
-            .join(&metadata.instance.path);
+        let instance_path =
+            libraries::resolve_instance_dir(state, &metadata.instance.path);
         copy_directory(
             &instance_path,
             &staging_dir.join(SHARED_INSTANCE_ROLLBACK_INSTANCE_DIR),
@@ -106,10 +104,10 @@ async fn restore_shared_instance_update(
         &crate::util::io::read(staging_dir.join(SHARED_INSTANCE_ROLLBACK_FILE))
             .await?,
     )?;
-    let instance_path = state
-        .directories
-        .instances_dir()
-        .join(&rollback.instance.instance.path);
+    let instance_path = libraries::resolve_instance_dir(
+        state,
+        &rollback.instance.instance.path,
+    );
     if tokio::fs::try_exists(&instance_path).await? {
         crate::util::io::remove_dir_all(&instance_path).await?;
     }

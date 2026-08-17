@@ -58,9 +58,6 @@ import {
 	useHostingIntercom,
 	useVIntl,
 } from '@modrinth/ui'
-
-import ImportModal from '@/components/ui/modal/ImportModal.vue'
-
 import { renderString } from '@modrinth/utils'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { getVersion } from '@tauri-apps/api/app'
@@ -86,6 +83,7 @@ import MinecraftAuthErrorModal from '@/components/ui/minecraft-auth-error-modal/
 import MinecraftRequiredModal from '@/components/ui/minecraft-required-modal/MinecraftRequiredModal.vue'
 import AppSettingsModal from '@/components/ui/modal/AppSettingsModal.vue'
 import AuthGrantFlowWaitModal from '@/components/ui/modal/AuthGrantFlowWaitModal.vue'
+import ImportModal from '@/components/ui/modal/ImportModal.vue'
 import InstallToPlayModal from '@/components/ui/modal/InstallToPlayModal.vue'
 import ModpackAlreadyInstalledModal from '@/components/ui/modal/ModpackAlreadyInstalledModal.vue'
 import ModrinthAccountRequiredModal from '@/components/ui/modal/ModrinthAccountRequiredModal.vue'
@@ -110,6 +108,8 @@ import {
 } from '@/helpers/ads.js'
 import { debugAnalytics, initAnalytics, trackEvent } from '@/helpers/analytics'
 import { check_reachable } from '@/helpers/auth.js'
+import { getAssetUrl } from '@/helpers/background';
+import {applyBackground} from "@/helpers/backgroundApply.ts";
 import { get_user, get_version } from '@/helpers/cache.js'
 import { command_listener, notification_listener, warning_listener } from '@/helpers/events.js'
 import { install_create_modpack_instance, install_get_modpack_preview } from '@/helpers/install'
@@ -118,6 +118,7 @@ import { cancelLogin, get as getCreds, login, logout } from '@/helpers/mr_auth.t
 import { mergeUrlQuery, parseModrinthLink } from '@/helpers/project-links.ts'
 import { get as getSettings, set as setSettings } from '@/helpers/settings.ts'
 import { get_opening_command, initialize_state } from '@/helpers/state'
+import { checkForUpdate, downloadAndRunRelease } from '@/helpers/update.ts'
 import { hasActivePride26Midas, hasMidasBadge } from '@/helpers/user-campaigns.ts'
 import { parse_modrinth_user_link } from '@/helpers/users'
 import {
@@ -127,7 +128,6 @@ import {
 } from '@/helpers/utils.js'
 import { start_join_server, start_join_singleplayer_world } from '@/helpers/worlds.ts'
 import i18n from '@/i18n.config'
-import { checkForUpdate, downloadAndRunRelease } from '@/helpers/update.ts'
 import {
 	appUpdateState,
 	downloadAvailableAppUpdate,
@@ -157,9 +157,6 @@ import { get_available_capes, get_available_skins } from './helpers/skins'
 import { AppNotificationManager } from './providers/app-notifications'
 import { AppPopupNotificationManager } from './providers/app-popup-notifications'
 import { appSettingsModalOpenProfileKey } from './providers/app-settings-modal'
-
-import { getAssetUrl } from '@/helpers/background';
-import {applyBackground} from "@/helpers/backgroundApply.ts";
 
 const themeStore = useTheming()
 const router = useRouter()
@@ -546,7 +543,7 @@ const messages = defineMessages({
 async function setupApp() {
     const allSettings = await getSettings()
     //主题转换
-    let rawTheme = allSettings.theme
+    const rawTheme = allSettings.theme
     if (rawTheme === 'dark') {
         allSettings.theme = 'customdark'
         await setSettings(allSettings)

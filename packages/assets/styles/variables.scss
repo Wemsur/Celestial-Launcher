@@ -395,7 +395,6 @@ html {
 	--hover-brightness: 1.25;
 }
 
-
 .oled-mode {
 	@extend .dark-mode;
 	--surface-1: #000000;
@@ -475,14 +474,14 @@ html {
 	--color-focus-ring: #7eb693;
 
 	--brand-gradient-bg: linear-gradient(
-					0deg,
-					rgba(22, 66, 51, 0.15) 0%,
-					rgba(55, 137, 73, 0.1) 100%
+		0deg,
+		rgba(22, 66, 51, 0.15) 0%,
+		rgba(55, 137, 73, 0.1) 100%
 	);
 	--brand-gradient-strong-bg: linear-gradient(
-					270deg,
-					rgba(9, 18, 14, 0.6) 10%,
-					rgba(19, 31, 23, 0.5) 100%
+		270deg,
+		rgba(9, 18, 14, 0.6) 10%,
+		rgba(19, 31, 23, 0.5) 100%
 	);
 
 	--color-green-50: #effef5;
@@ -515,15 +514,11 @@ html {
 
 	--color-focus-ring: #ede3ba;
 
-	--brand-gradient-bg: linear-gradient(
-					0deg,
-					rgb(66 60 22 / 0.15) 0%,
-					rgb(182 172 116 / 0.1) 100%
-	);
+	--brand-gradient-bg: linear-gradient(0deg, rgb(66 60 22 / 0.15) 0%, rgb(182 172 116 / 0.1) 100%);
 	--brand-gradient-strong-bg: linear-gradient(
-					270deg,
-					rgb(41 38 20 / 0.6) 10%,
-					rgb(74 70 46 / 0.5) 100%
+		270deg,
+		rgb(41 38 20 / 0.6) 10%,
+		rgb(74 70 46 / 0.5) 100%
 	);
 
 	--color-green-50: #effef5;
@@ -548,15 +543,16 @@ html {
 	--brand-gradient-fade-out-color: linear-gradient(to bottom, rgba(24, 30, 31, 0), #1e1c17 80%);
 
 	--color-gradient-button-bg: linear-gradient(180deg, #1b1b20 0%, #7e7757 100%);
-	[class*="outline-none"] {//输入框外框
+	[class*='outline-none'] {
+		//输入框外框
 		border: 1px solid rgb(166 162 126 / 0.39);
 	}
-	[class*="router-link-exact-active"]{
+	[class*='router-link-exact-active'] {
 		background: #3e3e36;
 		border-radius: 100px;
 	}
-	[class*="custom-focus-indicator text-inherit outline-none"] {
-		border:none;
+	[class*='custom-focus-indicator text-inherit outline-none'] {
+		border: none;
 	}
 	--color-brand-highlight: rgb(140 129 82 / 0.25);
 }
@@ -577,14 +573,14 @@ html {
 	--color-focus-ring: hsl(var(--brand-hue, 217), 59%, 83%);
 
 	--brand-gradient-bg: linear-gradient(
-					0deg,
-					hsla(var(--brand-hue, 217), 56%, 24%, 0.25) 0%,
-					hsla(var(--brand-hue, 217), 5%, 28%, 0.1) 100%
+		0deg,
+		hsla(var(--brand-hue, 217), 56%, 24%, 0.25) 0%,
+		hsla(var(--brand-hue, 217), 5%, 28%, 0.1) 100%
 	);
 	--brand-gradient-strong-bg: linear-gradient(
-					270deg,
-					rgb(41 38 20 / 0.6) 10%,
-					rgb(74 70 46 / 0.5) 100%
+		270deg,
+		rgb(41 38 20 / 0.6) 10%,
+		rgb(74 70 46 / 0.5) 100%
 	);
 
 	--color-green-50: hsl(var(--brand-hue, 217), 88%, 97%);
@@ -606,9 +602,17 @@ html {
 
 	--brand-gradient-button: rgba(255, 255, 255, 0.08);
 	--brand-gradient-border: hsl(var(--brand-hue, 217), 5%, 29%);
-	--brand-gradient-fade-out-color: linear-gradient(to bottom, hsl(var(--brand-hue, 217), 14%, 16%), hsl(var(--brand-hue, 217), 13%, 10%) 80%);
+	--brand-gradient-fade-out-color: linear-gradient(
+		to bottom,
+		hsl(var(--brand-hue, 217), 14%, 16%),
+		hsl(var(--brand-hue, 217), 13%, 10%) 80%
+	);
 
-	--color-gradient-button-bg: linear-gradient(180deg, hsl(var(--brand-hue, 217), 8%, 12%) 0%, hsl(var(--brand-hue, 217), 18%, 42%) 100%);
+	--color-gradient-button-bg: linear-gradient(
+		180deg,
+		hsl(var(--brand-hue, 217), 8%, 12%) 0%,
+		hsl(var(--brand-hue, 217), 18%, 42%) 100%
+	);
 	--color-brand-highlight: hsl(var(--brand-hue, 217), 9%, 30%);
 }
 
@@ -619,14 +623,14 @@ html {
 	--color-focus-ring: hsl(var(--brand-hue, 217), 59%, 83%);
 
 	--brand-gradient-bg: linear-gradient(
-					0deg,
-					hsla(var(--brand-hue, 217), 56%, 24%, 0.25) 0%,
-					hsla(var(--brand-hue, 217), 5%, 28%, 0.1) 100%
+		0deg,
+		hsla(var(--brand-hue, 217), 56%, 24%, 0.25) 0%,
+		hsla(var(--brand-hue, 217), 5%, 28%, 0.1) 100%
 	);
 	--brand-gradient-strong-bg: linear-gradient(
-					270deg,
-					rgb(41 38 20 / 0.6) 10%,
-					rgb(74 70 46 / 0.5) 100%
+		270deg,
+		rgb(41 38 20 / 0.6) 10%,
+		rgb(74 70 46 / 0.5) 100%
 	);
 
 	--color-green-50: hsl(var(--brand-hue, 217), 88%, 97%);
@@ -642,17 +646,22 @@ html {
 	--color-green-950: hsl(var(--brand-hue, 217), 74%, 10%);
 	--color-green: var(--color-green-500);
 
-
-
-
 	--color-text-primary: hsl(var(--brand-hue, 217), 26%, 14%);
 	--color-text-default: hsl(var(--brand-hue, 217), 5%, 18%);
 	--color-text-tertiary: hsl(var(--brand-hue, 217), 8%, 31%);
 
 	--brand-gradient-button: rgba(255, 255, 255, 0.08);
 	--brand-gradient-border: hsl(var(--brand-hue, 217), 5%, 29%);
-	--brand-gradient-fade-out-color: linear-gradient(to bottom, hsl(var(--brand-hue, 217), 14%, 16%), hsl(var(--brand-hue, 217), 13%, 10%) 80%);
+	--brand-gradient-fade-out-color: linear-gradient(
+		to bottom,
+		hsl(var(--brand-hue, 217), 14%, 16%),
+		hsl(var(--brand-hue, 217), 13%, 10%) 80%
+	);
 
-	--color-gradient-button-bg: linear-gradient(180deg, hsl(var(--brand-hue, 217), 8%, 12%) 0%, hsl(var(--brand-hue, 217), 18%, 42%) 100%);
+	--color-gradient-button-bg: linear-gradient(
+		180deg,
+		hsl(var(--brand-hue, 217), 8%, 12%) 0%,
+		hsl(var(--brand-hue, 217), 18%, 42%) 100%
+	);
 	--color-brand-highlight: hsl(var(--brand-hue, 217), 9%, 90%);
 }

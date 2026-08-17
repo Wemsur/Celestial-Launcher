@@ -26,6 +26,8 @@ pub use event::{
 };
 pub use logger::start_logger;
 pub use state::State;
+pub use state::libraries;
+pub use state::libraries::{LibrariesConfig, LibraryInfo};
 pub use util::fetch::DownloadReason;
 
 pub fn launcher_user_agent() -> String {

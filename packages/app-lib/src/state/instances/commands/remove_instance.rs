@@ -1,23 +1,45 @@
 use crate::state::State;
 use crate::state::instances::adapters::sqlite::instance_rows;
-use crate::util::io;
+use crate::state::libraries;
 
 pub(crate) async fn remove_instance(
     instance_id: &str,
     state: &State,
 ) -> crate::Result<()> {
-    let instance = instance_rows::get_instance_by_id(instance_id, &state.pool)
-        .await?
-        .ok_or_else(|| {
-            crate::ErrorKind::InputError("Unknown instance".to_string())
-        })?;
-    let _content_lock = state.lock_instance_content(instance_id).await;
+    let instance =
+        instance_rows::get_instance_by_id(instance_id, &state.pool).await?;
 
-    delete_instance_row_and_locks(&instance.id, state).await?;
-
-    let path = state.directories.instances_dir().join(&instance.path);
-    if path.exists() {
-        io::remove_dir_all(&path).await?;
+    match instance {
+        Some(instance) => {
+            let _content_lock = state.lock_instance_content(instance_id).await;
+            delete_instance_row_and_locks(&instance.id, state).await?;
+            let path = libraries::resolve_instance_dir(state, &instance.path);
+            if path.exists() {
+                crate::util::io::remove_dir_all(&path).await?;
+            }
+        }
+        None => {
+            // JSON-backed instance — find it from libraries
+            let json_instances =
+                libraries::list_instances_from_json(state).await?;
+            if let Some(instance) = json_instances.iter().find(|i| i.id == instance_id)
+            {
+                let path =
+                    libraries::resolve_instance_dir(state, &instance.path);
+                if path.exists() {
+                    crate::util::io::remove_dir_all(&path).await?;
+                }
+                let json_path = path.join("instance.json");
+                if json_path.exists() {
+                    std::fs::remove_file(&json_path)?;
+                }
+            } else {
+                return Err(crate::ErrorKind::InputError(
+                    "Unknown instance".to_string(),
+                )
+                .into());
+            }
+        }
     }
 
     Ok(())

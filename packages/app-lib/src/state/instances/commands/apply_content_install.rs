@@ -4,7 +4,7 @@ use crate::state::instances::{
 };
 use crate::state::{
     CacheBehaviour, CachedEntry, Dependency, DependencyType, KnownModrinthFile,
-    ModLoader, ProjectType, State, Version, cache_file_hash,
+    ModLoader, ProjectType, State, Version, cache_file_hash, libraries,
 };
 use crate::util::fetch::{self, DownloadMeta, DownloadReason};
 use crate::util::io;
@@ -861,7 +861,7 @@ pub(crate) fn instance_full_path(
     state: &State,
     instance: &Instance,
 ) -> PathBuf {
-    state.directories.instances_dir().join(&instance.path)
+    libraries::resolve_instance_dir(state, &instance.path)
 }
 
 async fn index_existing_file(

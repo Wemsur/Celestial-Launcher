@@ -80,8 +80,8 @@ function getPreviewClass(option: T): string {
 	<div class="theme-options mt-4">
 		<button
 			v-for="option in themeOptions"
-			:key="option"
-            v-if="!['light', 'dark'].includes(option)"
+			v-if="!['light', 'dark'].includes(option)"
+            :key="option"
 			class="preview-radio button-base"
 			:class="{ selected: currentTheme === option }"
 			@click="() => updateColorTheme(option)"

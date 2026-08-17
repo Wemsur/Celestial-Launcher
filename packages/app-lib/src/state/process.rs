@@ -2,6 +2,7 @@ use crate::event::emit::{emit_instance, emit_process};
 use crate::event::{InstancePayloadType, ProcessPayloadType};
 #[cfg(feature = "tauri")]
 use crate::event::{LogEvent, LogPayload};
+use crate::state::libraries;
 use crate::util::io::IOError;
 use crate::util::rpc::RpcServer;
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
@@ -886,7 +887,7 @@ impl Process {
                 if let Some(command) = cmd.next() {
                     let mut command = Command::new(command);
                     command.args(cmd).current_dir(
-                        state.directories.instances_dir().join(&instance_path),
+                        libraries::resolve_instance_dir(&state, &instance_path),
                     );
                     command.spawn().map_err(IOError::from)?;
                 }

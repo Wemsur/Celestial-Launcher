@@ -104,6 +104,11 @@ export default new createRouter({
 					name: 'Custom',
 					component: Library.Custom,
 				},
+				{
+					path: 'lib/:libPath(.*)',
+					name: 'LibraryByPath',
+					component: Library.Overview,
+				},
 			],
 		},
 		{

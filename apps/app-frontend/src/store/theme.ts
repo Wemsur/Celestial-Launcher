@@ -1,6 +1,6 @@
+import { invoke } from '@tauri-apps/api/core'
 import { BaseDirectory,readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { defineStore } from 'pinia'
-import { invoke } from '@tauri-apps/api/core'
 
 const CONFIG_FILE_NAME = 'custom_bg_settings.txt'
 

@@ -12,10 +12,9 @@ pub(crate) struct ScannedContentFile {
 }
 
 pub(crate) fn scan_content_files(
-    instances_dir: &Path,
-    instance_path: &str,
+    instance_dir: &Path,
 ) -> crate::Result<Vec<ScannedContentFile>> {
-    let instance_dir = io::canonicalize(instances_dir.join(instance_path))?;
+    let instance_dir = io::canonicalize(instance_dir)?;
     let mut files = Vec::new();
 
     for project_type in ProjectType::iterator() {
@@ -52,7 +51,7 @@ pub(crate) fn scan_content_files(
             let hash_cache_key = file_hash_cache_key(
                 size,
                 modified_at_ns,
-                &format!("{instance_path}/{relative_path}"),
+                &format!("{relative_path}"),
             );
 
             files.push(ScannedContentFile {

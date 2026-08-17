@@ -4,6 +4,7 @@ use crate::event::InstancePayloadType;
 use crate::event::emit::{emit_instance, emit_warning};
 use crate::state::{
     DirectoryInfo, InstanceInstallStage, ProjectType, attached_world_data,
+    libraries,
 };
 use crate::worlds::WorldType;
 use notify::{RecommendedWatcher, RecursiveMode};
@@ -208,7 +209,10 @@ pub(crate) async fn watch_instance_folder(
     watcher: &FileWatcher,
     dirs: &DirectoryInfo,
 ) {
-    let full_instance_path = dirs.instances_dir().join(instance_path);
+    let full_instance_path = libraries::resolve_instance_dir_with_dirs(
+        &dirs,
+        instance_path,
+    );
 
     let Ok(metadata) = tokio::fs::metadata(&full_instance_path).await else {
         return;

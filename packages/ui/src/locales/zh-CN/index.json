@@ -5858,21 +5858,6 @@
   "user.profile.badge.staff.name": {
     "defaultMessage": "Modrinth 团队"
   },
-  "app.appearance-settings.background-image.title": {
-    "defaultMessage": "背景图片"
-  },
-  "app.appearance-settings.background-image.description": {
-    "defaultMessage": "自定义 Celetial Launcher 的整体背景"
-  },
-  "app.appearance-settings.background-image.title": {
-    "defaultMessage": "背景图片"
-  },
-  "app.appearance-settings.background-image.drop-active": {
-     "defaultMessage": "松手以应用..."
-  },
-  "app.appearance-settings.background-image.hint": {
-    "defaultMessage": "拖放或点击以选择图片"
-  },
   "version.content.name": {
     "defaultMessage": "名称"
   },

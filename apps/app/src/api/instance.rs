@@ -65,6 +65,9 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             instance_share_unpublish,
             instance_export_mrpack,
             instance_get_pack_export_candidates,
+            library_list,
+            library_add,
+            library_remove,
         ])
         .build()
 }
@@ -468,8 +471,8 @@ pub async fn instance_get_many(
 }
 
 #[tauri::command]
-pub async fn instance_list() -> Result<Vec<Instance>> {
-    Ok(theseus::instance::list()
+pub async fn instance_list(library_path: Option<String>) -> Result<Vec<Instance>> {
+    Ok(theseus::instance::list(library_path.as_deref())
         .await?
         .into_iter()
         .map(Instance::from)
@@ -893,5 +896,39 @@ pub async fn instance_share_unlink(instance_id: &str) -> Result<()> {
 #[tauri::command]
 pub async fn instance_share_unpublish(instance_id: &str) -> Result<()> {
     theseus::instance::unpublish_shared_instance(instance_id).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn library_list() -> Result<theseus::LibrariesConfig> {
+    let state = theseus::State::get().await?;
+    Ok(theseus::libraries::get_libraries_config(&state).await?)
+}
+
+#[tauri::command]
+pub async fn library_add(
+    path: String,
+    format: String,
+    name: Option<String>,
+) -> Result<()> {
+    let state = theseus::State::get().await?;
+    let mut config = theseus::libraries::get_libraries_config(&state).await?;
+    if !config.libraries.iter().any(|l| l.path == path) {
+        config.libraries.push(theseus::LibraryInfo {
+            name: name.unwrap_or_default(),
+            path,
+            format: format.as_str().into(),
+        });
+    }
+    theseus::libraries::save_libraries_config(&state, &config).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn library_remove(path: String) -> Result<()> {
+    let state = theseus::State::get().await?;
+    let mut config = theseus::libraries::get_libraries_config(&state).await?;
+    config.libraries.retain(|l| l.path != path);
+    theseus::libraries::save_libraries_config(&state, &config).await?;
     Ok(())
 }

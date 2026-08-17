@@ -7,6 +7,7 @@ use async_walkdir::WalkDir;
 use async_zip::{Compression, ZipEntryBuilder};
 use futures::StreamExt;
 use std::collections::BTreeMap;
+use crate::state::libraries;
 
 #[tracing::instrument]
 pub async fn unpublish_shared_instance(instance_id: &str) -> crate::Result<()> {
@@ -335,10 +336,10 @@ pub(super) async fn collect_publish_snapshot(
     metadata: &crate::state::InstanceMetadata,
     state: &State,
 ) -> crate::Result<CurrentPublishSnapshot> {
-    let instance_path = state
-        .directories
-        .instances_dir()
-        .join(&metadata.instance.path);
+    let instance_path = libraries::resolve_instance_dir(
+        state,
+        &metadata.instance.path,
+    );
     let (items, config_files) = if CONFIG_SYNC_ENABLED {
         tokio::try_join!(
             crate::state::list_content(
@@ -810,11 +811,11 @@ async fn build_config_bundle_candidate(
         entries.extend(archived_entries);
     }
 
-    let config_path = state
-        .directories
-        .instances_dir()
-        .join(instance_path)
-        .join(CONFIG_DIRECTORY);
+    let config_path = libraries::resolve_instance_dir(
+        state,
+        instance_path,
+    )
+    .join(CONFIG_DIRECTORY);
     for selected_path in selected_paths {
         let file = local_files_by_path
             .get(selected_path)
@@ -986,11 +987,11 @@ pub(super) async fn upload_external_files(
             })?;
         let bytes = match &candidate.source {
             ExternalFileSource::InstanceFile(file_path) => {
-                let path = state
-                    .directories
-                    .instances_dir()
-                    .join(instance_path)
-                    .join(file_path);
+                let path = libraries::resolve_instance_dir(
+                    state,
+                    instance_path,
+                )
+                .join(file_path);
                 crate::util::io::read(path).await?
             }
             ExternalFileSource::ConfigBundle(bytes) => bytes.clone(),

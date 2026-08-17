@@ -1,7 +1,7 @@
 use super::content::get_projects;
 use crate::server_address::ServerAddress;
 use crate::state::{
-    Credentials, InstanceLink, ProcessMetadata, Settings, State,
+    Credentials, InstanceLink, ProcessMetadata, Settings, State, libraries,
 };
 use crate::util::fetch;
 use crate::util::io::IOError;
@@ -97,10 +97,10 @@ async fn run_credentials(
 
         if let Some(command) = cmd.next() {
             let full_path = crate::util::io::canonicalize(
-                state
-                    .directories
-                    .instances_dir()
-                    .join(&context.instance.path),
+                libraries::resolve_instance_dir(
+                    &state,
+                    &context.instance.path,
+                ),
             )?;
             let result = Command::new(command)
                 .args(cmd)

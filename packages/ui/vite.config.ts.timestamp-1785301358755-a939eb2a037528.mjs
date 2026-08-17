@@ -1,5 +1,6 @@
 // vite.config.ts
 import path from "node:path";
+
 import vue from "file:///C:/Users/iexam/github-project/CelestialLauncher/node_modules/.pnpm/@vitejs+plugin-vue@5.2.4_vi_224b2095dd9e600ad256f085d32f1f98/node_modules/@vitejs/plugin-vue/dist/index.mjs";
 import { defineConfig } from "file:///C:/Users/iexam/github-project/CelestialLauncher/node_modules/.pnpm/vite@5.4.21_@types+node@24._2b8b6264ee1f7a19f82bb7b3cd5e4f3b/node_modules/vite/dist/node/index.js";
 import svgLoader from "file:///C:/Users/iexam/github-project/CelestialLauncher/node_modules/.pnpm/vite-svg-loader@5.1.0_vue@3.5.27_typescript@5.9.3_/node_modules/vite-svg-loader/index.js";

@@ -1,4 +1,5 @@
 use crate::launcher::get_loader_version_from_profile;
+use crate::state::libraries;
 use crate::state::instances::{
     ContentSet, ContentSetStatus, ContentSourceKind, Instance,
     InstanceLaunchOverrides, InstanceLink,
@@ -33,7 +34,7 @@ pub(crate) async fn create_instance(
     trace!("Creating new instance. {}", input.name);
 
     let (path, full_path) =
-        resolve_instance_path(&input.name, input.path.as_deref(), state)
+        resolve_instance_path(&input.name, input.path.as_deref())
             .await?;
     io::create_dir_all(&full_path).await?;
 
@@ -58,7 +59,8 @@ pub(crate) async fn create_instance(
         let icon_path =
             resolve_icon_path(input.icon_path.as_deref(), state).await?;
         let now = Utc::now();
-        let instance_id = format!("local:{}", Uuid::new_v4());
+        let abs_path_str = full_path.to_string_lossy().to_string();
+        let instance_id = libraries::instance_id_from_path(&abs_path_str);
         let content_set_id = format!("content-set:{}", Uuid::new_v4());
         let instance = Instance {
             id: instance_id.clone(),
@@ -113,6 +115,26 @@ pub(crate) async fn create_instance(
         )
         .await;
 
+        // Write JSON sidecar so instance_list can read game_version/loader
+        // without relying on filesystem detection.
+        let instance_json = libraries::InstanceJson {
+            name: Some(instance.name.clone()),
+            icon_path: instance.icon_path.clone(),
+            last_played: instance.last_played,
+            game_version: Some(content_set.game_version.clone()),
+            loader: Some(input.loader.as_str().to_string()),
+            loader_version: content_set.loader_version.clone(),
+            link: Some(input.link.clone()),
+            submitted_time_played: instance.submitted_time_played,
+            recent_time_played: instance.recent_time_played,
+        };
+        if let Err(e) = instance_json.write_to_dir(&full_path) {
+            tracing::warn!(
+                "Failed to write instance.json for {}: {e}",
+                instance.id
+            );
+        }
+
         Ok(instance)
     }
     .await;
@@ -127,24 +149,24 @@ pub(crate) async fn create_instance(
 async fn resolve_instance_path(
     name: &str,
     path: Option<&str>,
-    state: &State,
 ) -> crate::Result<(String, std::path::PathBuf)> {
     let base_path = path
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| sanitize_instance_name(name));
     let mut path = base_path.clone();
-    let mut full_path = state.directories.instances_dir().join(&path);
+    let state = State::get().await?;
+    let mut full_path = libraries::resolve_instance_dir(&state, &path);
 
-    if path_available(&path, &full_path, state).await? {
+    if path_available(&path, &full_path, &state).await? {
         return Ok((path, full_path));
     }
 
     let mut which = 1;
     loop {
         path = format!("{base_path} ({which})");
-        full_path = state.directories.instances_dir().join(&path);
+        full_path = libraries::resolve_instance_dir(&state, &path);
 
-        if path_available(&path, &full_path, state).await? {
+        if path_available(&path, &full_path, &state).await? {
             return Ok((path, full_path));
         }
 

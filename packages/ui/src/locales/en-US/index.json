@@ -5204,11 +5204,23 @@
   "settings.billing.title": {
     "defaultMessage": "Billing and subscriptions"
   },
+  "settings.display.theme.antiquedark": {
+    "defaultMessage": "AntiqueDark"
+  },
+  "settings.display.theme.customdark": {
+    "defaultMessage": "Customdark"
+  },
+  "settings.display.theme.customlight": {
+    "defaultMessage": "Customlight"
+  },
   "settings.display.theme.dark": {
     "defaultMessage": "Dark"
   },
   "settings.display.theme.description": {
     "defaultMessage": "Select your preferred color theme for Modrinth on this device."
+  },
+  "settings.display.theme.elegant": {
+    "defaultMessage": "Elegant"
   },
   "settings.display.theme.light": {
     "defaultMessage": "Light"

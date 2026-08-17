@@ -5,14 +5,14 @@ use crate::State;
 use crate::pack::install_from::{PackFileHash, PackFormat};
 use crate::state::instances::adapters::sqlite;
 use crate::state::instances::{
-    ContentEntry, ContentSet, ContentSourceKind, Instance,
+    ContentEntry, ContentSet, ContentSetStatus, ContentSourceKind, Instance,
     InstanceInstallCandidate, InstanceInstallTarget, InstanceLink,
 };
 use crate::state::{
     CacheBehaviour, CachedEntry, CachedFile, ContentFile, ContentItem,
     ContentItemOwner, ContentItemProject, ContentItemVersion, Dependency,
     LinkedModpackInfo, ModLoader, Organization, OwnerType, Project,
-    ProjectType, ReleaseChannel, TeamMember, Version,
+    ProjectType, ReleaseChannel, TeamMember, Version, libraries,
 };
 use crate::util::fetch::{
     DownloadMeta, DownloadReason, FetchSemaphore, fetch_mirrors, sha1_async,
@@ -49,11 +49,17 @@ pub(crate) async fn list_content_sets(
     pool: &SqlitePool,
 ) -> crate::Result<Vec<ContentSet>> {
     let instance = sqlite::instance_rows::get_instance_by_id(instance_id, pool)
-        .await?
-        .ok_or_else(|| {
-            crate::ErrorKind::InputError("Unknown instance".to_string())
-        })?;
+        .await?;
 
+    if instance.is_none() {
+        // JSON-backed instances have no DB content sets — return empty
+        // We can't check libraries here without State, but sync_content_files
+        // will return empty for JSON instances anyway, so we just error
+        // as "no content sets" rather than "unknown instance"
+        return Ok(Vec::new());
+    }
+
+    let instance = instance.unwrap();
     sqlite::content_rows::get_content_sets_for_instance(&instance.id, pool)
         .await
 }
@@ -64,12 +70,18 @@ pub(crate) async fn get_content_projects(
     cache_behaviour: Option<CacheBehaviour>,
     state: &State,
 ) -> crate::Result<DashMap<String, ContentFile>> {
-    let resolved = resolve_content_scope_with_instance(
+    let resolved = match resolve_content_scope_with_instance(
         instance_id,
         content_set_id,
         &state.pool,
     )
-    .await?;
+    .await
+    {
+        Ok(resolved) => resolved,
+        Err(_) => {
+            resolve_content_scope_for_json(instance_id, state).await?
+        }
+    };
 
     content_projects_for_scope(
         &resolved,
@@ -196,12 +208,40 @@ pub(crate) async fn list_content(
     cache_behaviour: Option<CacheBehaviour>,
     state: &State,
 ) -> crate::Result<Vec<ContentItem>> {
-    let resolved = resolve_content_scope_with_instance(
+    tracing::info!(
+        "list_content called for instance '{}', content_set={:?}",
+        instance_id, content_set_id
+    );
+    let resolved = match resolve_content_scope_with_instance(
         instance_id,
         content_set_id,
         &state.pool,
     )
-    .await?;
+    .await
+    {
+        Ok(resolved) => {
+            tracing::info!(
+                "list_content: using DB scope for instance '{}', content_set='{}'",
+                resolved.instance.id,
+                resolved.content_set.id
+            );
+            resolved
+        }
+        Err(e) => {
+            tracing::info!(
+                "list_content: DB scope failed for '{}': {}, trying JSON fallback",
+                instance_id, e
+            );
+            let json_resolved =
+                resolve_content_scope_for_json(instance_id, state).await?;
+            tracing::info!(
+                "list_content: using JSON scope for instance '{}', content_set='{}'",
+                json_resolved.instance.id,
+                json_resolved.content_set.id
+            );
+            json_resolved
+        }
+    };
     let link = sqlite::instance_rows::get_instance_link(
         &resolved.instance.id,
         &state.pool,
@@ -260,12 +300,18 @@ pub(crate) async fn list_linked_modpack_content(
     cache_behaviour: Option<CacheBehaviour>,
     state: &State,
 ) -> crate::Result<Vec<ContentItem>> {
-    let resolved = resolve_content_scope_with_instance(
+    let resolved = match resolve_content_scope_with_instance(
         instance_id,
         content_set_id,
         &state.pool,
     )
-    .await?;
+    .await
+    {
+        Ok(resolved) => resolved,
+        Err(_) => {
+            resolve_content_scope_for_json(instance_id, state).await?
+        }
+    };
     let link = sqlite::instance_rows::get_instance_link(
         &resolved.instance.id,
         &state.pool,
@@ -335,12 +381,18 @@ pub(crate) async fn get_linked_modpack_info(
     cache_behaviour: Option<CacheBehaviour>,
     state: &State,
 ) -> crate::Result<Option<LinkedModpackInfo>> {
-    let resolved = resolve_content_scope_with_instance(
+    let resolved = match resolve_content_scope_with_instance(
         instance_id,
         content_set_id,
         &state.pool,
     )
-    .await?;
+    .await
+    {
+        Ok(resolved) => resolved,
+        Err(_) => {
+            resolve_content_scope_for_json(instance_id, state).await?
+        }
+    };
     let Some((project_id, version_id)) =
         linked_modpack_ids_for_instance(&resolved.instance.id, &state.pool)
             .await?
@@ -586,13 +638,71 @@ async fn resolve_content_scope_with_instance(
     })
 }
 
+/// Resolve a content scope for JSON-backed instances that have no DB content set.
+async fn resolve_content_scope_for_json(
+    instance_id: &str,
+    state: &State,
+) -> crate::Result<ResolvedContentScope> {
+    let json_instances =
+        libraries::list_instances_from_json(state).await?;
+    let instance = json_instances
+        .into_iter()
+        .find(|i| i.id == instance_id)
+        .ok_or_else(|| {
+            crate::ErrorKind::InputError("Unknown instance".to_string())
+        })?;
+    // Build a synthetic content set — same structure used by get.rs for JSON
+    // instances; content_entries will be empty so only CachedFile lookups apply.
+    let dir = libraries::resolve_instance_dir(&state, &instance.path);
+    let (game_version, loader, loader_version) =
+        if let Ok(Some(json)) = libraries::InstanceJson::read_from_dir(&dir) {
+            (json.game_version, json.loader, json.loader_version)
+        } else {
+            (None, None, None)
+        };
+    let game_version = game_version.or_else(|| {
+        libraries::detect_game_version_from_dir(&dir)
+    });
+    let loader = loader.or_else(|| {
+        if game_version.as_ref().is_some_and(|gv| gv.is_empty()) {
+            None
+        } else {
+            Some(libraries::detect_loader_from_dir(&dir).as_str().to_string())
+        }
+    });
+    let content_set = ContentSet {
+        id: format!("json-cs-{}", instance.id),
+        instance_id: instance.id.clone(),
+        name: "Applied Content Set".to_string(),
+        source_kind: ContentSourceKind::Local,
+        status: ContentSetStatus::Available,
+        game_version: game_version.unwrap_or_default(),
+        protocol_version: None,
+        loader: ModLoader::from_string(&loader.unwrap_or_default()),
+        loader_version,
+        created: chrono::Utc::now(),
+        modified: chrono::Utc::now(),
+    };
+    Ok(ResolvedContentScope { instance, content_set })
+}
+
 async fn content_projects_for_scope(
     resolved: &ResolvedContentScope,
     cache_behaviour: Option<CacheBehaviour>,
     state: &State,
     filter: ContentFilter<'_>,
 ) -> crate::Result<DashMap<String, ContentFile>> {
+    tracing::info!(
+        "content_projects_for_scope: starting for instance '{}', content_set='{}'",
+        resolved.instance.id,
+        resolved.content_set.id
+    );
     let files = sync_instance_content_files(&resolved.instance, state).await?;
+    tracing::info!(
+        "content_projects_for_scope: synced {} files for instance '{}'",
+        files.len(),
+        resolved.instance.id
+    );
     let entries = sqlite::content_rows::get_content_entries(
         &resolved.content_set.id,
         &state.pool,
@@ -840,7 +950,8 @@ async fn content_files_to_content_items(
         &state.api_semaphore,
     )
     .await?;
-    let instance_path = state.directories.instances_dir().join(&instance.path);
+    let instance_path =
+        libraries::resolve_instance_dir(&state, &instance.path);
     let paths = files
         .iter()
         .map(|(path, _)| instance_path.join(path))

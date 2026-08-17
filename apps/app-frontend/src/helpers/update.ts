@@ -1,10 +1,11 @@
 import { getVersion } from '@tauri-apps/api/app'
+import {invoke} from "@tauri-apps/api/core";
+
 import {
     appUpdateState,
     markAppUpdateActionable,
     markAppUpdatePopupShown,
 } from '@/providers/app-update'
-import {invoke} from "@tauri-apps/api/core";
 
 const REPO_OWNER = 'celestial-launcher'
 const REPO_NAME = 'Celestial'

@@ -120,7 +120,7 @@
         header="添加离线账户"
         :max-width="'500px'"
     >
-        <form @submit.prevent="handleCreateOffline" class="space-y-6 min-w-[400px]">
+        <form class="space-y-6 min-w-[400px]" @submit.prevent="handleCreateOffline">
             <label class="flex flex-col gap-2">
                 <span class="font-semibold text-contrast">用户名</span>
                 <StyledInput
@@ -153,21 +153,21 @@
 
 <script setup lang="ts">
 import {
-	LogInIcon,
+EditIcon,	LogInIcon,
 	PlusIcon,
 	RadioButtonCheckedIcon,
 	RadioButtonIcon,
 	SpinnerIcon,
-	TrashIcon,
+	TrashIcon, XIcon 
 } from '@modrinth/assets'
 import {
 	Accordion,
 	Avatar,
 	ButtonStyled,
-    NewModal,
-    StyledInput,
 	defineMessages,
 	injectNotificationManager,
+    NewModal,
+    StyledInput,
 	useVIntl,
 } from '@modrinth/ui'
 import type { Ref } from 'vue'
@@ -175,21 +175,17 @@ import { computed, onUnmounted, ref } from 'vue'
 
 import { trackEvent } from '@/helpers/analytics'
 import {
+create_offline_user, 
 	get_default_user,
 	login as login_flow,
 	remove_user,
 	set_default_user,
-	users,
-} from '@/helpers/auth'
+	users} from '@/helpers/auth'
 import { process_listener } from '@/helpers/events'
-import { generatePlayerHeadBlob } from '@/helpers/rendering/batch-skin-renderer.ts'
-import { getPlayerHeadUrl } from '@/helpers/rendering/batch-skin-renderer.ts'
+import { generatePlayerHeadBlob, getPlayerHeadUrl  } from '@/helpers/rendering/batch-skin-renderer.ts'
 import type { Skin } from '@/helpers/skins'
 import { get_available_skins } from '@/helpers/skins'
 import { handleSevereError } from '@/store/error.js'
-
-import { XIcon, EditIcon } from '@modrinth/assets'
-import { create_offline_user } from '@/helpers/auth'
 
 const { formatMessage } = useVIntl()
 const notificationManager = injectNotificationManager()
@@ -360,7 +356,7 @@ function getOfflineAvatarColor(name: string) {
     for (let i = 0; i < name.length; i++) {
         hash = name.charCodeAt(i) + ((hash << 5) - hash)
     }
-    var hue = Math.abs(hash % 360)
+    const hue = Math.abs(hash % 360)
     return 'hsl(' + hue + ', 60%, 45%)'
 }
 /** 校验用户名 */

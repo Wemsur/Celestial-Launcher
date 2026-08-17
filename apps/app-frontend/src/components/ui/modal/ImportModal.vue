@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NewModal as Modal, ButtonStyled, Checkbox } from '@modrinth/ui'
+import { ButtonStyled, Checkbox,NewModal as Modal } from '@modrinth/ui'
 import { invoke } from '@tauri-apps/api/core'
 import { ref } from 'vue'
 

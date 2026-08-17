@@ -144,13 +144,31 @@
     "message": "Your privacy and how ads support Modrinth"
   },
   "app.appearance-settings.advanced-rendering.description": {
-    "message": "Enable visual effects such as background blur. This may reduce performance without hardware acceleration."
+    "message": "Enables advanced rendering such as blur effects that may cause performance issues without hardware-accelerated rendering."
   },
   "app.appearance-settings.advanced-rendering.title": {
     "message": "Advanced rendering"
   },
+  "app.appearance-settings.background-image.description": {
+    "message": "Customize the overall background of the Modrinth App"
+  },
+  "app.appearance-settings.background-image.drop-active": {
+    "message": "Drop image here..."
+  },
+  "app.appearance-settings.background-image.hint": {
+    "message": "Drag and drop an image or click to customize your app background."
+  },
+  "app.appearance-settings.background-image.title": {
+    "message": "Background image"
+  },
+  "app.appearance-settings.blur-background.description": {
+    "message": "Enables background blur when customizing background images."
+  },
+  "app.appearance-settings.blur-background.title": {
+    "message": "BackgroundBlur"
+  },
   "app.appearance-settings.color-theme.description": {
-    "message": "Choose the color theme used by Modrinth App."
+    "message": "Select your preferred color theme for Modrinth App."
   },
   "app.appearance-settings.color-theme.title": {
     "message": "Color theme"
@@ -166,6 +184,9 @@
   },
   "app.appearance-settings.default-landing-page.title": {
     "message": "Default landing page"
+  },
+  "app.appearance-settings.default-landing-page.worlds": {
+    "message": "Worlds"
   },
   "app.appearance-settings.hide-nametag.description": {
     "message": "Hide your username above the player preview on the Skin selector page."
@@ -186,10 +207,13 @@
     "message": "Minimize app"
   },
   "app.appearance-settings.native-decorations.description": {
-    "message": "Use your operating system's title bar and window controls. Requires an app restart."
+    "message": "Use system window frame (app restart required)."
   },
   "app.appearance-settings.native-decorations.title": {
-    "message": "System window frame"
+    "message": "Native decorations"
+  },
+  "app.appearance-settings.select-option": {
+    "message": "Select an option"
   },
   "app.appearance-settings.show-play-time.description": {
     "message": "Show how long you've played each instance."
@@ -1210,6 +1234,12 @@
   },
   "app.update-popup.download-complete": {
     "message": "Download complete"
+  },
+  "app.update-popup.downloading": {
+    "message": "正在下载Celestial更新…"
+  },
+  "app.update-popup.downloading.body": {
+    "message": "Celestial Launcher v{version}"
   },
   "app.update-popup.reload": {
     "message": "Reload to update"

@@ -11,17 +11,17 @@
             <div class="mt-4 flex gap-2">
                 <StyledInput
                     :model-value="newOfflineUsername"
-                    @update:model-value="newOfflineUsername = $event"
-
                     wrapper-class="flex-1 w-full"
+
                     :disabled="creatingOffline"
                     clearable
+                    @update:model-value="newOfflineUsername = $event"
                     @keyup.enter="onCreateOffline"
                 />
                 <button
                     class="btn btn-brand"
-                    @click="onCreateOffline"
                     :disabled="!newOfflineUsername.trim()"
+                    @click="onCreateOffline"
                 >
                     添加
                 </button>
@@ -143,9 +143,18 @@
 
 <script setup lang="ts">
 import type { Labrinth } from '@modrinth/api-client'
-import {AccountProfileSettings, Avatar, injectAuth, StyledInput, injectNotificationManager} from '@modrinth/ui'
-import { inject, onBeforeUnmount, onMounted, ref, onUnmounted } from 'vue'
+import {AccountProfileSettings, Avatar, injectAuth, injectNotificationManager,StyledInput} from '@modrinth/ui'
+import { inject, onBeforeUnmount, onMounted, onUnmounted,ref } from 'vue'
 
+import {
+    create_offline_user,
+    minecraft_login,
+    remove_user,
+    set_default_user,
+    users,
+} from '@/helpers/auth.js'
+import { get as getModrinthUser,login, logout } from '@/helpers/mr_auth.ts'
+import { generatePlayerHeadBlob } from '@/helpers/rendering/batch-skin-renderer.ts'
 import {
 	change_user_avatar,
 	delete_user_avatar,
@@ -153,16 +162,6 @@ import {
 	patch_user,
 } from '@/helpers/users'
 import { appSettingsModalContextKey } from '@/providers/app-settings-modal'
-
-import {
-    users,
-    remove_user,
-    set_default_user,
-    create_offline_user,
-    minecraft_login,
-} from '@/helpers/auth.js'
-import { login, logout, get as getModrinthUser } from '@/helpers/mr_auth.ts'
-import { generatePlayerHeadBlob } from '@/helpers/rendering/batch-skin-renderer.ts'
 
 const notificationManager = injectNotificationManager()
 const modrinthCredentials = inject('modrinthCredentials', null)
