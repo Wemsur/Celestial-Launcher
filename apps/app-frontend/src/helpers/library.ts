@@ -28,3 +28,7 @@ export async function library_add(
 export async function library_remove(path: string): Promise<void> {
 	return await invoke('plugin:instance|library_remove', { path })
 }
+
+export async function library_default_path(): Promise<string> {
+	return await invoke('plugin:instance|library_default_path')
+}

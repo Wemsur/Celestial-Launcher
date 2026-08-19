@@ -20,6 +20,10 @@ use std::path::{Path, PathBuf};
 pub(crate) struct ContentScope {
     pub instance: Instance,
     pub content_set_id: String,
+    /// Cached game version used for download requests.
+    pub game_version: String,
+    /// Cached loader string used for download requests.
+    pub loader: String,
 }
 
 pub(crate) struct InstalledContentFile {
@@ -161,14 +165,20 @@ pub(crate) async fn resolve_install_plan(
     request: InstanceInstallProjectRequest,
     state: &State,
 ) -> crate::Result<ResolveContentPlan> {
-    let content_set =
-        content_rows::get_applied_content_set(instance_id, &state.pool)
-            .await?
-            .ok_or_else(|| {
-                crate::ErrorKind::InputError(format!(
-                    "Instance {instance_id} has no applied content set"
-                ))
-            })?;
+    let content_set = content_rows::get_applied_content_set(instance_id, &state.pool)
+        .await?
+        .or_else(|| {
+            // JSON-backed instances don't have a DB content set — fall
+            // through to async rebuild below.
+            None
+        });
+    let content_set = match content_set {
+        Some(cs) => cs,
+        None => super::list_content::create_json_content_set(
+            instance_id, state,
+        )
+        .await?,
+    };
     let existing_project_ids =
         crate::state::get_installed_project_ids_for_instance(
             instance_id,
@@ -325,11 +335,12 @@ pub(crate) async fn resolve_content_scope(
     {
         Some(inst) => inst,
         None => {
-            // JSON-backed instances are not managed by content sets
-            return Err(crate::ErrorKind::InputError(
-                "This instance is managed externally and does not support content management".to_string(),
+            // JSON-backed instances are not managed by content sets — return
+            // a synthetic scope so file-write operations still work.
+            return super::list_content::create_json_content_scope(
+                instance_id, state,
             )
-            .into());
+            .await;
         }
     };
     let content_set_id = match content_set_id {
@@ -342,9 +353,32 @@ pub(crate) async fn resolve_content_scope(
         })?,
     };
 
+    let cs_game_version = if let Some(cs_id) = &instance.applied_content_set_id {
+        content_rows::get_content_set(cs_id, &state.pool)
+            .await
+            .ok()
+            .flatten()
+            .map(|cs| cs.game_version)
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let cs_loader = if let Some(cs_id) = &instance.applied_content_set_id {
+        content_rows::get_content_set(cs_id, &state.pool)
+            .await
+            .ok()
+            .flatten()
+            .map(|cs| cs.loader.as_str().to_string())
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+
     Ok(ContentScope {
         instance,
         content_set_id,
+        game_version: cs_game_version,
+        loader: cs_loader,
     })
 }
 
@@ -377,15 +411,20 @@ pub(crate) async fn download_project_version(
     state: &State,
 ) -> crate::Result<DownloadedProjectVersion> {
     let scope = resolve_content_scope(instance_id, None, state).await?;
-    let content_set =
-        content_rows::get_content_set(&scope.content_set_id, &state.pool)
-            .await?
-            .ok_or_else(|| {
-                crate::ErrorKind::InputError(format!(
-                    "Unknown content set {}",
-                    scope.content_set_id
-                ))
-            })?;
+    let (game_version, loader) = if scope.instance.is_json_backed() {
+        (scope.game_version.clone(), scope.loader.clone())
+    } else {
+        let content_set =
+            content_rows::get_content_set(&scope.content_set_id, &state.pool)
+                .await?
+                .ok_or_else(|| {
+                    crate::ErrorKind::InputError(format!(
+                        "Unknown content set {}",
+                        scope.content_set_id
+                    ))
+                })?;
+        (content_set.game_version, content_set.loader.as_str().to_string())
+    };
     let version = CachedEntry::get_version(
         version_id,
         None,
@@ -410,8 +449,8 @@ pub(crate) async fn download_project_version(
         })?;
     let download_meta = DownloadMeta {
         reason,
-        game_version: content_set.game_version,
-        loader: content_set.loader.as_str().to_string(),
+        game_version: game_version.clone(),
+        loader,
         dependent_on: dependent_on_version_id,
     };
     let bytes = fetch::fetch(
@@ -550,6 +589,11 @@ pub(crate) async fn add_project_bytes(
     )
     .await?;
 
+    if scope.instance.is_json_backed() {
+        // JSON-backed instances have no DB rows — skip content tracking.
+        return Ok(relative_path);
+    }
+
     let mut tx = state.pool.begin().await?;
     let file = content_rows::upsert_instance_file_from_parts(
         content_rows::UpsertInstanceFile {
@@ -598,6 +642,9 @@ pub(crate) async fn record_project_file(
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
+    if scope.instance.is_json_backed() {
+        return Ok(());
+    }
     let mut tx = state.pool.begin().await?;
     let file = content_rows::upsert_instance_file_from_parts(
         content_rows::UpsertInstanceFile {
@@ -661,6 +708,10 @@ pub(crate) async fn toggle_disable_project(
     if current_path != new_path {
         io::rename_or_move(&base.join(&current_path), &base.join(&new_path))
             .await?;
+    }
+
+    if scope.instance.is_json_backed() {
+        return Ok(new_path);
     }
 
     let file_name = Path::new(&new_path)
@@ -751,6 +802,10 @@ pub(crate) async fn remove_project(
         Ok(()) => {}
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => return Err(err.into()),
+    }
+
+    if scope.instance.is_json_backed() {
+        return Ok(());
     }
 
     if let Some(file) = file {

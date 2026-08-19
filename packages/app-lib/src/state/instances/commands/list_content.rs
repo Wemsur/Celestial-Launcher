@@ -686,6 +686,111 @@ async fn resolve_content_scope_for_json(
     Ok(ResolvedContentScope { instance, content_set })
 }
 
+/// Build a synthetic `ContentSet` for a JSON-backed instance.
+///
+/// Tries to read game_version/loader from the sidecar file; falls back to
+/// filesystem detection if the sidecar has no stored values.
+pub(crate) async fn create_json_content_set(
+    instance_id: &str,
+    state: &State,
+) -> crate::Result<ContentSet> {
+    let json_instances =
+        libraries::list_instances_from_json(state).await?;
+    let instance = json_instances
+        .into_iter()
+        .find(|i| i.id == instance_id)
+        .ok_or_else(|| {
+            crate::ErrorKind::InputError("Unknown instance".to_string())
+        })?;
+    let dir = libraries::resolve_instance_dir(&state, &instance.path);
+    let (game_version, loader, loader_version) =
+        if let Ok(Some(json)) = libraries::InstanceJson::read_from_dir(&dir) {
+            (json.game_version, json.loader, json.loader_version)
+        } else {
+            (None, None, None)
+        };
+    let game_version = game_version.or_else(|| {
+        libraries::detect_game_version_from_dir(&dir)
+    });
+    let loader = loader.or_else(|| {
+        if game_version.as_ref().is_some_and(|gv| gv.is_empty()) {
+            None
+        } else {
+            Some(libraries::detect_loader_from_dir(&dir).as_str().to_string())
+        }
+    });
+    Ok(ContentSet {
+        id: format!("json-cs-{}", instance.id),
+        instance_id: instance.id.clone(),
+        name: "Applied Content Set".to_string(),
+        source_kind: ContentSourceKind::Local,
+        status: ContentSetStatus::Available,
+        game_version: game_version.unwrap_or_default(),
+        protocol_version: None,
+        loader: ModLoader::from_string(&loader.unwrap_or_default()),
+        loader_version,
+        created: chrono::Utc::now(),
+        modified: chrono::Utc::now(),
+    })
+}
+
+/// Build a synthetic `ContentScope` for a JSON-backed instance.
+///
+/// Same logic as `create_json_content_set`, but returns a full `ContentScope`.
+pub(crate) async fn create_json_content_scope(
+    instance_id: &str,
+    state: &State,
+) -> crate::Result<
+    crate::state::instances::commands::apply_content_install::ContentScope,
+> {
+    use super::apply_content_install::ContentScope;
+
+    let json_instances =
+        libraries::list_instances_from_json(state).await?;
+    let instance = json_instances
+        .into_iter()
+        .find(|i| i.id == instance_id)
+        .ok_or_else(|| {
+            crate::ErrorKind::InputError("Unknown instance".to_string())
+        })?;
+    let dir = libraries::resolve_instance_dir(&state, &instance.path);
+    let (game_version, loader, loader_version) =
+        if let Ok(Some(json)) = libraries::InstanceJson::read_from_dir(&dir) {
+            (json.game_version, json.loader, json.loader_version)
+        } else {
+            (None, None, None)
+        };
+    let game_version = game_version.or_else(|| {
+        libraries::detect_game_version_from_dir(&dir)
+    });
+    let loader = loader.or_else(|| {
+        if game_version.as_ref().is_some_and(|gv| gv.is_empty()) {
+            None
+        } else {
+            Some(libraries::detect_loader_from_dir(&dir).as_str().to_string())
+        }
+    });
+    let content_set = ContentSet {
+        id: format!("json-cs-{}", instance.id),
+        instance_id: instance.id.clone(),
+        name: "Applied Content Set".to_string(),
+        source_kind: ContentSourceKind::Local,
+        status: ContentSetStatus::Available,
+        game_version: game_version.unwrap_or_default(),
+        protocol_version: None,
+        loader: ModLoader::from_string(&loader.unwrap_or_default()),
+        loader_version,
+        created: chrono::Utc::now(),
+        modified: chrono::Utc::now(),
+    };
+    Ok(ContentScope {
+        instance,
+        content_set_id: content_set.id,
+        game_version: content_set.game_version,
+        loader: content_set.loader.as_str().to_string(),
+    })
+}
+
 async fn content_projects_for_scope(
     resolved: &ResolvedContentScope,
     cache_behaviour: Option<CacheBehaviour>,

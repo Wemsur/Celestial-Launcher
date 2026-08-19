@@ -201,6 +201,27 @@ pub fn instance_id_from_path(path: &str) -> String {
     format!("local:{}", &hex[..32])
 }
 
+/// Returns the default library path that was used before multi-library support.
+/// On Windows this is `<AppData>/Minecraft/Modrinth`; on other platforms it is
+/// `<home>/Minecraft/Modrinth`. The caller can append `profiles` or `versions`
+/// depending on the instance format.
+pub fn default_library_path() -> PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        dirs::data_local_dir()
+            .unwrap_or_default()
+            .join("Minecraft")
+            .join("Modrinth")
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        dirs::home_dir()
+            .unwrap_or_default()
+            .join("Minecraft")
+            .join("Modrinth")
+    }
+}
+
 pub async fn get_libraries_config(state: &State) -> crate::Result<LibrariesConfig> {
     let path = state.directories.settings_dir.join(LIBRARIES_FILE_NAME);
     if !path.exists() {
@@ -444,6 +465,9 @@ pub fn resolve_instance_dir_with_dirs(
 }
 
 /// Find a JSON-backed instance by ID. Returns the path used to locate it.
+///
+/// Performs a full scan of all configured libraries on each call. Use
+/// `find_json_instance_by_id_fast` when you already have the resolved path.
 pub async fn find_json_instance(
     state: &State,
     instance_id: &str,

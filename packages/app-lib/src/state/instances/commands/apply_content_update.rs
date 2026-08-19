@@ -327,14 +327,19 @@ async fn plan_bulk_update(
         });
     }
 
-    let content_set =
-        content_rows::get_applied_content_set(instance_id, &state.pool)
-            .await?
-            .ok_or_else(|| {
-                crate::ErrorKind::InputError(format!(
-                    "Instance {instance_id} has no applied content set"
-                ))
-            })?;
+    let content_set = content_rows::get_applied_content_set(instance_id, &state.pool)
+        .await?
+        .or_else(|| {
+            // JSON-backed instances have no DB content set.
+            None
+        });
+    let content_set = match content_set {
+        Some(cs) => cs,
+        None => super::list_content::create_json_content_set(
+            instance_id, state,
+        )
+        .await?,
+    };
     let installed =
         installed_projects(instance_id, &content_set, state).await?;
     let updateable_paths = if shared_instance_member {

@@ -17,7 +17,7 @@ import { NewInstanceImage } from '@/assets/icons'
 import { instance_listener } from '@/helpers/events.js'
 import { list } from '@/helpers/instance'
 import type { InstanceFormat } from '@/helpers/library'
-import { library_list } from '@/helpers/library'
+import { library_list, library_default_path } from '@/helpers/library'
 import { useRootBreadcrumb } from '@/providers/breadcrumbs'
 
 const { handleError } = injectNotificationManager()
@@ -49,10 +49,15 @@ onUnmounted(() => {
 })
 
 const libraries = shallowRef<{ name: string; path: string; type: string }[]>([])
+let defaultLibraryPath: string | null = null
 const loadLibraries = async () => {
 	try {
-		const config = await library_list()
+		const [config, defaultPath] = await Promise.all([
+			library_list(),
+			library_default_path().catch(() => null),
+		])
 		libraries.value = config.libraries
+		defaultLibraryPath = defaultPath
 	} catch (e) {
 		handleError(e as Error)
 	}
@@ -65,10 +70,29 @@ const tabLinks = shallowRef([
 	{ label: '全部实例', href: `/library` },
 ])
 
+const libDisplayLabel = (lib: { name: string; path: string }): string => {
+	if (lib.name) return lib.name
+	// Check against the default library path (normalise both sides)
+	if (defaultLibraryPath) {
+		const normDefault = defaultLibraryPath.replace(/\\/g, '/').toLowerCase()
+		const normLib = lib.path.replace(/\\/g, '/').toLowerCase()
+		if (normLib === normDefault || normLib === normDefault + '/profiles') {
+			return '默认库'
+		}
+	}
+	const folderName = lib.path
+		.split('/')
+		.pop()
+		?.split('\\')
+		.pop()
+		|| lib.path
+	return folderName || lib.path
+}
+
 const updateTabs = () => {
 	const tabs = [{ label: '全部实例', href: '/library' }]
 	for (const lib of libraries.value) {
-		const label = lib.name || lib.path.split('/').pop() || lib.path
+		const label = libDisplayLabel(lib)
 		tabs.push({ label, href: `/library/lib/${encodeURIComponent(lib.path)}` })
 	}
 	tabLinks.value = tabs

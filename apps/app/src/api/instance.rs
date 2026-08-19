@@ -68,6 +68,7 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             library_list,
             library_add,
             library_remove,
+            library_default_path,
         ])
         .build()
 }
@@ -931,4 +932,11 @@ pub async fn library_remove(path: String) -> Result<()> {
     config.libraries.retain(|l| l.path != path);
     theseus::libraries::save_libraries_config(&state, &config).await?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn library_default_path() -> String {
+    theseus::libraries::default_library_path()
+        .to_string_lossy()
+        .to_string()
 }

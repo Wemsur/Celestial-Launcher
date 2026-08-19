@@ -4,6 +4,7 @@ use crate::state::instances::{
 };
 use crate::state::{
     CacheBehaviour, CachedEntry, ProjectType, ReleaseChannel, State,
+    libraries,
 };
 use std::collections::HashMap;
 
@@ -31,20 +32,37 @@ pub(crate) async fn check_content_updates(
     cache_behaviour: Option<CacheBehaviour>,
     state: &State,
 ) -> crate::Result<Vec<ContentUpdate>> {
-    let instance = instance_rows::get_instance_by_id(instance_id, &state.pool)
+    let instance = match instance_rows::get_instance_by_id(instance_id, &state.pool)
         .await?
-        .ok_or_else(|| {
-            crate::ErrorKind::InputError("Unknown instance".to_string())
-        })?;
-    let content_set =
-        content_rows::get_applied_content_set(&instance.id, &state.pool)
-            .await?
-            .ok_or_else(|| {
-                crate::ErrorKind::InputError(format!(
-                    "Instance {} has no applied content set",
-                    instance.id
-                ))
-            })?;
+    {
+        Some(inst) => inst,
+        None => {
+            // JSON-backed instances have no DB record — resolve from JSON.
+            let json_instances =
+                libraries::list_instances_from_json(state).await?;
+            json_instances
+                .into_iter()
+                .find(|i| i.id == instance_id)
+                .ok_or_else(|| {
+                    crate::ErrorKind::InputError("Unknown instance".to_string())
+                })?
+        }
+    };
+    let content_set = content_rows::get_applied_content_set(
+        &instance.id, &state.pool,
+    )
+    .await?
+    .or_else(|| {
+        // JSON-backed instances have no DB content set.
+        None
+    });
+    let content_set = match content_set {
+        Some(cs) => cs,
+        None => super::list_content::create_json_content_set(
+            instance_id, state,
+        )
+        .await?,
+    };
     let entries =
         content_rows::get_content_entries(&content_set.id, &state.pool).await?;
     let entries_by_file_id = entries
