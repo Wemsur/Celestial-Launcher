@@ -3,7 +3,7 @@ import type {
 	CreationFlowContextValue,
 	CreationFlowModal,
 } from '@modrinth/ui'
-import { provide, ref, useTemplateRef } from 'vue'
+import { provide, ref, useTemplateRef, watchEffect } from 'vue'
 import type { ComponentExposed } from 'vue-component-type-helpers'
 import { useRouter } from 'vue-router'
 
@@ -19,6 +19,7 @@ import {
 	install_get_modpack_preview,
 } from '@/helpers/install'
 import { list } from '@/helpers/instance'
+import { library_list } from '@/helpers/library'
 import { get_loader_versions as getLoaderManifest } from '@/helpers/metadata.js'
 import type { InstanceLoader } from '@/helpers/types'
 import { useTheming } from '@/store/state'
@@ -33,6 +34,17 @@ export function setupCreationModal(notificationManager: AbstractWebNotificationM
 	const unknownPackWarningModal =
 		useTemplateRef<InstanceType<typeof UnknownPackWarningModal>>('unknownPackWarningModal')
 	const modpackAlreadyInstalledModal = ref<InstanceType<typeof ModpackAlreadyInstalledModal>>()
+
+	// Load available libraries for the creation modal
+	const availableLibraries = ref<Array<{ path: string; name: string }>>([])
+	watchEffect(async () => {
+		try {
+			const config = await library_list()
+			availableLibraries.value = config.libraries
+		} catch {
+			// ignore
+		}
+	})
 
 	function setModpackAlreadyInstalledModal(
 		modal: InstanceType<typeof ModpackAlreadyInstalledModal>,
@@ -147,6 +159,7 @@ export function setupCreationModal(notificationManager: AbstractWebNotificationM
 				loader: loader as InstanceLoader,
 				loaderVersion,
 				iconPath,
+				libraryPath: config.selectedLibraryPath.value,
 			}).catch(handleError)
 
 			trackEvent('InstanceCreate', {
@@ -208,5 +221,6 @@ export function setupCreationModal(notificationManager: AbstractWebNotificationM
 		setModpackAlreadyInstalledModal,
 		handleModpackDuplicateCreateAnyway,
 		handleModpackDuplicateGoToInstance,
+		availableLibraries,
 	}
 }

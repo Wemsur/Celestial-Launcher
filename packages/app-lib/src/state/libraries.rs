@@ -36,6 +36,17 @@ impl From<&str> for InstanceFormat {
     }
 }
 
+impl InstanceFormat {
+    /// Detect format from a library path string.
+    pub(crate) fn from_path(path: &str) -> Self {
+        if path.contains(".minecraft") {
+            Self::Minecraft
+        } else {
+            Self::default()
+        }
+    }
+}
+
 impl From<InstanceFormat> for &str {
     fn from(format: InstanceFormat) -> Self {
         match format {
@@ -72,6 +83,18 @@ pub(crate) struct InstanceJson {
     pub submitted_time_played: u64,
     #[serde(default)]
     pub recent_time_played: u64,
+    #[serde(default = "default_install_stage")]
+    pub install_stage: String,
+    #[serde(default)]
+    pub quarantined: bool,
+    /// Format used when this instance was created.
+    /// Derived from the parent library's format when missing.
+    #[serde(default)]
+    pub library_format: InstanceFormat,
+}
+
+fn default_install_stage() -> String {
+    crate::state::InstanceInstallStage::Installed.as_str().to_string()
 }
 
 impl InstanceJson {
@@ -109,6 +132,9 @@ impl InstanceJson {
             link,
             submitted_time_played: instance.submitted_time_played,
             recent_time_played: instance.recent_time_played,
+            install_stage: default_install_stage(),
+            quarantined: false,
+            library_format: instance.library_format.clone(),
         }
     }
 
@@ -128,6 +154,16 @@ impl InstanceJson {
         &self,
         absolute_path: &str,
     ) -> Instance {
+        self.to_instance_with_format(absolute_path, self.library_format.clone())
+    }
+
+    /// Derive an Instance from this JSON sidecar and a known absolute path,
+    /// overriding the library format.
+    pub(crate) fn to_instance_with_format(
+        &self,
+        absolute_path: &str,
+        format: InstanceFormat,
+    ) -> Instance {
         let id = instance_id_from_path(absolute_path);
         // Prefer stored name, then fall back to directory name
         let name = self
@@ -138,7 +174,7 @@ impl InstanceJson {
             id: id.clone(),
             path: absolute_path.to_string(),
             applied_content_set_id: None,
-            install_stage: crate::state::InstanceInstallStage::Installed,
+            install_stage: crate::state::InstanceInstallStage::from_str(&self.install_stage),
             launcher_feature_version:
                 crate::state::LauncherFeatureVersion::MOST_RECENT,
             update_channel: crate::state::ReleaseChannel::Release,
@@ -149,6 +185,7 @@ impl InstanceJson {
             last_played: self.last_played,
             submitted_time_played: self.submitted_time_played,
             recent_time_played: self.recent_time_played,
+            library_format: format,
         }
     }
 }
@@ -199,9 +236,24 @@ pub async fn list_instances_from_json(
             continue;
         }
 
-        let entries = match fs::read_dir(lib_path) {
-            Ok(e) => e,
-            Err(_) => continue,
+        // Determine which subdirectory to scan based on format
+        let scan_root = match library.format {
+            InstanceFormat::Modrinth => lib_path.join("profiles"),
+            InstanceFormat::Minecraft => lib_path.join("versions"),
+        };
+
+        // For Modrinth, scan profiles/ directly; for Minecraft, scan versions/<instance>/
+        let entries = if scan_root.exists() {
+            match fs::read_dir(&scan_root) {
+                Ok(e) => e,
+                Err(_) => continue,
+            }
+        } else {
+            // Fallback: scan library root directly (backwards compatibility)
+            match fs::read_dir(lib_path) {
+                Ok(e) => e,
+                Err(_) => continue,
+            }
         };
 
         for entry in entries {
@@ -220,7 +272,10 @@ pub async fn list_instances_from_json(
                 continue;
             };
 
-            let instance = instance_json.to_instance(dir.to_string_lossy().as_ref());
+            let instance = instance_json.to_instance_with_format(
+                dir.to_string_lossy().as_ref(),
+                library.format.clone(),
+            );
             instances.push(instance);
         }
     }
@@ -280,11 +335,7 @@ pub(crate) async fn migrate_instances_from_db(
         let lib_path =
             lib_path_opt.unwrap_or_else(|| "unknown-library".to_string());
 
-        let format = if lib_path.contains(".minecraft") {
-            InstanceFormat::Minecraft
-        } else {
-            InstanceFormat::Modrinth
-        };
+        let format = InstanceFormat::from_path(&lib_path);
 
         lib_map.entry(lib_path.clone()).or_insert_with(|| LibraryInfo {
             name: String::new(),
@@ -296,12 +347,13 @@ pub(crate) async fn migrate_instances_from_db(
         // We no longer persist derived fields (version, loader) — they are
         // detected from the filesystem on each scan.
         if fallback_path.exists() {
-            let instance_json = InstanceJson::from_instance_and_content_set(
+            let mut instance_json = InstanceJson::from_instance_and_content_set(
                 instance,
                 &record.applied_content_set,
                 &absolute_path_str,
                 Some(record.link.clone()),
             );
+            instance_json.library_format = format.clone();
             if let Err(e) = instance_json.write_to_dir(&fallback_path) {
                 tracing::warn!(
                     "Failed to write instance.json for {}: {e}",
@@ -402,10 +454,24 @@ pub async fn find_json_instance(
         if !lib_path.exists() {
             continue;
         }
-        let entries = match fs::read_dir(lib_path) {
-            Ok(e) => e,
-            Err(_) => continue,
+
+        let scan_root = match library.format {
+            InstanceFormat::Modrinth => lib_path.join("profiles"),
+            InstanceFormat::Minecraft => lib_path.join("versions"),
         };
+
+        let entries = if scan_root.exists() {
+            match fs::read_dir(&scan_root) {
+                Ok(e) => e,
+                Err(_) => continue,
+            }
+        } else {
+            match fs::read_dir(lib_path) {
+                Ok(e) => e,
+                Err(_) => continue,
+            }
+        };
+
         for entry in entries {
             let entry = match entry {
                 Ok(e) => e,
@@ -420,7 +486,10 @@ pub async fn find_json_instance(
             else {
                 continue;
             };
-            let instance = instance_json.to_instance(dir.to_string_lossy().as_ref());
+            let instance = instance_json.to_instance_with_format(
+                dir.to_string_lossy().as_ref(),
+                library.format.clone(),
+            );
             if instance.id == instance_id {
                 return Ok(Some(resolve_instance_dir(state, &instance.path)));
             }
@@ -554,4 +623,29 @@ fn detect_modloader_from_file_name(name: &str) -> Option<crate::state::ModLoader
         return Some(crate::state::ModLoader::Forge);
     }
     None
+}
+
+/// Check whether an instance is quarantined — covers both DB-backed and
+/// JSON-backed instances. For JSON-backed instances the quarantine flag is
+/// read from the sidecar file; for DB-backed ones the DB table is queried.
+pub async fn is_instance_quarantined(
+    instance_id: &str,
+    pool: &sqlx::SqlitePool,
+) -> crate::Result<bool> {
+    // DB-backed check
+    if instance_rows::is_instance_quarantined(instance_id, pool).await? {
+        return Ok(true);
+    }
+    // JSON-backed check
+    let state = State::get().await?;
+    let json_instances = list_instances_from_json(&state).await?;
+    Ok(json_instances
+        .iter()
+        .find(|i| i.id == instance_id)
+        .and_then(|inst| {
+            let dir = resolve_instance_dir(&state, &inst.path);
+            InstanceJson::read_from_dir(&dir).ok().flatten()
+        })
+        .map(|j| j.quarantined)
+        .unwrap_or(false))
 }

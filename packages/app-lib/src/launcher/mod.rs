@@ -292,12 +292,14 @@ pub async fn install_minecraft_with_reporter(
     let state = State::get().await?;
     let previous_install_stage = instance.install_stage;
 
-    crate::state::instances::commands::set_instance_install_stage(
-        &instance.id,
-        InstanceInstallStage::MinecraftInstalling,
-        &state.pool,
-    )
-    .await?;
+    if !instance.is_json_backed() {
+        crate::state::instances::commands::set_instance_install_stage(
+            &instance.id,
+            InstanceInstallStage::MinecraftInstalling,
+            &state.pool,
+        )
+        .await?;
+    }
     emit_instance(&instance.id, InstancePayloadType::Edited).await?;
 
     let result = async {
@@ -349,12 +351,14 @@ pub async fn install_minecraft_with_reporter(
         )
         .await?;
 
-        crate::state::instances::commands::set_applied_content_set_loader_version(
-            &instance.id,
-            loader_version.as_ref().map(|x| x.id.as_str()),
-            &state.pool,
-        )
-        .await?;
+        if !instance.is_json_backed() {
+            crate::state::instances::commands::set_applied_content_set_loader_version(
+                &instance.id,
+                loader_version.as_ref().map(|x| x.id.as_str()),
+                &state.pool,
+            )
+            .await?;
+        }
     }
 
     let version_jar =
@@ -603,19 +607,29 @@ pub async fn install_minecraft_with_reporter(
 
     let protocol_version = read_protocol_version_from_jar(client_path).await?;
 
-    crate::state::instances::commands::set_applied_content_set_protocol_version(
-        &instance.id,
-        protocol_version,
-        &state.pool,
-    )
-    .await?;
+    if !instance.is_json_backed() {
+        crate::state::instances::commands::set_applied_content_set_protocol_version(
+            &instance.id,
+            protocol_version,
+            &state.pool,
+        )
+        .await?;
+    }
 	if reporter.is_none() {
-		crate::state::instances::commands::set_instance_install_stage(
-			&instance.id,
-			InstanceInstallStage::Installed,
-			&state.pool,
-		)
-		.await?;
+		if instance.is_json_backed() {
+			crate::state::instances::commands::set_instance_install_stage_json(
+				&instance.path,
+				InstanceInstallStage::Installed,
+			)
+			.await?;
+		} else {
+			crate::state::instances::commands::set_instance_install_stage(
+				&instance.id,
+				InstanceInstallStage::Installed,
+				&state.pool,
+			)
+			.await?;
+		}
 		emit_instance(&instance.id, InstancePayloadType::Edited).await?;
 	}
     if let Some(loading_bar) = &loading_bar {
@@ -627,7 +641,20 @@ pub async fn install_minecraft_with_reporter(
     .await;
 
     if result.is_err() {
-        if let Err(error) =
+        if instance.is_json_backed() {
+            if let Err(error) =
+                crate::state::instances::commands::set_instance_install_stage_json(
+                    &instance.path,
+                    previous_install_stage,
+                )
+                .await
+            {
+                tracing::error!(
+                    "Failed to restore install stage for JSON instance {}: {error}",
+                    instance.id
+                );
+            }
+        } else if let Err(error) =
             crate::state::instances::commands::set_instance_install_stage(
                 &instance.id,
                 previous_install_stage,
@@ -639,7 +666,8 @@ pub async fn install_minecraft_with_reporter(
                 "Failed to restore install stage for instance {}: {error}",
                 instance.id
             );
-        } else if let Err(error) =
+        }
+        if let Err(error) =
             emit_instance(&instance.id, InstancePayloadType::Edited).await
         {
             tracing::error!(
@@ -1043,12 +1071,20 @@ pub async fn launch_minecraft(
             .await?;
     }
 
-    crate::state::instances::commands::set_instance_last_played(
-        &instance.id,
-        Utc::now(),
-        &state.pool,
-    )
-    .await?;
+    if instance.is_json_backed() {
+        crate::state::instances::commands::set_instance_last_played_json(
+            &instance.path,
+            Utc::now(),
+        )
+        .await?;
+    } else {
+        crate::state::instances::commands::set_instance_last_played(
+            &instance.id,
+            Utc::now(),
+            &state.pool,
+        )
+        .await?;
+    }
 
     // If in tauri, and the 'minimize on launch' setting is enabled, minimize the window
     #[cfg(feature = "tauri")]

@@ -15,6 +15,7 @@ pub(crate) async fn create(
     loader_version: Option<String>,
     icon_path: Option<String>,
     link: InstanceLink,
+    library_path: Option<String>,
 ) -> crate::Result<InstanceMetadata> {
     let state = State::get().await?;
     let instance = crate::state::create_instance(
@@ -26,14 +27,16 @@ pub(crate) async fn create(
             loader_version,
             icon_path,
             link,
+            library_path,
         },
         &state,
     )
     .await?;
 
-    let result = async {
-        emit_instance(&instance.id, InstancePayloadType::Created).await?;
+    emit_instance(&instance.id, InstancePayloadType::Created).await?;
 
+    // DB-backed: verify it was written to the database
+    if instance.applied_content_set_id.is_some() {
         crate::state::get_instance(&instance.id, &state.pool)
             .await?
             .ok_or_else(|| {
@@ -42,14 +45,12 @@ pub(crate) async fn create(
                 )
                 .into()
             })
+    } else {
+        // JSON-backed: build metadata from the instance directly
+        Ok(crate::api::instance::get::instance_metadata_from_instance(
+            &instance,
+        ))
     }
-    .await;
-
-    if result.is_err() {
-        let _ = crate::state::remove_instance(&instance.id, &state).await;
-    }
-
-    result
 }
 
 pub async fn edit(

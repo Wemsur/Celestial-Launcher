@@ -154,18 +154,29 @@ impl DirectoryInfo {
         self.config_dir.join(INSTANCES_FOLDER_NAME)
     }
 
-    /// Gets the logs dir for a given instance path
+    /// Gets the logs dir for a given instance path.
+    /// For absolute paths (multi-library instances), resolves relative to the
+    /// instance directory directly. For relative paths (legacy), joins with
+    /// the default instances directory.
     #[inline]
     pub fn instance_logs_dir(&self, instance_path: &str) -> PathBuf {
-        self.instances_dir().join(instance_path).join("logs")
+        let instance_dir = if Path::new(instance_path).is_absolute() {
+            PathBuf::from(instance_path)
+        } else {
+            self.instances_dir().join(instance_path)
+        };
+        instance_dir.join("logs")
     }
 
-    /// Gets the crash reports dir for a given instance path
+    /// Gets the crash reports dir for a given instance path.
     #[inline]
     pub fn crash_reports_dir(&self, instance_path: &str) -> PathBuf {
-        self.instances_dir()
-            .join(instance_path)
-            .join("crash-reports")
+        let instance_dir = if Path::new(instance_path).is_absolute() {
+            PathBuf::from(instance_path)
+        } else {
+            self.instances_dir().join(instance_path)
+        };
+        instance_dir.join("crash-reports")
     }
 
     #[inline]

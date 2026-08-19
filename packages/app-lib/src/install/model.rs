@@ -163,6 +163,8 @@ pub enum InstallRequest {
         loader_version: Option<String>,
         icon_path: Option<String>,
         link: InstanceLink,
+        #[serde(default)]
+        library_path: Option<String>,
     },
     CreateModpackInstance {
         location: CreatePackLocation,
@@ -479,6 +481,14 @@ pub enum InstallPhaseDetails {
 pub struct InstallJobPaths {
     pub staging_dir: Option<PathBuf>,
     pub final_instance_path: Option<PathBuf>,
+    /// JSON-backed instances are not stored in the DB, so their instance_id
+    /// is saved here instead of in `target.instance_id` to avoid FK violations.
+    /// Restored to target after prepare, so `current_instance_id()` still works.
+    pub json_backed_instance_id: Option<String>,
+    /// For JSON-backed existing-instance operations, saves the install_stage
+    /// to restore on rollback (avoids writing to DB).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub json_backed_previous_install_stage: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, bon::Builder)]

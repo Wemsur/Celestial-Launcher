@@ -57,6 +57,7 @@ impl TryFrom<InstanceRow> for Instance {
                 row.recent_time_played,
                 "recent_time_played",
             )?,
+            library_format: crate::state::libraries::InstanceFormat::default(),
         })
     }
 }

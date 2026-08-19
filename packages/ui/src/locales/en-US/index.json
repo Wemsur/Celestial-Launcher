@@ -725,6 +725,12 @@
   "creation-flow.modal.custom-setup.icon.select": {
     "defaultMessage": "Select icon"
   },
+  "creation-flow.modal.custom-setup.library.label": {
+    "defaultMessage": "Library"
+  },
+  "creation-flow.modal.custom-setup.library.placeholder": {
+    "defaultMessage": "Select library (optional)"
+  },
   "creation-flow.modal.custom-setup.loader-version-type.latest": {
     "defaultMessage": "Latest"
   },

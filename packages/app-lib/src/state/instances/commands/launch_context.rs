@@ -88,6 +88,8 @@ fn json_backed_launch_context(
     }
 }
 
+// ─── DB-backed operations ────────────────────────────────────────────────────
+
 pub(crate) async fn set_instance_install_stage(
     instance_id: &str,
     install_stage: InstanceInstallStage,
@@ -268,5 +270,107 @@ pub(crate) async fn mark_instance_playtime_submitted(
     .execute(pool)
     .await?;
 
+    Ok(())
+}
+
+// ─── JSON-backed operations ─────────────────────────────────────────────────
+
+/// Update install_stage in the JSON sidecar for a JSON-backed instance.
+pub(crate) async fn set_instance_install_stage_json(
+    instance_path: &str,
+    install_stage: InstanceInstallStage,
+) -> crate::Result<()> {
+    let dir = crate::state::libraries::resolve_instance_dir(
+        &*State::get().await?,
+        instance_path,
+    );
+    if let Some(mut json) =
+        crate::state::libraries::InstanceJson::read_from_dir(&dir)?
+    {
+        json.install_stage = install_stage.as_str().to_string();
+        json.write_to_dir(&dir)?;
+    }
+    Ok(())
+}
+
+/// Update last_played in the JSON sidecar for a JSON-backed instance.
+pub(crate) async fn set_instance_last_played_json(
+    instance_path: &str,
+    last_played: DateTime<Utc>,
+) -> crate::Result<()> {
+    let dir = crate::state::libraries::resolve_instance_dir(
+        &*State::get().await?,
+        instance_path,
+    );
+    if let Some(mut json) =
+        crate::state::libraries::InstanceJson::read_from_dir(&dir)?
+    {
+        json.last_played = Some(last_played);
+        json.write_to_dir(&dir)?;
+    }
+    Ok(())
+}
+
+/// Add recent playtime to the JSON sidecar for a JSON-backed instance.
+pub(crate) async fn add_instance_recent_playtime_json(
+    instance_path: &str,
+    seconds: u64,
+) -> crate::Result<()> {
+    if seconds == 0 {
+        return Ok(());
+    }
+    let seconds = playtime_to_storage(seconds, "recent_time_played")?;
+    let max_playtime = i64::MAX;
+    let max_playtime_before_increment = max_playtime - seconds;
+
+    let dir = crate::state::libraries::resolve_instance_dir(
+        &*State::get().await?,
+        instance_path,
+    );
+    if let Some(mut json) =
+        crate::state::libraries::InstanceJson::read_from_dir(&dir)?
+    {
+        json.recent_time_played = match json.recent_time_played {
+            v if v < seconds as u64 => seconds as u64,
+            v if v > max_playtime_before_increment as u64 => {
+                max_playtime as u64
+            }
+            v => v + seconds as u64,
+        };
+        json.write_to_dir(&dir)?;
+    }
+    Ok(())
+}
+
+/// Mark playtime as submitted in the JSON sidecar for a JSON-backed instance.
+pub(crate) async fn mark_instance_playtime_submitted_json(
+    instance_path: &str,
+    recent_time_played: u64,
+) -> crate::Result<()> {
+    if recent_time_played == 0 {
+        return Ok(());
+    }
+    let recent_time_played =
+        playtime_to_storage(recent_time_played, "recent_time_played")?;
+    let max_playtime = i64::MAX;
+    let max_playtime_before_increment = max_playtime - recent_time_played;
+
+    let dir = crate::state::libraries::resolve_instance_dir(
+        &*State::get().await?,
+        instance_path,
+    );
+    if let Some(mut json) =
+        crate::state::libraries::InstanceJson::read_from_dir(&dir)?
+    {
+        json.submitted_time_played = match json.submitted_time_played {
+            v if v < recent_time_played as u64 => recent_time_played as u64,
+            v if v > max_playtime_before_increment as u64 => {
+                max_playtime as u64
+            }
+            v => v + recent_time_played as u64,
+        };
+        json.recent_time_played = 0;
+        json.write_to_dir(&dir)?;
+    }
     Ok(())
 }

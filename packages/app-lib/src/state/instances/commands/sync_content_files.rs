@@ -69,20 +69,11 @@ pub(crate) async fn sync_content_files(
     sync_instance_content_files(&instance, state).await
 }
 
-/// Returns true if the instance is JSON-backed (not in SQLite).
-async fn is_json_backed(instance_id: &str, pool: &sqlx::SqlitePool) -> bool {
-    sqlite::instance_rows::get_instance_by_id(instance_id, pool)
-        .await
-        .is_ok_and(|r| r.is_none())
-}
-
 pub(crate) async fn sync_instance_content_files(
     instance: &Instance,
     state: &State,
 ) -> crate::Result<Vec<InstanceFile>> {
-    let json_backed = is_json_backed(&instance.id, &state.pool).await;
-
-    if json_backed {
+    if instance.is_json_backed() {
         sync_json_instance_content_files(instance, state).await
     } else {
         sync_db_instance_content_files(instance, state).await

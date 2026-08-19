@@ -37,6 +37,7 @@ export interface InstallCreateInstanceRequest {
 	loaderVersion: string | null
 	iconPath: string | null
 	link?: InstanceLink | null
+	libraryPath?: string | null
 }
 
 export interface InstallPostInstallEdit {

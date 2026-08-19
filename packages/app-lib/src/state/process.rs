@@ -756,6 +756,7 @@ impl Process {
         async fn update_playtime(
             last_updated_playtime: &mut Instant,
             instance_id: &str,
+            instance_path: &str,
             force_update: bool,
         ) {
             let elapsed = last_updated_playtime.elapsed().as_secs();
@@ -774,7 +775,22 @@ impl Process {
                     return;
                 }
             };
-            if let Err(e) =
+            if instance_id.starts_with("local:") {
+                // JSON-backed instance: write playtime to the sidecar file
+                if let Err(e) =
+                    crate::state::instances::commands::add_instance_recent_playtime_json(
+                        &instance_path,
+                        elapsed,
+                    )
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to update playtime for JSON instance {}: {}",
+                        instance_id,
+                        e
+                    );
+                }
+            } else if let Err(e) =
                 crate::state::instances::commands::add_instance_recent_playtime(
                     instance_id,
                     elapsed,
@@ -811,7 +827,7 @@ impl Process {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
             // Auto-update playtime every minute
-            update_playtime(&mut last_updated_playtime, &instance_id, false)
+            update_playtime(&mut last_updated_playtime, &instance_id, &instance_path, false)
                 .await;
         }
 
@@ -825,7 +841,7 @@ impl Process {
         .await?;
 
         // Now fully complete- update playtime one last time
-        update_playtime(&mut last_updated_playtime, &instance_id, true).await;
+        update_playtime(&mut last_updated_playtime, &instance_id, &instance_path, true).await;
 
         // Publish play time update
         // Allow failure, it will be stored locally and sent next time

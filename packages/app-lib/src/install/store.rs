@@ -345,10 +345,9 @@ pub async fn complete_success(
     app_state: &State,
 ) -> crate::Result<Option<InstallJobRecord>> {
     let Some(instance_id) = instance_id(state) else {
-        return Err(crate::ErrorKind::InputError(
-            "Install job is missing its instance id".to_string(),
-        )
-        .into());
+        // JSON-backed instances have a null instance_id to avoid FK violations.
+        // Finish the job without writing to install_jobs.instance_id.
+        return complete_success_json_backed(id, state, app_state).await;
     };
     let now = Utc::now().timestamp();
     let json = serde_json::to_string(state)?;
@@ -375,27 +374,82 @@ pub async fn complete_success(
         return Ok(None);
     }
 
-    let instance_result = sqlx::query(
-        "
-		UPDATE instances
-		SET install_stage = 'installed', modified = ?
-		WHERE id = ?
-		",
+    // Only update the instances table for DB-backed instances.
+    // JSON-backed instances are managed entirely through their sidecar files.
+    let is_db_backed = sqlx::query(
+        "SELECT 1 FROM instances WHERE id = ?",
     )
-    .bind(now)
     .bind(&instance_id)
-    .execute(&mut *transaction)
-    .await?;
+    .fetch_optional(&mut *transaction)
+    .await?
+    .is_some();
 
-    if instance_result.rows_affected() == 0 {
-        transaction.rollback().await?;
-        return Err(crate::ErrorKind::InputError(format!(
-            "Unknown instance {instance_id}"
-        ))
-        .into());
+    if is_db_backed {
+        sqlx::query(
+            "
+			UPDATE instances
+			SET install_stage = 'installed', modified = ?
+			WHERE id = ?
+			",
+        )
+        .bind(now)
+        .bind(&instance_id)
+        .execute(&mut *transaction)
+        .await?;
     }
 
     transaction.commit().await?;
+    get_required(id, app_state).await.map(Some)
+}
+
+/// JSON-backed variant of `complete_success`: writes status='succeeded' to
+/// install_jobs with instance_id=NULL to avoid FK violations (JSON-backed
+/// instances don't exist in the `instances` table).
+async fn complete_success_json_backed(
+    id: Uuid,
+    state: &InstallJobState,
+    app_state: &State,
+) -> crate::Result<Option<InstallJobRecord>> {
+    let now = Utc::now().timestamp();
+    let json = serde_json::to_string(state)?;
+    let id_value = id.to_string();
+
+    // Update install_stage in the JSON sidecar so the frontend sees 'installed'.
+    if let Some(instance_id) = &state.paths.json_backed_instance_id {
+        if let Ok(Some(dir)) =
+            crate::state::libraries::find_json_instance(app_state, instance_id)
+                .await
+        {
+            if let Ok(Some(mut json_data)) =
+                crate::state::libraries::InstanceJson::read_from_dir(&dir)
+            {
+                json_data.install_stage =
+                    crate::state::InstanceInstallStage::Installed
+                        .as_str()
+                        .to_string();
+                let _ = json_data.write_to_dir(&dir);
+            }
+        }
+    }
+
+    let result = sqlx::query(
+        "
+        UPDATE install_jobs
+        SET status = 'succeeded', state = ?, modified = ?, finished = ?
+        WHERE id = ? AND status = 'running'
+        ",
+    )
+    .bind(&json)
+    .bind(now)
+    .bind(now)
+    .bind(id_value)
+    .execute(&app_state.pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Ok(None);
+    }
+
     get_required(id, app_state).await.map(Some)
 }
 
@@ -465,6 +519,9 @@ fn deserialize_rows(rows: Vec<InstallJobRow>) -> Vec<InstallJobRecord> {
 fn instance_id(state: &InstallJobState) -> Option<String> {
     match &state.target {
         super::model::InstallTarget::NewInstance { instance_id } => {
+            // For JSON-backed instances the target is null to avoid FK
+            // violations.  The real ID lives in paths.json_backed_instance_id
+            // and must not be written to the install_jobs table.
             instance_id.clone()
         }
         super::model::InstallTarget::ExistingInstance { instance_id } => {

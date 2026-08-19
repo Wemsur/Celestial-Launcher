@@ -133,6 +133,7 @@ export interface CreationFlowContextValue {
 	// Initial values
 	initialLoader: string | null
 	initialGameVersion: string | null
+	availableLibraries: Array<{ path: string; name: string }>
 
 	// State
 	setupType: Ref<SetupType | null>
@@ -156,6 +157,7 @@ export interface CreationFlowContextValue {
 	// Loader/version state (custom setup)
 	selectedLoader: Ref<string | null>
 	selectedGameVersion: Ref<string | null>
+	selectedLibraryPath: Ref<string | null>
 	loaderVersionType: Ref<LoaderVersionType>
 	selectedLoaderVersion: Ref<string | null>
 	hideLoaderChips: ComputedRef<boolean>
@@ -230,6 +232,7 @@ export interface CreationFlowOptions {
 	isInitialSetup?: boolean
 	initialLoader?: string
 	initialGameVersion?: string
+	availableLibraries?: Array<{ path: string; name: string }>
 	fetchExistingInstanceNames?: () => Promise<string[]>
 	onBack?: () => void
 	searchModpacks?: (query: string, limit?: number) => Promise<ModpackSearchResult>
@@ -258,6 +261,7 @@ export function createCreationFlowContext(
 	const isInitialSetup = options.isInitialSetup ?? false
 	const initialLoader = options.initialLoader ?? null
 	const initialGameVersion = options.initialGameVersion ?? null
+	const availableLibraries = options.availableLibraries ?? []
 	const onBack = options.onBack ?? null
 	const searchModpacks = options.searchModpacks!
 	const getProjectVersions = options.getProjectVersions!
@@ -293,6 +297,7 @@ export function createCreationFlowContext(
 
 	const selectedLoader = ref<string | null>(null)
 	const selectedGameVersion = ref<string | null>(null)
+	const selectedLibraryPath = ref<string | null>(null)
 	const loaderVersionType = ref<LoaderVersionType>('stable')
 	const selectedLoaderVersion = ref<string | null>(null)
 	const showSnapshots = ref(false)
@@ -448,6 +453,7 @@ export function createCreationFlowContext(
 
 		selectedLoader.value = null
 		selectedGameVersion.value = null
+		selectedLibraryPath.value = null
 		loaderVersionType.value = 'stable'
 		selectedLoaderVersion.value = null
 		showSnapshots.value = false
@@ -554,6 +560,7 @@ export function createCreationFlowContext(
 		isInitialSetup,
 		initialLoader,
 		initialGameVersion,
+		availableLibraries,
 		setupType,
 		isImportMode,
 		worldName,
@@ -571,6 +578,7 @@ export function createCreationFlowContext(
 		instanceIconPath,
 		selectedLoader,
 		selectedGameVersion,
+		selectedLibraryPath,
 		loaderVersionType,
 		selectedLoaderVersion,
 		hideLoaderChips,

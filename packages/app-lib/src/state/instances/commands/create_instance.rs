@@ -25,6 +25,7 @@ pub struct CreateInstance {
     pub loader_version: Option<String>,
     pub icon_path: Option<String>,
     pub link: InstanceLink,
+    pub library_path: Option<String>,
 }
 
 pub(crate) async fn create_instance(
@@ -34,9 +35,84 @@ pub(crate) async fn create_instance(
     trace!("Creating new instance. {}", input.name);
 
     let (path, full_path) =
-        resolve_instance_path(&input.name, input.path.as_deref())
+        resolve_instance_path(&input.name, input.path.as_deref(), input.library_path.as_deref())
             .await?;
     io::create_dir_all(&full_path).await?;
+
+    // JSON-backed instances (multi-library): skip DB, write JSON sidecar only
+    if input.library_path.is_some() {
+        let loader_version = if input.loader != ModLoader::Vanilla {
+            get_loader_version_from_profile(
+                &input.game_version,
+                input.loader,
+                input.loader_version.as_deref(),
+            )
+            .await?
+            .map(|value| value.id)
+        } else {
+            None
+        };
+
+        let icon_path =
+            resolve_icon_path(input.icon_path.as_deref(), state).await?;
+        let now = Utc::now();
+        let abs_path_str = full_path.to_string_lossy().to_string();
+        let instance_id = libraries::instance_id_from_path(&abs_path_str);
+        let library_format =
+            libraries::InstanceFormat::from_path(
+                input.library_path.as_deref().unwrap_or(""),
+            );
+
+        let instance = Instance {
+            id: instance_id.clone(),
+            path: full_path.to_string_lossy().to_string(),
+            applied_content_set_id: None,
+            install_stage: InstanceInstallStage::NotInstalled,
+            launcher_feature_version: LauncherFeatureVersion::MOST_RECENT,
+            update_channel: ReleaseChannel::Release,
+            name: input.name,
+            icon_path,
+            created: now,
+            modified: now,
+            last_played: None,
+            submitted_time_played: 0,
+            recent_time_played: 0,
+            library_format: library_format.clone(),
+        };
+
+        // Write JSON sidecar so instance_list can read game_version/loader
+        let instance_json = libraries::InstanceJson {
+            name: Some(instance.name.clone()),
+            icon_path: instance.icon_path.clone(),
+            last_played: instance.last_played,
+            game_version: Some(input.game_version.clone()),
+            loader: Some(input.loader.as_str().to_string()),
+            loader_version,
+            link: Some(input.link.clone()),
+            submitted_time_played: instance.submitted_time_played,
+            recent_time_played: instance.recent_time_played,
+            install_stage: InstanceInstallStage::NotInstalled.as_str().to_string(),
+            quarantined: false,
+            library_format: library_format,
+        };
+        if let Err(e) = instance_json.write_to_dir(&full_path) {
+            tracing::warn!(
+                "Failed to write instance.json for {}: {e}",
+                instance.id
+            );
+        }
+
+        // Watch the actual directory (pass absolute path directly)
+        crate::state::instances::watcher::watch_instance_folder(
+            &instance.id,
+            &full_path.to_string_lossy(),
+            &state.file_watcher,
+            &state.directories,
+        )
+        .await;
+
+        return Ok(instance);
+    }
 
     let result = async {
         info!(
@@ -76,6 +152,7 @@ pub(crate) async fn create_instance(
             last_played: None,
             submitted_time_played: 0,
             recent_time_played: 0,
+            library_format: libraries::InstanceFormat::default(),
         };
         let content_set = ContentSet {
             id: content_set_id,
@@ -127,6 +204,9 @@ pub(crate) async fn create_instance(
             link: Some(input.link.clone()),
             submitted_time_played: instance.submitted_time_played,
             recent_time_played: instance.recent_time_played,
+            install_stage: crate::state::InstanceInstallStage::Installed.as_str().to_string(),
+            quarantined: false,
+            library_format: libraries::InstanceFormat::default(),
         };
         if let Err(e) = instance_json.write_to_dir(&full_path) {
             tracing::warn!(
@@ -149,13 +229,18 @@ pub(crate) async fn create_instance(
 async fn resolve_instance_path(
     name: &str,
     path: Option<&str>,
+    library_path: Option<&str>,
 ) -> crate::Result<(String, std::path::PathBuf)> {
     let base_path = path
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| sanitize_instance_name(name));
     let mut path = base_path.clone();
     let state = State::get().await?;
-    let mut full_path = libraries::resolve_instance_dir(&state, &path);
+    let full_path = if let Some(lib) = library_path {
+        libraries::resolve_instance_dir(&state, lib).join(&path)
+    } else {
+        libraries::resolve_instance_dir(&state, &path)
+    };
 
     if path_available(&path, &full_path, &state).await? {
         return Ok((path, full_path));
@@ -164,7 +249,11 @@ async fn resolve_instance_path(
     let mut which = 1;
     loop {
         path = format!("{base_path} ({which})");
-        full_path = libraries::resolve_instance_dir(&state, &path);
+        let full_path = if let Some(lib) = library_path {
+            libraries::resolve_instance_dir(&state, lib).join(&path)
+        } else {
+            libraries::resolve_instance_dir(&state, &path)
+        };
 
         if path_available(&path, &full_path, &state).await? {
             return Ok((path, full_path));

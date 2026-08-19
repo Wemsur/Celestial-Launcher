@@ -48,6 +48,8 @@ pub struct InstallCreateInstanceRequest {
     pub loader_version: Option<String>,
     pub icon_path: Option<String>,
     pub link: Option<InstanceLink>,
+    #[serde(default)]
+    pub library_path: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -94,6 +96,7 @@ pub async fn install_create_instance(
             Some(link) => link.into_core()?,
             None => theseus::data::InstanceLink::Unmanaged,
         },
+        request.library_path,
     )
     .await?)
 }

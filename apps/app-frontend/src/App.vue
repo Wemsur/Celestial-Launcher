@@ -298,6 +298,7 @@ const {
 	setModpackAlreadyInstalledModal,
 	handleModpackDuplicateCreateAnyway,
 	handleModpackDuplicateGoToInstance,
+	availableLibraries,
 } = setupProviders(notificationManager, popupNotificationManager)
 
 const news = ref([])
@@ -1569,6 +1570,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			ref="installationModal"
 			type="instance"
 			show-snapshot-toggle
+			:available-libraries="availableLibraries"
 			:fetch-existing-instance-names="fetchExistingInstanceNames"
 			:search-modpacks="searchModpacks"
 			:get-project-versions="getProjectVersions"

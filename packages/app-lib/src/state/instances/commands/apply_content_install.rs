@@ -320,11 +320,18 @@ pub(crate) async fn resolve_content_scope(
     content_set_id: Option<&str>,
     state: &State,
 ) -> crate::Result<ContentScope> {
-    let instance = instance_rows::get_instance_by_id(instance_id, &state.pool)
+    let instance = match instance_rows::get_instance_by_id(instance_id, &state.pool)
         .await?
-        .ok_or_else(|| {
-            crate::ErrorKind::InputError("Unknown instance".to_string())
-        })?;
+    {
+        Some(inst) => inst,
+        None => {
+            // JSON-backed instances are not managed by content sets
+            return Err(crate::ErrorKind::InputError(
+                "This instance is managed externally and does not support content management".to_string(),
+            )
+            .into());
+        }
+    };
     let content_set_id = match content_set_id {
         Some(id) => id.to_string(),
         None => instance.applied_content_set_id.clone().ok_or_else(|| {

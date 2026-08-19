@@ -28,6 +28,17 @@
 			/>
 		</div>
 
+		<!-- Library selector (instance flow only) -->
+		<div v-if="ctx.flowType === 'instance' && ctx.availableLibraries.length > 0" class="flex flex-col gap-2">
+			<span class="font-semibold text-contrast">{{ formatMessage(messages.libraryLabel) }}</span>
+			<Combobox
+				v-model="selectedLibraryPath"
+				:options="libraryOptions"
+				:placeholder="formatMessage(messages.selectLibrary)"
+				searchable
+			/>
+		</div>
+
 		<!-- Loader chips -->
 		<div v-if="!hideLoaderChips" class="flex flex-col gap-2">
 			<span class="font-semibold text-contrast">{{
@@ -174,6 +185,7 @@ const { formatMessage } = useVIntl()
 const {
 	selectedLoader,
 	selectedGameVersion,
+	selectedLibraryPath,
 	loaderVersionType,
 	selectedLoaderVersion,
 	hideLoaderChips,
@@ -204,6 +216,14 @@ const messages = defineMessages({
 	contentLoaderLabel: {
 		id: 'creation-flow.modal.custom-setup.content-loader.label',
 		defaultMessage: 'Content loader',
+	},
+	libraryLabel: {
+		id: 'creation-flow.modal.custom-setup.library.label',
+		defaultMessage: 'Library',
+	},
+	selectLibrary: {
+		id: 'creation-flow.modal.custom-setup.library.placeholder',
+		defaultMessage: 'Select library (optional)',
 	},
 	noVersionsAvailable: {
 		id: 'creation-flow.modal.custom-setup.options.no-versions-available',
@@ -295,6 +315,13 @@ onMounted(() => {
 })
 
 const tags = injectTags()
+
+const libraryOptions = computed(() =>
+	ctx.availableLibraries.map((lib) => ({
+		value: lib.path,
+		label: lib.name || lib.path.split(/[\\/]/).pop() || lib.path,
+	})),
+)
 
 const loaderVersionTypeItems: LoaderVersionType[] = ['stable', 'latest', 'other']
 

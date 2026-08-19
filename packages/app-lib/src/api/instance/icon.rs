@@ -1,7 +1,7 @@
 use crate::event::InstancePayloadType;
 use crate::event::emit::emit_instance;
 use crate::state::instances::adapters::sqlite::instance_rows;
-use crate::state::{EditInstance, State};
+use crate::state::{libraries, EditInstance, State};
 use crate::util::fetch::{sha1_async, write};
 use crate::util::io;
 use bytes::Bytes;
@@ -146,21 +146,48 @@ async fn apply_instance_icon(
     icon_path: Option<String>,
     state: &State,
 ) -> crate::Result<()> {
-    let instance =
+    let emit_id = if let Some(info) =
         instance_rows::get_instance_display_info(instance_id, &state.pool)
             .await?
-            .ok_or_else(|| {
-                crate::ErrorKind::InputError("Unknown instance".to_string())
-            })?;
-    crate::state::edit_instance(
-        instance_id,
-        EditInstance {
-            icon_path: Some(icon_path.clone()),
-            ..EditInstance::default()
-        },
-        &state.pool,
-    )
-    .await?;
+    {
+        info.id
+    } else if libraries::find_json_instance(state, instance_id)
+        .await?
+        .is_some()
+    {
+        instance_id.to_string()
+    } else {
+        return Err(
+            crate::ErrorKind::InputError("Unknown instance".to_string())
+                .into(),
+        );
+    };
+
+    // JSON-backed instances: update the sidecar directly.
+    // DB-backed instances go through the DB edit path.
+    if !libraries::find_json_instance(state, instance_id)
+        .await?
+        .is_some()
+    {
+        crate::state::edit_instance(
+            instance_id,
+            EditInstance {
+                icon_path: Some(icon_path.clone()),
+                ..EditInstance::default()
+            },
+            &state.pool,
+        )
+        .await?;
+    } else if let Ok(dir) = libraries::find_json_instance(state, instance_id).await {
+        if let Some(dir) = dir {
+            if let Some(mut json) =
+                libraries::InstanceJson::read_from_dir(&dir)?
+            {
+                json.icon_path = icon_path.clone();
+                json.write_to_dir(&dir)?;
+            }
+        }
+    }
 
     if let Err(error) = super::shared::sync_shared_instance_icon(
         instance_id,
@@ -176,7 +203,7 @@ async fn apply_instance_icon(
         );
     }
 
-    emit_instance(&instance.id, InstancePayloadType::Edited).await?;
+    emit_instance(&emit_id, InstancePayloadType::Edited).await?;
 
     Ok(())
 }

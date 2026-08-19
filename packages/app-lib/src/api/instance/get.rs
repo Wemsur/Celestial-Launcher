@@ -7,20 +7,18 @@ use std::path::PathBuf;
 pub async fn get(instance_id: &str) -> crate::Result<Option<InstanceMetadata>> {
     let state = State::get().await?;
 
-    // Try DB first (legacy/migrated instances)
+    // First try JSON-backed instances (multi-library)
+    let json_instances =
+        crate::state::libraries::list_instances_from_json(&state).await?;
+    if let Some(inst) = json_instances.iter().find(|i| i.id == instance_id) {
+        return Ok(Some(instance_metadata_from_instance(inst)));
+    }
+
+    // Fall back to DB-backed instances
     if let Some(meta) =
         crate::state::get_instance(instance_id, &state.pool).await?
     {
         return Ok(Some(meta));
-    }
-
-    // Fall back to JSON-backed instances from libraries
-    let json_instances =
-        crate::state::libraries::list_instances_from_json(&state).await?;
-    for instance in &json_instances {
-        if instance.id == instance_id {
-            return Ok(Some(instance_metadata_from_instance(instance)));
-        }
     }
 
     Ok(None)
@@ -33,17 +31,9 @@ pub async fn get_many(
     let state = State::get().await?;
 
     let mut result: HashSet<String> = HashSet::new();
+    let mut out = Vec::new();
 
-    // Collect from DB
-    for &id in instance_ids {
-        if let Some(_meta) =
-            crate::state::get_instance(id, &state.pool).await?
-        {
-            result.insert(id.to_string());
-        }
-    }
-
-    // Collect from JSON libraries
+    // Collect JSON-backed instances first
     let json_instances =
         crate::state::libraries::list_instances_from_json(&state).await?;
     for instance in &json_instances {
@@ -52,21 +42,30 @@ pub async fn get_many(
         }
     }
 
-    // Build full list
-    let mut out = Vec::new();
+    // Collect DB-backed instances
     for &id in instance_ids {
         if result.contains(id) {
-            if let Some(meta) =
+            continue;
+        }
+        if let Some(_meta) =
+            crate::state::get_instance(id, &state.pool).await?
+        {
+            result.insert(id.to_string());
+        }
+    }
+
+    // Build full list
+    for &id in instance_ids {
+        if result.contains(id) {
+            // Try JSON first, then DB
+            if let Some(inst) =
+                json_instances.iter().find(|i| i.id == id)
+            {
+                out.push(instance_metadata_from_instance(inst));
+            } else if let Some(meta) =
                 crate::state::get_instance(id, &state.pool).await?
             {
                 out.push(meta);
-            } else {
-                // JSON-backed instance
-                if let Some(inst) =
-                    json_instances.iter().find(|i| i.id == id)
-                {
-                    out.push(instance_metadata_from_instance(inst));
-                }
             }
         }
     }

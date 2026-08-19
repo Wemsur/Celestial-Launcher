@@ -1,6 +1,7 @@
 use crate::event::emit::{emit_instance, emit_loading, init_loading};
 use crate::event::{InstancePayloadType, LoadingBarType};
 use crate::state::instances::adapters::sqlite::instance_rows;
+use crate::state::libraries;
 use crate::state::{
     CacheBehaviour, CachedEntry, ContentSourceKind, ProjectType, State,
 };
@@ -294,14 +295,18 @@ async fn ensure_shared_instance_can_modify_project(
     project_path: &str,
     state: &State,
 ) -> crate::Result<()> {
-    let metadata = crate::state::instances::commands::get_instance_metadata(
+    let metadata = match crate::state::instances::commands::get_instance_metadata(
         instance_id,
         &state.pool,
     )
     .await?
-    .ok_or_else(|| {
-        crate::ErrorKind::InputError("Unknown instance".to_string())
-    })?;
+    {
+        Some(m) => m,
+        None => {
+            // JSON-backed instances don't have shared instance metadata.
+            return Ok(());
+        }
+    };
     ensure_metadata_content_unlocked(&metadata)?;
     if !metadata
         .shared_instance
@@ -334,14 +339,21 @@ pub async fn update_managed_modrinth_version(
     version_id: &str,
 ) -> crate::Result<crate::install::InstallJobSnapshot> {
     let state = State::get().await?;
-    let metadata = crate::state::instances::commands::get_instance_metadata(
+    let metadata = match crate::state::instances::commands::get_instance_metadata(
         instance_id,
         &state.pool,
     )
     .await?
-    .ok_or_else(|| {
-        crate::ErrorKind::InputError("未知的实例".to_string())
-    })?;
+    {
+        Some(m) => m,
+        None => {
+            // JSON-backed instances can't be updated this way.
+            return Err(crate::ErrorKind::InputError(
+                "未知的实例".to_string(),
+            )
+            .into());
+        }
+    };
     ensure_metadata_content_unlocked(&metadata)?;
 
     let post_install_edit = match &metadata.link {
@@ -392,14 +404,20 @@ pub async fn repair_managed_modrinth(
     instance_id: &str,
 ) -> crate::Result<crate::install::InstallJobSnapshot> {
     let state = State::get().await?;
-    let metadata = crate::state::instances::commands::get_instance_metadata(
+    let metadata = match crate::state::instances::commands::get_instance_metadata(
         instance_id,
         &state.pool,
     )
     .await?
-    .ok_or_else(|| {
-        crate::ErrorKind::InputError("未知的实例".to_string())
-    })?;
+    {
+        Some(m) => m,
+        None => {
+            return Err(crate::ErrorKind::InputError(
+                "未知的实例".to_string(),
+            )
+            .into());
+        }
+    };
     ensure_metadata_content_unlocked(&metadata)?;
 
     let post_install_edit = match &metadata.link {
@@ -451,7 +469,7 @@ async fn ensure_instance_content_unlocked(
     instance_id: &str,
     state: &State,
 ) -> crate::Result<()> {
-    if instance_rows::is_instance_quarantined(instance_id, &state.pool).await? {
+    if crate::state::libraries::is_instance_quarantined(instance_id, &state.pool).await? {
         return Err(quarantined_content_error().into());
     }
 
@@ -478,9 +496,23 @@ async fn get_instance_display_info(
     instance_id: &str,
     state: &State,
 ) -> crate::Result<instance_rows::InstanceDisplayInfo> {
-    instance_rows::get_instance_display_info(instance_id, &state.pool)
+    if let Some(info) =
+        instance_rows::get_instance_display_info(instance_id, &state.pool)
+            .await?
+    {
+        return Ok(info);
+    }
+    // Fall back to JSON-backed instances
+    let dir = libraries::find_json_instance(state, instance_id)
         .await?
         .ok_or_else(|| {
-            crate::ErrorKind::InputError("未知的实例".to_string()).into()
-        })
+            crate::ErrorKind::InputError("未知的实例".to_string())
+        })?;
+    let name = libraries::InstanceJson::read_from_dir(&dir)?
+        .and_then(|j| j.name)
+        .unwrap_or_default();
+    Ok(instance_rows::InstanceDisplayInfo {
+        id: instance_id.to_string(),
+        name,
+    })
 }

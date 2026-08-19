@@ -1,5 +1,6 @@
 use crate::state::{
     InstanceInstallStage, LauncherFeatureVersion, ReleaseChannel,
+    libraries::InstanceFormat,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -19,6 +20,14 @@ pub struct Instance {
     pub last_played: Option<DateTime<Utc>>,
     pub submitted_time_played: u64,
     pub recent_time_played: u64,
+    #[serde(default)]
+    pub library_format: InstanceFormat,
+}
+
+impl Instance {
+    pub fn is_json_backed(&self) -> bool {
+        self.applied_content_set_id.is_none()
+    }
 }
 
 pub(crate) fn playtime_to_storage(

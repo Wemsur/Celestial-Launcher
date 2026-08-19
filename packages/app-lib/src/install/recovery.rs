@@ -402,9 +402,15 @@ pub async fn apply_cleanup(
     match &job_state.cleanup {
         InstallCleanup::DeleteNewInstance { instance_id } => {
             if let Some(instance_id) = instance_id {
-                if crate::state::get_instance(instance_id, &state.pool)
-                    .await?
-                    .is_some()
+                // Try DB first; if not found there, fall back to JSON-backed detection.
+                let is_db_instance =
+                    crate::state::get_instance(instance_id, &state.pool)
+                        .await?
+                        .is_some();
+                if is_db_instance
+                    || libraries::find_json_instance(state, instance_id)
+                        .await?
+                        .is_some()
                 {
                     crate::state::remove_instance(instance_id, state).await?;
                 }

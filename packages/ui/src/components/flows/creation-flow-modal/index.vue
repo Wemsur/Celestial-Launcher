@@ -40,6 +40,7 @@ const props = withDefaults(
 		getLoaderManifest?: LoaderManifestResolver
 		finishDisabled?: boolean
 		finishDisabledTooltip?: string
+		availableLibraries?: Array<{ path: string; name: string }>
 	}>(),
 	{
 		type: 'world',
@@ -82,6 +83,7 @@ const ctx = createCreationFlowContext(
 		getLoaderManifest: props.getLoaderManifest,
 		finishDisabled: computed(() => props.finishDisabled ?? false),
 		finishDisabledTooltip: computed(() => props.finishDisabledTooltip),
+		availableLibraries: props.availableLibraries ?? [],
 	},
 )
 provideCreationFlowContext(ctx)

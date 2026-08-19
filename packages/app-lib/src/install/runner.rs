@@ -1,10 +1,10 @@
 use super::events::{InstallProgressReporter, emit_install_job};
 use super::model::{
     InstallCleanup, InstallErrorContext, InstallErrorView, InstallJobDisplay,
-    InstallJobEventKind, InstallJobSnapshot, InstallJobState, InstallJobStatus,
-    InstallPhaseDetails, InstallPhaseId, InstallPostInstallEdit,
-    InstallProgress, InstallRequest, InstallRollbackState, InstallTarget,
-    SharedInstanceInstallData,
+    InstallJobEventKind, InstallJobSnapshot, InstallJobState,
+    InstallJobStatus, InstallPhaseDetails, InstallPhaseId,
+    InstallPostInstallEdit, InstallProgress, InstallRequest,
+    InstallRollbackState, InstallTarget, SharedInstanceInstallData,
 };
 use super::shared_instance::{
     apply_shared_instance_content, apply_shared_instance_update,
@@ -37,6 +37,7 @@ pub async fn create_instance(
     loader_version: Option<String>,
     icon_path: Option<String>,
     link: InstanceLink,
+    library_path: Option<String>,
 ) -> crate::Result<InstallJobSnapshot> {
     start(InstallRequest::CreateInstance {
         name,
@@ -45,6 +46,7 @@ pub async fn create_instance(
         loader_version,
         icon_path,
         link,
+        library_path,
     })
     .await
 }
@@ -178,6 +180,31 @@ pub async fn retry_job(job_id: Uuid) -> crate::Result<InstallJobSnapshot> {
         kind: job.state.request.kind(),
     });
 
+    // JSON-backed instances aren't in the DB, so null the target before
+    // writing to install_jobs to avoid FK violations. The real ID is
+    // preserved in paths.json_backed_instance_id.
+    let retry_has_target = matches!(
+        job.state.target,
+        InstallTarget::NewInstance {
+            instance_id: Some(_)
+        }
+    );
+    if retry_has_target {
+        if let InstallTarget::NewInstance { instance_id: Some(ref id) } =
+            job.state.target
+        {
+            job.state.paths.json_backed_instance_id = Some(id.clone());
+            if id.starts_with("local:") {
+                // JSON-backed: null target to avoid FK violation.
+                job.state.target = InstallTarget::NewInstance { instance_id: None };
+                job.state.cleanup = InstallCleanup::DeleteNewInstance {
+                    instance_id: None,
+                };
+            }
+            // DB-backed instances keep their target and cleanup unchanged.
+        }
+    }
+
     let record = match store::update_status(
         job_id,
         InstallJobStatus::Queued,
@@ -198,6 +225,11 @@ pub async fn retry_job(job_id: Uuid) -> crate::Result<InstallJobSnapshot> {
             return Err(error);
         }
     };
+
+    // Restore the real instance_id in paths so `current_instance_id()` works.
+    if retry_has_target {
+        let _ = store::update_state(job_id, &job.state, &state).await;
+    }
     if let Err(error) =
         lock_existing_instance_if_needed(&job.state, &state).await
     {
@@ -315,6 +347,37 @@ async fn start(request: InstallRequest) -> crate::Result<InstallJobSnapshot> {
         }
         return Err(error);
     }
+
+    // JSON-backed instances aren't in the DB, so storing their instance_id
+    // in install_jobs.instance_id would violate the FK constraint (SQLx
+    // enables PRAGMA foreign_keys by default).  Null the target before insert.
+    // `paths.json_backed_instance_id` holds the real ID for the rest of the
+    // job lifecycle; DB-backed instances keep their target intact.
+    let has_target = matches!(
+        job_state.target,
+        InstallTarget::NewInstance {
+            instance_id: Some(_)
+        }
+    );
+    if has_target {
+        let id = match &job_state.target {
+            InstallTarget::NewInstance { instance_id: Some(id) }
+            | InstallTarget::ExistingInstance { instance_id: id } => {
+                id.clone()
+            }
+            _ => unreachable!(),
+        };
+        job_state.paths.json_backed_instance_id = Some(id.clone());
+        if id.starts_with("local:") {
+            // JSON-backed: null target to avoid FK violation.
+            job_state.target = InstallTarget::NewInstance { instance_id: None };
+            job_state.cleanup = InstallCleanup::DeleteNewInstance {
+                instance_id: None,
+            };
+        }
+        // DB-backed instances keep their target and cleanup unchanged.
+    }
+
     let record = match store::insert(
         id,
         &job_state,
@@ -335,6 +398,12 @@ async fn start(request: InstallRequest) -> crate::Result<InstallJobSnapshot> {
             return Err(error);
         }
     };
+
+    // After inserting with null target, keep the job in DB with
+    // instance_id=NULL (JSON-backed instances don't exist in the
+    // instances table — restoring a real ID here would violate the FK).
+    // `paths.json_backed_instance_id` holds the real ID for the rest of the
+    // job lifecycle.
     if let Err(error) =
         lock_existing_instance_if_needed(&job_state, &state).await
     {
@@ -369,6 +438,7 @@ async fn prepare_initial_instance(
             loader_version,
             icon_path,
             link,
+            library_path,
         } => {
             let metadata = crate::api::instance::create(
                 name,
@@ -377,6 +447,7 @@ async fn prepare_initial_instance(
                 loader_version,
                 icon_path,
                 link,
+                library_path,
             )
             .await?;
             set_display(
@@ -418,6 +489,7 @@ async fn prepare_initial_instance(
                 preview.loader_version,
                 icon_path,
                 link,
+                None,
             )
             .await?;
             set_display(
@@ -463,6 +535,7 @@ async fn prepare_initial_instance(
                 loader_version,
                 icon_path,
                 shared_link,
+                None,
             )
             .await?;
             set_display(
@@ -485,6 +558,7 @@ async fn prepare_initial_instance(
                 Some("latest".to_string()),
                 None,
                 InstanceLink::Unmanaged,
+                None,
             )
             .await?;
             set_display(
@@ -510,6 +584,7 @@ async fn prepare_initial_instance(
                 metadata.applied_content_set.loader_version,
                 metadata.instance.icon_path,
                 metadata.link,
+                None,
             )
             .await?;
             set_display(
@@ -577,13 +652,20 @@ async fn run_job(job_id: Uuid) -> crate::Result<()> {
     emit_install_job(&record.snapshot()).await?;
 
     let result = Box::pin(run_request(job_id, &mut job_state, &state)).await;
-    if let Ok(record) = store::get_required(job_id, &state).await {
-        job_state = record.state;
-    }
 
     let result = match result {
         Ok(Some(instance_id)) => {
-            set_instance_id(&mut job_state, instance_id.clone());
+            // For DB-backed instances, write the real ID into target so
+            // `instance_id(state)` returns it for the success completion SQL.
+            // JSON-backed instances already have their ID in
+            // paths.json_backed_instance_id and must NOT write it back to
+            // install_jobs.instance_id (FK violation).
+            if !matches!(
+                job_state.target,
+                InstallTarget::NewInstance { instance_id: None }
+            ) {
+                set_instance_id(&mut job_state, instance_id.clone());
+            }
             Ok(instance_id)
         }
         Ok(None) => Err(crate::ErrorKind::InputError(
@@ -604,19 +686,21 @@ async fn run_job(job_id: Uuid) -> crate::Result<()> {
             job_state.error = None;
             job_state.rollback_error = None;
             job_state.context = None;
+
+            recovery::clear_staging_dir(&job_state).await;
+
             if let Some(record) =
                 store::complete_success(job_id, &job_state, &state).await?
             {
-                recovery::clear_staging_dir(&job_state).await;
-                if let Err(error) =
-                    emit_instance(&instance_id, InstancePayloadType::Edited)
-                        .await
-                {
-                    tracing::warn!(
-                        "Failed to emit completed instance {instance_id}: {error}"
-                    );
-                }
+                // DB-backed instance — emit the record snapshot.
+                emit_instance(&instance_id, InstancePayloadType::Edited)
+                    .await?;
                 emit_install_job(&record.snapshot()).await?;
+            } else {
+                // JSON-backed instance — complete_success stores None to
+                // avoid FK violations; still need to emit the event.
+                emit_instance(&instance_id, InstancePayloadType::Edited)
+                    .await?;
             }
         }
         Err(error) => {
@@ -682,6 +766,24 @@ async fn terminalize_failed_job(
         Ok(()) => {
             job_state.record_event(InstallJobEventKind::RollbackCompleted);
             clear_deleted_new_instance_id(&mut job_state);
+            // For JSON-backed instances, restore the previous install_stage
+            // from the recorded value (not from the DB).
+            if let Some(ref prev_stage) =
+                job_state.paths.json_backed_previous_install_stage
+            {
+                if let Some(ref id) = job_state.paths.json_backed_instance_id {
+                    if let Err(e) = crate::state::instances::commands::set_instance_install_stage_json(
+                        id,
+                        crate::state::InstanceInstallStage::from_str(prev_stage),
+                    )
+                    .await
+                    {
+                        tracing::warn!(
+                            "Failed to restore install stage for JSON-backed instance {id}: {e}"
+                        );
+                    }
+                }
+            }
             true
         }
         Err(rollback_error) => {
@@ -730,6 +832,7 @@ async fn run_request(
             loader_version: _,
             icon_path: _,
             link: _,
+            library_path: _,
         } => {
             let Some(instance_id) = current_instance_id(job_state) else {
                 return Err(crate::ErrorKind::InputError(
@@ -1275,32 +1378,76 @@ async fn prepare_existing_rollback(
         return Ok(());
     }
 
-    let instance = crate::state::get_instance(instance_id, &state.pool)
-        .await?
-        .ok_or_else(|| {
-            crate::ErrorKind::InputError(format!(
-                "Unknown instance {instance_id}"
-            ))
-        })?;
-    if instance.quarantined {
-        return Err(crate::ErrorKind::InputError(
-            "Content in quarantined instances cannot be changed.".to_string(),
-        )
-        .into());
-    }
-    let install_stage = instance.instance.install_stage;
-    set_display(
-        job_state,
-        instance.instance.name.clone(),
-        instance.instance.icon_path.clone(),
-    );
-    job_state.rollback = Some(InstallRollbackState {
-        instance,
-        install_stage,
-    });
-    job_state.cleanup = InstallCleanup::RestoreExistingInstance {
-        instance_id: instance_id.to_string(),
+    // DB-backed instances
+    let is_json_backed = if let Some(instance) =
+        crate::state::get_instance(instance_id, &state.pool).await?
+    {
+        if instance.quarantined {
+            return Err(crate::ErrorKind::InputError(
+                "Content in quarantined instances cannot be changed.".to_string(),
+            )
+            .into());
+        }
+        let install_stage = instance.instance.install_stage;
+        set_display(
+            job_state,
+            instance.instance.name.clone(),
+            instance.instance.icon_path.clone(),
+        );
+        job_state.rollback = Some(InstallRollbackState {
+            instance,
+            install_stage,
+        });
+        job_state.cleanup = InstallCleanup::RestoreExistingInstance {
+            instance_id: instance_id.to_string(),
+        };
+        false
+    } else {
+        // JSON-backed instances: record previous install stage and preserve
+        // instance_id so rollback can restore without touching the DB.
+        let dir =
+            match crate::state::libraries::find_json_instance(state, instance_id).await?
+            {
+                Some(d) => d,
+                None => {
+                    return Err(crate::ErrorKind::InputError(format!(
+                        "Unknown instance {instance_id}"
+                    ))
+                    .into());
+                }
+            };
+        if let Ok(Some(json)) =
+            crate::state::libraries::InstanceJson::read_from_dir(&dir)
+        {
+            set_display(
+                job_state,
+                json.name.unwrap_or_default(),
+                json.icon_path,
+            );
+            job_state.paths.json_backed_previous_install_stage =
+                Some(json.install_stage.clone());
+        } else {
+            let fallback_name = dir
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            set_display(job_state, fallback_name, None);
+            job_state.paths.json_backed_previous_install_stage =
+                Some(crate::state::InstanceInstallStage::Installed.as_str().to_string());
+        }
+        job_state.paths.json_backed_instance_id = Some(instance_id.to_string());
+        // Use non-None id so the cleanup path can distinguish from a truly new
+        // instance that should be deleted on failure.
+        job_state.cleanup = InstallCleanup::DeleteNewInstance {
+            instance_id: Some(instance_id.to_string()),
+        };
+        true
     };
+    if !is_json_backed {
+        // DB-backed: lock_existing_instance is called below via
+        // lock_existing_instance_if_needed which only triggers for
+        // RestoreExistingInstance.
+    }
 
     Ok(())
 }
@@ -1393,8 +1540,13 @@ fn clear_deleted_new_instance_id(job_state: &mut InstallJobState) {
         job_state.target = InstallTarget::NewInstance { instance_id: None };
         job_state.cleanup =
             InstallCleanup::DeleteNewInstance { instance_id: None };
+        // Preserve json_backed_instance_id so retry can still resolve the
+        // instance. json_backed_previous_install_stage is also preserved.
     }
 }
+
+/// Clear the `instance_id` in `target`, `cleanup`, and `paths` when a deleted
+/// new instance has been cleaned up. Used after rollback to reset state.
 
 fn set_display(
     job_state: &mut InstallJobState,
@@ -1499,7 +1651,11 @@ fn install_error_code(
 
 fn current_instance_id(job_state: &InstallJobState) -> Option<String> {
     match &job_state.target {
-        InstallTarget::NewInstance { instance_id } => instance_id.clone(),
+        InstallTarget::NewInstance { instance_id } => {
+            instance_id.clone().or_else(|| {
+                job_state.paths.json_backed_instance_id.clone()
+            })
+        }
         InstallTarget::ExistingInstance { instance_id } => {
             Some(instance_id.clone())
         }

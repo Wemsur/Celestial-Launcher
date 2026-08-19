@@ -24,7 +24,7 @@ pub async fn run(
     quick_play_type: QuickPlayType,
 ) -> crate::Result<ProcessMetadata> {
     let state = State::get().await?;
-    if crate::state::instances::adapters::sqlite::instance_rows::is_instance_quarantined(
+    if crate::state::libraries::is_instance_quarantined(
         instance_id,
         &state.pool,
     )
@@ -67,7 +67,7 @@ async fn run_credentials(
                 "Tried to run a nonexistent instance {instance_id}!"
             ))
         })?;
-    if crate::state::instances::adapters::sqlite::instance_rows::is_instance_quarantined(
+    if crate::state::libraries::is_instance_quarantined(
         instance_id,
         &state.pool,
     )
@@ -311,12 +311,20 @@ pub async fn try_update_playtime_by_instance_id(
     };
 
     if res.is_ok() {
-        crate::state::instances::commands::mark_instance_playtime_submitted(
-            &context.instance.id,
-            updated_recent_playtime,
-            &state.pool,
-        )
-        .await?;
+        if context.instance.is_json_backed() {
+            crate::state::instances::commands::mark_instance_playtime_submitted_json(
+                &context.instance.path,
+                updated_recent_playtime,
+            )
+            .await?;
+        } else {
+            crate::state::instances::commands::mark_instance_playtime_submitted(
+                &context.instance.id,
+                updated_recent_playtime,
+                &state.pool,
+            )
+            .await?;
+        }
     }
 
     res

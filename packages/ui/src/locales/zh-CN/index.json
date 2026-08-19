@@ -746,6 +746,12 @@
   "creation-flow.modal.custom-setup.loader.label": {
     "defaultMessage": "加载器"
   },
+  "creation-flow.modal.custom-setup.library.label": {
+    "defaultMessage": "库"
+  },
+  "creation-flow.modal.custom-setup.library.placeholder": {
+    "defaultMessage": "选择库（可选）"
+  },
   "creation-flow.modal.custom-setup.name.label": {
     "defaultMessage": "名称"
   },
