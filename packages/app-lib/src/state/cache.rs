@@ -266,9 +266,10 @@ pub struct CachedFileUpdate {
     pub update_version_id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ReleaseChannel {
+    #[default]
     Release,
     Beta,
     Alpha,

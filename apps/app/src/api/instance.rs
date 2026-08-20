@@ -229,6 +229,22 @@ pub struct EditInstance {
     )]
     pub game_resolution: Option<Option<WindowSize>>,
     pub hooks: Option<Hooks>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "serde_with::rust::double_option"
+    )]
+    pub icon_path: Option<Option<String>>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "serde_with::rust::double_option"
+    )]
+    pub last_played: Option<Option<chrono::DateTime<chrono::Utc>>>,
+    pub submitted_time_played: Option<u64>,
+    pub recent_time_played: Option<u64>,
 }
 
 impl From<InstanceMetadata> for Instance {
@@ -410,11 +426,45 @@ impl InstanceLink {
 }
 
 fn edit_to_core(edit_instance: EditInstance) -> Result<CoreEditInstance> {
+    let launch_overrides = match (
+        edit_instance.java_path.is_some(),
+        edit_instance.extra_launch_args.is_some(),
+        edit_instance.custom_env_vars.is_some(),
+        edit_instance.memory.is_some(),
+        edit_instance.force_fullscreen.is_some(),
+        edit_instance.game_resolution.is_some(),
+        edit_instance.hooks.is_some(),
+    ) {
+        (false, false, false, false, false, false, false) => None,
+        _ => Some(InstanceLaunchOverridesPatch {
+            java_path: edit_instance.java_path,
+            extra_launch_args: edit_instance.extra_launch_args,
+            custom_env_vars: edit_instance.custom_env_vars,
+            memory: edit_instance.memory,
+            force_fullscreen: edit_instance.force_fullscreen,
+            game_resolution: edit_instance.game_resolution,
+            hooks: edit_instance.hooks,
+        }),
+    };
+    let content_set_patch = match (
+        edit_instance.game_version.is_some(),
+        edit_instance.loader.is_some(),
+        edit_instance.loader_version.is_some(),
+    ) {
+        (false, false, false) => None,
+        _ => Some(AppliedContentSetPatch {
+            source_kind: None,
+            game_version: edit_instance.game_version,
+            protocol_version: Some(None),
+            loader: edit_instance.loader,
+            loader_version: edit_instance.loader_version,
+        }),
+    };
     Ok(CoreEditInstance {
         install_stage: None,
         launcher_feature_version: None,
         name: edit_instance.name,
-        icon_path: None,
+        icon_path: edit_instance.icon_path,
         update_channel: edit_instance.update_channel,
         groups: edit_instance.groups,
         link: edit_instance
@@ -424,25 +474,11 @@ fn edit_to_core(edit_instance: EditInstance) -> Result<CoreEditInstance> {
                 None => Ok(CoreInstanceLink::Unmanaged),
             })
             .transpose()?,
-        launch_overrides: Some(InstanceLaunchOverridesPatch {
-            java_path: edit_instance.java_path,
-            extra_launch_args: edit_instance.extra_launch_args,
-            custom_env_vars: edit_instance.custom_env_vars,
-            memory: edit_instance.memory,
-            force_fullscreen: edit_instance.force_fullscreen,
-            game_resolution: edit_instance.game_resolution,
-            hooks: edit_instance.hooks,
-        }),
-        content_set_patch: Some(AppliedContentSetPatch {
-            source_kind: None,
-            game_version: edit_instance.game_version,
-            protocol_version: Some(None),
-            loader: edit_instance.loader,
-            loader_version: edit_instance.loader_version,
-        }),
-        last_played: None,
-        submitted_time_played: None,
-        recent_time_played: None,
+        launch_overrides,
+        content_set_patch,
+        last_played: edit_instance.last_played,
+        submitted_time_played: edit_instance.submitted_time_played,
+        recent_time_played: edit_instance.recent_time_played,
     })
 }
 

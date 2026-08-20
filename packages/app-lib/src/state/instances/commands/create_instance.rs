@@ -94,6 +94,9 @@ pub(crate) async fn create_instance(
             install_stage: InstanceInstallStage::NotInstalled.as_str().to_string(),
             quarantined: false,
             library_format: library_format,
+            groups: vec![],
+            update_channel: instance.update_channel,
+            launch_overrides: None,
         };
         if let Err(e) = instance_json.write_to_dir(&full_path) {
             tracing::warn!(
@@ -207,6 +210,9 @@ pub(crate) async fn create_instance(
             install_stage: crate::state::InstanceInstallStage::Installed.as_str().to_string(),
             quarantined: false,
             library_format: libraries::InstanceFormat::default(),
+            groups: vec![],
+            update_channel: instance.update_channel,
+            launch_overrides: None,
         };
         if let Err(e) = instance_json.write_to_dir(&full_path) {
             tracing::warn!(

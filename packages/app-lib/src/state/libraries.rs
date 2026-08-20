@@ -1,5 +1,5 @@
-use crate::state::instances::adapters::sqlite::instance_rows;
-use crate::state::{ContentSet, Instance, InstanceLink, State};
+use crate::state::instances::{InstanceLaunchOverridesData, adapters::sqlite::instance_rows};
+use crate::state::{ContentSet, Instance, InstanceLink, ReleaseChannel, State};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -79,6 +79,12 @@ pub(crate) struct InstanceJson {
     pub loader_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub link: Option<InstanceLink>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch_overrides: Option<InstanceLaunchOverridesData>,
+    #[serde(default)]
+    pub groups: Vec<String>,
+    #[serde(default)]
+    pub update_channel: ReleaseChannel,
     #[serde(default)]
     pub submitted_time_played: u64,
     #[serde(default)]
@@ -135,6 +141,9 @@ impl InstanceJson {
             install_stage: default_install_stage(),
             quarantined: false,
             library_format: instance.library_format.clone(),
+            groups: vec![],
+            update_channel: instance.update_channel,
+            launch_overrides: None,
         }
     }
 
@@ -177,7 +186,7 @@ impl InstanceJson {
             install_stage: crate::state::InstanceInstallStage::from_str(&self.install_stage),
             launcher_feature_version:
                 crate::state::LauncherFeatureVersion::MOST_RECENT,
-            update_channel: crate::state::ReleaseChannel::Release,
+            update_channel: self.update_channel,
             name: name.unwrap_or_default(),
             icon_path: self.icon_path.clone(),
             created: Utc::now(),
@@ -188,9 +197,32 @@ impl InstanceJson {
             library_format: format,
         }
     }
+    pub(crate) fn launch_overrides(&self, instance_id: &str) -> crate::state::InstanceLaunchOverrides {
+        match self.launch_overrides.as_ref() {
+            Some(data) => crate::state::InstanceLaunchOverrides {
+                instance_id: instance_id.to_string(),
+                java_path: data.java_path.clone(),
+                extra_launch_args: data.extra_launch_args.clone(),
+                custom_env_vars: data.custom_env_vars.clone(),
+                memory: data.memory,
+                force_fullscreen: data.force_fullscreen,
+                game_resolution: data.game_resolution,
+                hooks: data.hooks.clone(),
+            },
+            None => crate::state::InstanceLaunchOverrides::empty(instance_id.to_string()),
+        }
+    }
+
+    pub(crate) fn groups(&self) -> &[String] {
+        &self.groups
+    }
+
+    pub(crate) fn update_channel(&self) -> ReleaseChannel {
+        self.update_channel
+    }
 }
 
-pub fn instance_id_from_path(path: &str) -> String {
+pub(crate) fn instance_id_from_path(path: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(path.as_bytes());
     let result = hasher.finalize();
@@ -363,6 +395,10 @@ pub(crate) async fn migrate_instances_from_db(
                 Some(record.link.clone()),
             );
             instance_json.library_format = format.clone();
+            instance_json.update_channel = instance.update_channel;
+            instance_json.groups = record.groups.clone();
+            instance_json.launch_overrides =
+                Some(InstanceLaunchOverridesData::from(&record.launch_overrides));
             if let Err(e) = instance_json.write_to_dir(&fallback_path) {
                 tracing::warn!(
                     "Failed to write instance.json for {}: {e}",
@@ -382,7 +418,7 @@ pub(crate) async fn migrate_instances_from_db(
 
     save_libraries_config(state, &config).await?;
 
-    // Second pass: fix missing `link` in existing instance.json files only.
+    // Second pass: fix missing `link` and other fields in existing instance.json files.
     // All other metadata (version, loader) is derivable from the filesystem.
     for record in &db_instances {
         let dir =
@@ -394,12 +430,16 @@ pub(crate) async fn migrate_instances_from_db(
             Ok(Some(mut json)) => {
                 if json.link.is_none() {
                     json.link = Some(record.link.clone());
-                    if let Err(e) = json.write_to_dir(&dir) {
-                        tracing::warn!(
-                            "Failed to update instance.json for {}: {e}",
-                            record.instance.id
-                        );
-                    }
+                }
+                json.update_channel = record.instance.update_channel;
+                json.groups = record.groups.clone();
+                json.launch_overrides =
+                    Some(InstanceLaunchOverridesData::from(&record.launch_overrides));
+                if let Err(e) = json.write_to_dir(&dir) {
+                    tracing::warn!(
+                        "Failed to update instance.json for {}: {e}",
+                        record.instance.id
+                    );
                 }
             }
             Ok(None) => {}

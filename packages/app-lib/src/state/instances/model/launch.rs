@@ -36,6 +36,8 @@ impl InstanceLaunchOverrides {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct InstanceLaunchOverridesData {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instance_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub java_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -53,6 +55,19 @@ pub(crate) struct InstanceLaunchOverridesData {
 }
 
 impl InstanceLaunchOverridesData {
+    pub(crate) fn new(instance_id: String) -> Self {
+        Self {
+            instance_id: Some(instance_id),
+            java_path: None,
+            extra_launch_args: None,
+            custom_env_vars: None,
+            memory: None,
+            force_fullscreen: None,
+            game_resolution: None,
+            hooks: Hooks::default(),
+        }
+    }
+
     pub(crate) fn into_launch_overrides(
         self,
         instance_id: String,
@@ -73,6 +88,7 @@ impl InstanceLaunchOverridesData {
 impl From<&InstanceLaunchOverrides> for InstanceLaunchOverridesData {
     fn from(overrides: &InstanceLaunchOverrides) -> Self {
         Self {
+            instance_id: Some(overrides.instance_id.clone()),
             java_path: overrides.java_path.clone(),
             extra_launch_args: overrides.extra_launch_args.clone(),
             custom_env_vars: overrides.custom_env_vars.clone(),

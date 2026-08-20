@@ -1,5 +1,5 @@
 use crate::state::libraries;
-use crate::state::{Instance, InstanceLaunchOverrides, InstanceMetadata, State};
+use crate::state::{Instance, InstanceMetadata, State};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -132,7 +132,7 @@ pub async fn list(library_path: Option<&str>) -> crate::Result<Vec<InstanceMetad
 pub(crate) fn instance_metadata_from_instance(
     instance: &Instance,
 ) -> InstanceMetadata {
-    // Try to read instance.json to get game_version/loader info
+    // Try to read instance.json to get game_version/loader info and settings
     let dir = if let Some(state) = State::get_if_initialized() {
         libraries::resolve_instance_dir_with_dirs(&state.directories, &instance.path)
     } else {
@@ -147,7 +147,7 @@ pub(crate) fn instance_metadata_from_instance(
     };
     let (game_version, loader, loader_version) =
         if let Ok(Some(json)) = libraries::InstanceJson::read_from_dir(&dir) {
-            (json.game_version, json.loader, json.loader_version)
+            (json.game_version.clone(), json.loader.clone(), json.loader_version.clone())
         } else {
             (None, None, None)
         };
@@ -177,17 +177,36 @@ pub(crate) fn instance_metadata_from_instance(
         created: chrono::Utc::now(),
         modified: chrono::Utc::now(),
     };
+
+    // Read settings from instance.json if available
+    let (link, launch_overrides, groups, update_channel) =
+        if let Ok(Some(json)) = libraries::InstanceJson::read_from_dir(&dir) {
+            let json_update_channel = json.update_channel();
+            (
+                json.link.clone().unwrap_or(crate::state::InstanceLink::Unmanaged),
+                json.launch_overrides(&instance.id),
+                json.groups().to_vec(),
+                json_update_channel,
+            )
+        } else {
+            (
+                crate::state::InstanceLink::Unmanaged,
+                crate::state::InstanceLaunchOverrides::empty(instance.id.clone()),
+                vec![],
+                instance.update_channel,
+            )
+        };
+
     InstanceMetadata {
-        instance: instance.clone(),
+        instance: Instance {
+            update_channel,
+            ..instance.clone()
+        },
         applied_content_set: content_set,
-        link: libraries::InstanceJson::read_from_dir(&dir)
-            .ok()
-            .flatten()
-            .and_then(|j| j.link)
-            .unwrap_or(crate::state::InstanceLink::Unmanaged),
+        link,
         shared_instance: None,
         quarantined: false,
-        groups: vec![],
-        launch_overrides: InstanceLaunchOverrides::empty(instance.id.clone()),
+        groups,
+        launch_overrides,
     }
 }
