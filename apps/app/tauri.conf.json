@@ -4,7 +4,7 @@
 		"beforeDevCommand": "pnpm --filter @modrinth/app-frontend dev",
 		"beforeBuildCommand": "pnpm turbo run build --filter=@modrinth/app-frontend",
 		"frontendDist": "../app-frontend/dist",
-		"devUrl": "http://localhost:8080"
+		"devUrl": "http://localhost:5173"
 	},
 	"bundle": {
 		"active": true,

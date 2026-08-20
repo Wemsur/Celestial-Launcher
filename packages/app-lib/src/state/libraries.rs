@@ -201,25 +201,13 @@ pub fn instance_id_from_path(path: &str) -> String {
     format!("local:{}", &hex[..32])
 }
 
-/// Returns the default library path that was used before multi-library support.
-/// On Windows this is `<AppData>/Minecraft/Modrinth`; on other platforms it is
-/// `<home>/Minecraft/Modrinth`. The caller can append `profiles` or `versions`
-/// depending on the instance format.
+/// Returns the default Modrinth library path (`<home>/Minecraft/Modrinth/profiles`).
 pub fn default_library_path() -> PathBuf {
-    #[cfg(target_os = "windows")]
-    {
-        dirs::data_local_dir()
-            .unwrap_or_default()
-            .join("Minecraft")
-            .join("Modrinth")
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        dirs::home_dir()
-            .unwrap_or_default()
-            .join("Minecraft")
-            .join("Modrinth")
-    }
+    dirs::home_dir()
+        .unwrap_or_default()
+        .join("Minecraft")
+        .join("Modrinth")
+        .join("profiles")
 }
 
 pub async fn get_libraries_config(state: &State) -> crate::Result<LibrariesConfig> {

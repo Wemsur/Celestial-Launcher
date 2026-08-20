@@ -17,7 +17,7 @@ import { NewInstanceImage } from '@/assets/icons'
 import { instance_listener } from '@/helpers/events.js'
 import { list } from '@/helpers/instance'
 import type { InstanceFormat } from '@/helpers/library'
-import { library_list, library_default_path } from '@/helpers/library'
+import { library_default_path, library_list } from '@/helpers/library'
 import { useRootBreadcrumb } from '@/providers/breadcrumbs'
 
 const { handleError } = injectNotificationManager()
@@ -54,8 +54,10 @@ const loadLibraries = async () => {
 	try {
 		const [config, defaultPath] = await Promise.all([
 			library_list(),
-			library_default_path().catch(() => null),
+			library_default_path().catch((e) => { console.log('[debug] library_default_path error:', e); return null; }),
 		])
+		console.log('[debug] defaultPath raw:', JSON.stringify(defaultPath))
+		console.log('[debug] libraries raw:', JSON.stringify(config.libraries))
 		libraries.value = config.libraries
 		defaultLibraryPath = defaultPath
 	} catch (e) {
@@ -74,8 +76,11 @@ const libDisplayLabel = (lib: { name: string; path: string }): string => {
 	if (lib.name) return lib.name
 	// Check against the default library path (normalise both sides)
 	if (defaultLibraryPath) {
-		const normDefault = defaultLibraryPath.replace(/\\/g, '/').toLowerCase()
-		const normLib = lib.path.replace(/\\/g, '/').toLowerCase()
+		const normDefault = defaultLibraryPath.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '')
+		const normLib = lib.path.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '')
+		console.log('[debug] libDisplayLabel: defaultPath=', JSON.stringify(defaultLibraryPath), 'normDefault=', JSON.stringify(normDefault))
+		console.log('[debug] libDisplayLabel: lib.path=', JSON.stringify(lib.path), 'normLib=', JSON.stringify(normLib))
+		console.log('[debug] libDisplayLabel: match1=', normLib === normDefault, 'match2=', normLib === normDefault + '/profiles')
 		if (normLib === normDefault || normLib === normDefault + '/profiles') {
 			return '默认库'
 		}
@@ -85,7 +90,7 @@ const libDisplayLabel = (lib: { name: string; path: string }): string => {
 		.pop()
 		?.split('\\')
 		.pop()
-		|| lib.path
+	|| lib.path
 	return folderName || lib.path
 }
 

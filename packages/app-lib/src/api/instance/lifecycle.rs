@@ -153,9 +153,7 @@ pub async fn remove(instance_id: &str) -> crate::Result<()> {
             .await?;
     crate::state::remove_instance(instance_id, &state).await?;
 
-    if let Some(instance) = instance {
-        emit_instance(&instance.id, InstancePayloadType::Removed).await?;
-    }
+    emit_instance(instance_id, InstancePayloadType::Removed).await?;
 
     Ok(())
 }
