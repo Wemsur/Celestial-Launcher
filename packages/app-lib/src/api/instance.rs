@@ -21,7 +21,7 @@ pub use self::content::{
 pub use self::export_mrpack::{
     create_mrpack_json, export_mrpack, get_pack_export_candidates,
 };
-pub use self::get::{get, get_many, list};
+pub use self::get::{get, get_by_id, get_many, list};
 pub use self::icon::edit_icon;
 pub(crate) use self::icon::{
     cache_icon, cache_icon_from_path, migrate_legacy_icons,

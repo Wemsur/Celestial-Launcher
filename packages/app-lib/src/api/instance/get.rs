@@ -24,6 +24,24 @@ pub async fn get(instance_id: &str) -> crate::Result<Option<InstanceMetadata>> {
     Ok(None)
 }
 
+/// Get an instance by ID, checking JSON-backed instances first, then DB.
+#[tracing::instrument]
+pub async fn get_by_id(
+    instance_id: &str,
+) -> crate::Result<Option<InstanceMetadata>> {
+    let state = State::get().await?;
+
+    // JSON-backed instances take priority
+    let json_instances =
+        crate::state::libraries::list_instances_from_json(&state).await?;
+    if let Some(inst) = json_instances.iter().find(|i| i.id == instance_id) {
+        return Ok(Some(instance_metadata_from_instance(inst)));
+    }
+
+    // Fall back to DB-backed instances
+    crate::state::get_instance(instance_id, &state.pool).await
+}
+
 #[tracing::instrument]
 pub async fn get_many(
     instance_ids: &[&str],

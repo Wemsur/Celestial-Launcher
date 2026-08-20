@@ -569,14 +569,13 @@ async fn prepare_initial_instance(
             set_instance_id(job_state, metadata.instance.id);
         }
         InstallRequest::DuplicateInstance { source_instance_id } => {
-            let metadata =
-                crate::state::get_instance(&source_instance_id, &state.pool)
-                    .await?
-                    .ok_or_else(|| {
-                        crate::ErrorKind::InputError(
-                            "Unknown instance".to_string(),
-                        )
-                    })?;
+            let metadata = crate::api::instance::get_by_id(&source_instance_id)
+                .await?
+                .ok_or_else(|| {
+                    crate::ErrorKind::InputError(
+                        "Unknown instance".to_string(),
+                    )
+                })?;
             let created = crate::api::instance::create(
                 metadata.instance.name,
                 metadata.applied_content_set.game_version,
@@ -1469,6 +1468,32 @@ async fn lock_existing_instance(
     instance_id: &str,
     state: &State,
 ) -> crate::Result<()> {
+    // JSON-backed instances: update stage in instance.json instead of DB
+    if crate::state::get_instance(instance_id, &state.pool).await?.is_none()
+    {
+        let dir =
+            match crate::state::libraries::find_json_instance(state, instance_id)
+                .await?
+            {
+                Some(d) => d,
+                None => {
+                    return Err(crate::ErrorKind::InputError(format!(
+                        "Unknown instance {instance_id}"
+                    ))
+                    .into());
+                }
+            };
+        if let Some(mut json) =
+            crate::state::libraries::InstanceJson::read_from_dir(&dir).ok().flatten()
+        {
+            json.install_stage =
+                InstanceInstallStage::MinecraftInstalling.as_str().to_string();
+            json.write_to_dir(&dir)?;
+        }
+        crate::event::emit::emit_instance(instance_id, InstancePayloadType::Edited)
+            .await?;
+        return Ok(());
+    }
     crate::state::instances::commands::set_instance_install_stage(
         instance_id,
         InstanceInstallStage::MinecraftInstalling,

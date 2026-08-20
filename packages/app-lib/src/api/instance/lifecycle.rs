@@ -59,16 +59,11 @@ pub async fn edit(
 ) -> crate::Result<InstanceMetadata> {
     let state = State::get().await?;
 
-    // DB-backed instances
-    if instance_rows::get_instance_by_id(instance_id, &state.pool).await?.is_some()
-    {
-        crate::state::edit_instance(instance_id, patch, &state.pool).await?;
-    } else {
-        // JSON-backed instances
+    // JSON-backed instances (primary path)
+    let json_instances =
+        crate::state::libraries::list_instances_from_json(&state).await?;
+    if json_instances.iter().any(|i| i.id == instance_id) {
         let mut found = false;
-        let json_instances =
-            crate::state::libraries::list_instances_from_json(&state)
-                .await?;
         for inst in &json_instances {
             if inst.id == instance_id {
                 let dir =
@@ -135,6 +130,18 @@ pub async fn edit(
                     if let Some(groups) = &patch.groups {
                         instance_json.groups = groups.clone();
                     }
+                    // Update content set fields (game_version, loader, loader_version)
+                    if let Some(cs_patch) = &patch.content_set_patch {
+                        if let Some(ref gv) = cs_patch.game_version {
+                            instance_json.game_version = Some(gv.clone());
+                        }
+                        if let Some(ref ld) = cs_patch.loader {
+                            instance_json.loader = Some(ld.as_str().to_string());
+                        }
+                        if let Some(ref lv) = cs_patch.loader_version {
+                            instance_json.loader_version = lv.clone();
+                        }
+                    }
                     instance_json.write_to_dir(&dir)?;
                     found = true;
                     break;
@@ -147,28 +154,30 @@ pub async fn edit(
                     .into(),
             );
         }
-    }
 
-    let instance = if let Some(meta) =
-        crate::state::get_instance(instance_id, &state.pool).await?
-    {
-        meta
-    } else {
-        // JSON-backed: build metadata from instance
-        let json_instances =
-            crate::state::libraries::list_instances_from_json(&state).await?;
+        // Return fresh metadata from JSON
         let inst = json_instances
             .into_iter()
             .find(|i| i.id == instance_id)
             .ok_or_else(|| -> crate::Error {
                 crate::ErrorKind::InputError("Unknown instance".to_string()).into()
             })?;
-        crate::api::instance::get::instance_metadata_from_instance(&inst)
-    };
+        emit_instance(&inst.id, InstancePayloadType::Edited).await?;
+        return Ok(crate::api::instance::get::instance_metadata_from_instance(
+            &inst,
+        ));
+    }
 
-    emit_instance(&instance.instance.id, InstancePayloadType::Edited).await?;
-
-    Ok(instance)
+    // DB-backed instances (fallback for legacy + migrated)
+    crate::state::edit_instance(instance_id, patch, &state.pool).await?;
+    let meta = crate::state::get_instance(instance_id, &state.pool).await?
+        .ok_or_else(|| {
+            crate::Error::from(crate::ErrorKind::InputError(
+                "Unknown instance".to_string(),
+            ))
+        })?;
+    emit_instance(&meta.instance.id, InstancePayloadType::Edited).await?;
+    Ok(meta)
 }
 
 #[tracing::instrument]
