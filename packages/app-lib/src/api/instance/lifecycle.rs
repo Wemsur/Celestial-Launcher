@@ -267,13 +267,18 @@ pub async fn rename(
     instance_id: &str,
     new_name: String,
 ) -> crate::Result<InstanceMetadata> {
+    tracing::info!("rename: starting for instance_id={} new_name={}", instance_id, new_name);
     let state = State::get().await?;
 
     let json_instances =
         crate::state::libraries::list_instances_from_json(&state).await?;
     let inst = match json_instances.iter().find(|i| i.id == instance_id) {
-        Some(i) => i.clone(),
+        Some(i) => {
+            tracing::info!("rename: found instance: path={} format={:?}", i.path, i.library_format);
+            i.clone()
+        },
         None => {
+            tracing::error!("rename: instance not found by id={}", instance_id);
             return Err(
                 crate::ErrorKind::InputError("Unknown instance".to_string())
                     .into(),
@@ -283,6 +288,7 @@ pub async fn rename(
 
     let dir =
         crate::state::libraries::resolve_instance_dir(&state, &inst.path);
+    tracing::info!("rename: resolved dir={:?}", dir);
 
     if inst.library_format != crate::state::libraries::InstanceFormat::Minecraft {
         return Err(
@@ -293,19 +299,26 @@ pub async fn rename(
         );
     }
 
+    tracing::info!("rename: calling rename_minecraft_instance");
     let new_dir =
         crate::state::libraries::rename_minecraft_instance(&dir, &new_name)?;
+    tracing::info!("rename: rename_minecraft_instance returned {:?}", new_dir);
 
     // Update the celestial.json (or create one if missing) name field
+    tracing::info!("rename: reading celestial.json from {:?}", new_dir);
     let celestial =
         crate::state::libraries::CelestialJson::read_from_dir(&new_dir)?
             .unwrap_or_default();
     let mut updated_celestial = celestial.clone();
     updated_celestial.name = Some(new_name.clone());
+    tracing::info!("rename: writing updated celestial.json");
     updated_celestial.write_to_dir(&new_dir)?;
+    tracing::info!("rename: celestial.json written successfully");
 
     // Emit event so the frontend knows the instance moved
+    tracing::info!("rename: emitting Edited event");
     emit_instance(instance_id, InstancePayloadType::Edited).await?;
+    tracing::info!("rename: event emitted");
 
     // Return fresh metadata — the scan will pick up the new path from
     // the sidecar name, and the path itself must be refreshed. We rebuild

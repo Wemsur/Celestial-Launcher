@@ -7,7 +7,29 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::debug;
+use tracing::{debug, info, warn, error};
+
+/// Retry a closure on `std::io::Error`, with 200ms delay between attempts.
+/// Modeled after PCL2's Retrier: handles Windows file locks that clear quickly.
+fn retry_io<F, T>(mut f: F, max_attempts: u32) -> crate::Result<T>
+where
+    F: FnMut() -> Result<T, std::io::Error>,
+{
+    let mut attempt = 0;
+    loop {
+        match f() {
+            Ok(v) => return Ok(v),
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied || e.raw_os_error() == Some(5) => {
+                attempt += 1;
+                if attempt >= max_attempts {
+                    return Err(e.into());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
+}
 
 pub const LIBRARIES_FILE_NAME: &str = "libraries.json";
 
@@ -1001,8 +1023,23 @@ pub(crate) fn rename_minecraft_instance(
         })?;
     let new_dir = parent.join(new_name);
 
-    // Rename the instance directory
+    tracing::info!(
+        "rename_minecraft_instance: old_dir={:?} old_filestem={} new_dir={:?}",
+        old_dir,
+        old_filestem,
+        new_dir
+    );
+
+    // Rename the instance directory.
+    // On Windows, os error 5 (Access Denied) often means a transient lock
+    // (antivirus, indexer, etc.). We retry with a short delay, matching the
+    // approach used by PCL2 launcher's Retrier.
     if new_dir.exists() {
+        tracing::warn!(
+            "rename_minecraft_instance: target dir already exists! old_dir={:?} new_dir={:?}",
+            old_dir,
+            new_dir
+        );
         return Err(
             crate::ErrorKind::InputError(format!(
                 "A directory named '{}' already exists",
@@ -1011,14 +1048,36 @@ pub(crate) fn rename_minecraft_instance(
             .into(),
         );
     }
-    fs::rename(old_dir, &new_dir)?;
+    info!("rename_minecraft_instance: renaming directory {:?} → {:?}", old_dir, new_dir);
+    let new_dir = retry_io(
+        || fs::rename(old_dir, &new_dir).map(|_| new_dir.clone()),
+        5,
+    )?;
+    info!("rename_minecraft_instance: directory rename succeeded");
+
+    // List entries to debug what files exist
+    let entries: Vec<_> = match fs::read_dir(&new_dir) {
+        Ok(rd) => rd.filter_map(|e| e.ok()).collect(),
+        Err(e) => {
+            tracing::error!(
+                "rename_minecraft_instance: failed to read_dir after rename: {:?}: {}",
+                new_dir,
+                e
+            );
+            return Err(e.into());
+        }
+    };
+    tracing::info!(
+        "rename_minecraft_instance: entries in new dir ({}): {:?}",
+        entries.len(),
+        entries.iter().map(|e| e.file_name().to_string_lossy().to_string()).collect::<Vec<_>>()
+    );
 
     // Rename only the version-specific files and natives directory.
     // Do NOT rename other files like content_cache.json, usercache.json, etc.
     let mut had_jar = false;
     let mut had_json = false;
-    for entry in fs::read_dir(&new_dir)? {
-        let entry = entry?;
+    for entry in entries {
         let file_name = entry.file_name().to_string_lossy().to_string();
         let new_file_name = if file_name == format!("{old_filestem}.jar") {
             format!("{new_name}.jar")
@@ -1029,11 +1088,33 @@ pub(crate) fn rename_minecraft_instance(
         } else {
             continue;
         };
-        fs::rename(entry.path(), new_dir.join(&new_file_name))?;
-        if file_name.ends_with(".jar") {
-            had_jar = true;
-        } else if file_name.ends_with(".json") {
-            had_json = true;
+        let src = entry.path();
+        let dst = new_dir.join(&new_file_name);
+        tracing::info!(
+            "rename_minecraft_instance: renaming file {:?} → {:?}",
+            src,
+            dst
+        );
+        match retry_io(
+            || fs::rename(&src, &dst).map(|_| ()),
+            3,
+        ) {
+            Ok(()) => {
+                tracing::info!("rename_minecraft_instance: file rename succeeded: {}", file_name);
+                if file_name.ends_with(".jar") {
+                    had_jar = true;
+                } else if file_name.ends_with(".json") {
+                    had_json = true;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "rename_minecraft_instance: file rename FAILED (after retries): {:?} → {:?}: {}. Skipping.",
+                    src,
+                    dst,
+                    e
+                );
+            }
         }
     }
     // Ensure we renamed at least the version manifest; the jar may or may not exist.
@@ -1046,5 +1127,6 @@ pub(crate) fn rename_minecraft_instance(
         );
     }
 
+    tracing::info!("rename_minecraft_instance: completed successfully, returning {:?}", new_dir);
     Ok(new_dir)
 }

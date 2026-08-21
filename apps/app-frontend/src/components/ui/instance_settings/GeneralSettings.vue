@@ -46,6 +46,7 @@ const releaseChannelDisabledItems = computed<ReleaseChannel[]>(() =>
 )
 
 const newCategoryInput = ref('')
+const lastRequestedRenameRef = ref<string | null>(null)
 
 const installing = computed(() => instance.value.install_stage !== 'installed')
 
@@ -172,11 +173,20 @@ watch(
 			name: title.value.trim().substring(0, 32) ?? 'Instance',
 			groups: groups.value.map((x) => x.trim().substring(0, 32)).filter((x) => x.length > 0),
 		}
+		console.log('[watch]', { patch, currentName: instance.value.name, isMinecraft: isMinecraftFormat.value })
 		if (isMinecraftFormat.value) {
 			// For .minecraft instances, rename uses a dedicated command
 			// that also renames the folder and version files.
-			if (patch.name !== instance.value.name) {
-				await rename(instance.value.id, patch.name).catch(handleError)
+			if (patch.name !== instance.value.name && patch.name !== lastRequestedRenameRef.value) {
+				lastRequestedRenameRef.value = patch.name
+				console.log('[watch] renaming to:', patch.name)
+				const updated = await rename(instance.value.id, patch.name).catch((e) => {
+					handleError(e)
+					return null
+				})
+				if (updated) {
+					title.value = updated.name
+				}
 			}
 			// Groups are saved via edit (written to celestial.json)
 			if (JSON.stringify(patch.groups) !== JSON.stringify(instance.value.groups)) {
