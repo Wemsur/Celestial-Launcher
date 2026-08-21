@@ -14,6 +14,7 @@ import {
 	commonMessages,
 	defineMessage,
 	TabbedModal,
+	UnsavedChangesPopup,
 	type TabbedModalTab,
 	useVIntl,
 } from '@modrinth/ui'
@@ -53,8 +54,47 @@ const handleUnlinked = () => emit('unlinked')
 const instanceRef = computed(() => props.instance)
 const tabbedModal = ref<InstanceType<typeof TabbedModal> | null>(null)
 
-function hide() {
-	tabbedModal.value?.hide()
+const unsavedChangesPopup = ref<{ nudge: () => void } | null>(null)
+
+const unsavedChangesController = ref<{
+	hasChanges: () => boolean
+	getOriginal: () => Record<string, unknown>
+	getModified: () => Record<string, unknown>
+	isSaving: () => boolean
+	reset: () => void
+	save: () => void | Promise<void>
+} | null>(null)
+
+const emptyUnsavedChangesState = {}
+const originalUnsavedChangesState = computed(
+	() => unsavedChangesController.value?.getOriginal() ?? emptyUnsavedChangesState,
+)
+const modifiedUnsavedChangesState = computed(
+	() => unsavedChangesController.value?.getModified() ?? emptyUnsavedChangesState,
+)
+const savingUnsavedChanges = computed(
+	() => unsavedChangesController.value?.isSaving() ?? false,
+)
+const hasUnsavedChanges = computed(
+	() => unsavedChangesController.value?.hasChanges() ?? false,
+)
+
+function canLeaveCurrentTab(): boolean {
+	if (!unsavedChangesController.value?.hasChanges()) return true
+	unsavedChangesPopup.value?.nudge()
+	return false
+}
+
+function hide(): boolean {
+	return tabbedModal.value?.hide() ?? false
+}
+
+function resetUnsavedChanges(): void {
+	unsavedChangesController.value?.reset()
+}
+
+function saveUnsavedChanges(): void {
+	void unsavedChangesController.value?.save()
 }
 
 provideInstanceSettings({
@@ -63,6 +103,9 @@ provideInstanceSettings({
 	isMinecraftServer,
 	onUnlinked: handleUnlinked,
 	closeModal: hide,
+	registerUnsavedChangesController: (controller) => {
+		unsavedChangesController.value = controller
+	},
 })
 
 watch(
@@ -194,6 +237,9 @@ defineExpose({ show, hide })
 		:tabs="tabs"
 		:max-width="'min(928px, calc(95vw - 10rem))'"
 		:width="'min(928px, calc(95vw - 10rem))'"
+		:before-hide="canLeaveCurrentTab"
+		:before-tab-change="canLeaveCurrentTab"
+		:floating-action-bar-shown="hasUnsavedChanges"
 	>
 		<template #title>
 			<span class="flex items-center gap-2 text-lg font-semibold text-primary">
@@ -207,6 +253,17 @@ defineExpose({ show, hide })
 					formatMessage(commonMessages.settingsLabel)
 				}}</span>
 			</span>
+		</template>
+		<template #floating-action-bar>
+			<UnsavedChangesPopup
+				ref="unsavedChangesPopup"
+				:original="originalUnsavedChangesState"
+				:modified="modifiedUnsavedChangesState"
+				:saving="savingUnsavedChanges"
+				inline
+				@reset="resetUnsavedChanges"
+				@save="saveUnsavedChanges"
+			/>
 		</template>
 	</TabbedModal>
 </template>

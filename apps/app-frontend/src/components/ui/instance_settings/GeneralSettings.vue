@@ -32,7 +32,7 @@ const queryClient = useQueryClient()
 
 const deleteConfirmModal = ref()
 
-const { instance } = injectInstanceSettings()
+const { instance, registerUnsavedChangesController } = injectInstanceSettings()
 type ReleaseChannel = GameInstance['update_channel']
 const releaseChannelOptions: ReleaseChannel[] = ['release', 'beta', 'alpha']
 
@@ -46,7 +46,9 @@ const releaseChannelDisabledItems = computed<ReleaseChannel[]>(() =>
 )
 
 const newCategoryInput = ref('')
-const lastRequestedRenameRef = ref<string | null>(null)
+
+const originalName = ref(instance.value.name)
+const savingName = ref(false)
 
 const installing = computed(() => instance.value.install_stage !== 'installed')
 
@@ -139,11 +141,6 @@ async function setIcon() {
 	}
 }
 
-const editInstanceObject = computed(() => ({
-	name: title.value.trim().substring(0, 32) ?? 'Instance',
-	groups: groups.value.map((x) => x.trim().substring(0, 32)).filter((x) => x.length > 0),
-}))
-
 const isMinecraftFormat = computed(() =>
 	instance.value.path.includes('.minecraft'),
 )
@@ -165,38 +162,47 @@ const addCategory = () => {
 	}
 }
 
+const hasNameChanges = computed(() => {
+	if (!isMinecraftFormat.value) return false
+	return title.value.trim().substring(0, 32) !== originalName.value
+})
+
+async function renameInstance() {
+	const newName = title.value.trim().substring(0, 32) ?? 'Instance'
+	if (newName === originalName.value || savingName.value) return
+	savingName.value = true
+	try {
+		await rename(instance.value.id, newName)
+		router.push({ path: `/instance/${encodeURIComponent(instance.value.id)}` })
+		originalName.value = newName
+	} catch (e) {
+		handleError(e)
+	} finally {
+		savingName.value = false
+	}
+}
+
+function resetName() {
+	title.value = originalName.value
+}
+
+if (registerUnsavedChangesController) {
+	registerUnsavedChangesController({
+		hasChanges: () => hasNameChanges.value,
+		getOriginal: () => ({ name: originalName.value }),
+		getModified: () => ({ name: title.value.trim().substring(0, 32) ?? 'Instance' }),
+		isSaving: () => savingName.value,
+		reset: resetName,
+		save: renameInstance,
+	})
+}
+
 watch(
-	[title, groups],
-	async () => {
-		if (removing.value) return
-		const patch = {
-			name: title.value.trim().substring(0, 32) ?? 'Instance',
-			groups: groups.value.map((x) => x.trim().substring(0, 32)).filter((x) => x.length > 0),
-		}
-		console.log('[watch]', { patch, currentName: instance.value.name, isMinecraft: isMinecraftFormat.value })
-		if (isMinecraftFormat.value) {
-			// For .minecraft instances, rename uses a dedicated command
-			// that also renames the folder and version files.
-			if (patch.name !== instance.value.name && patch.name !== lastRequestedRenameRef.value) {
-				lastRequestedRenameRef.value = patch.name
-				console.log('[watch] renaming to:', patch.name)
-				const updated = await rename(instance.value.id, patch.name).catch((e) => {
-					handleError(e)
-					return null
-				})
-				if (updated) {
-					title.value = updated.name
-				}
-			}
-			// Groups are saved via edit (written to celestial.json)
-			if (JSON.stringify(patch.groups) !== JSON.stringify(instance.value.groups)) {
-				await edit(instance.value.id, { groups: patch.groups }).catch(handleError)
-			}
-		} else {
-			await edit(instance.value.id, patch).catch(handleError)
-		}
+	() => instance.value.name,
+	(newName) => {
+		originalName.value = newName
+		title.value = newName
 	},
-	{ deep: true },
 )
 
 const removing = ref(false)
