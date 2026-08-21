@@ -172,9 +172,9 @@ async function renameInstance() {
 	if (newName === originalName.value || savingName.value) return
 	savingName.value = true
 	try {
-		await rename(instance.value.id, newName)
-		router.push({ path: `/instance/${encodeURIComponent(instance.value.id)}` })
+		const updated = await rename(instance.value.id, newName)
 		originalName.value = newName
+		router.push({ path: `/instance/${encodeURIComponent(updated.instance.id)}` })
 	} catch (e) {
 		handleError(e)
 	} finally {
