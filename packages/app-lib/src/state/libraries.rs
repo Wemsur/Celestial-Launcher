@@ -2,6 +2,7 @@ use crate::state::instances::{InstanceLaunchOverridesData, adapters::sqlite::ins
 use crate::state::{ContentSet, Instance, InstanceLink, ReleaseChannel, State};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
@@ -492,6 +493,139 @@ pub fn resolve_instance_dir_with_dirs(
     }
 }
 
+/// Find the library info for a given instance path by walking up the path.
+/// Returns None if the instance is not under any configured library.
+pub(crate) fn find_library_for_instance<'a>(
+    config: &'a LibrariesConfig,
+    instance_path: &Path,
+) -> Option<&'a LibraryInfo> {
+    let mut current = Some(instance_path);
+    while let Some(path) = current {
+        for lib in &config.libraries {
+            let lib_path = Path::new(&lib.path);
+            if path.starts_with(lib_path) {
+                return Some(lib);
+            }
+        }
+        current = path.parent();
+    }
+    None
+}
+
+/// Returns the library root directory (the configured library path) for an instance.
+/// For Modrinth format: `<library>/profiles/<instance>/` → `<library>`
+/// For .minecraft format: `<library>/versions/<instance>/` → `<library>`
+pub(crate) fn instance_library_root(
+    instance_dir: &Path,
+    library_format: &InstanceFormat,
+) -> Option<PathBuf> {
+    let (prefix, _) = match library_format {
+        InstanceFormat::Modrinth => ("profiles", true),
+        InstanceFormat::Minecraft => ("versions", true),
+    };
+    if !prefix.is_empty() {
+        // Walk up to find the prefix directory
+        let mut current = Some(instance_dir);
+        while let Some(path) = current {
+            if let Some(parent) = path.parent() {
+                if let Some(name) = parent.file_name() {
+                    if name.to_string_lossy() == prefix {
+                        // parent is profiles/ or versions/
+                        if let Some(grandparent) = parent.parent() {
+                            return Some(grandparent.to_path_buf());
+                        }
+                    }
+                }
+                current = Some(parent);
+            } else {
+                break;
+            }
+        }
+    }
+    // Fallback: the instance dir itself is the root
+    Some(instance_dir.to_path_buf())
+}
+
+/// Get the version jar path for an instance.
+/// For Minecraft format: looks in `versions/<instance>/<version>.jar` or `versions/<instance>/<version>-natives/<version>.jar`
+/// For Modrinth format: uses the launcher-managed version cache
+pub(crate) fn instance_version_jar_path(
+    instance_dir: &Path,
+    version_id: &str,
+    library_format: &InstanceFormat,
+) -> Option<PathBuf> {
+    match library_format {
+        InstanceFormat::Minecraft => {
+            // Check for version jar directly in the instance dir
+            let jar_path = instance_dir.join(format!("{version_id}.jar"));
+            if jar_path.exists() {
+                return Some(jar_path);
+            }
+            None
+        }
+        InstanceFormat::Modrinth => None,
+    }
+}
+
+/// Get the natives directory for an instance.
+/// For Minecraft format: `versions/<instance>/natives/` or `versions/<instance>/<version>-natives/`
+/// For Modrinth format: uses the launcher-managed natives cache
+pub(crate) fn instance_natives_dir(
+    instance_dir: &Path,
+    version_id: &str,
+    library_format: &InstanceFormat,
+) -> PathBuf {
+    match library_format {
+        InstanceFormat::Minecraft => {
+            // Try instance-specific natives first, then generic natives dir
+            let specific = instance_dir.join(format!("{version_id}-natives"));
+            if specific.exists() {
+                specific
+            } else if instance_dir.join("natives").exists() {
+                instance_dir.join("natives")
+            } else {
+                instance_dir.join("natives")
+            }
+        }
+        InstanceFormat::Modrinth => PathBuf::new(),
+    }
+}
+
+/// Get the shared content directory for a library format.
+/// For Minecraft format: returns the library root shared dirs (mods/, config/, etc.)
+/// For Modrinth format: returns empty path (everything is instance-local)
+pub(crate) fn shared_content_dirs(
+    instance_dir: &Path,
+    library_format: &InstanceFormat,
+) -> Vec<PathBuf> {
+    match library_format {
+        InstanceFormat::Minecraft => {
+            let mut dirs = Vec::new();
+            if let Some(root) = instance_library_root(instance_dir, library_format) {
+                for dir_name in ["mods", "config", "saves", "resourcepacks", "shaderpacks", "datapacks"] {
+                    let shared = root.join(dir_name);
+                    if shared.exists() {
+                        dirs.push(shared);
+                    }
+                }
+            }
+            dirs
+        }
+        InstanceFormat::Modrinth => Vec::new(),
+    }
+}
+
+/// Check if a Minecraft-format instance has its own local version data
+/// (version jar and/or version info JSON).
+pub(crate) fn instance_has_local_version(
+    instance_dir: &Path,
+    version_jar: &str,
+) -> bool {
+    let jar_path = instance_dir.join(format!("{version_jar}.jar"));
+    let json_path = instance_dir.join(format!("{version_jar}.json"));
+    jar_path.exists() || json_path.exists()
+}
+
 /// Find a JSON-backed instance by ID. Returns the path used to locate it.
 ///
 /// Performs a full scan of all configured libraries on each call. Use
@@ -628,53 +762,58 @@ pub fn detect_game_version_from_jar_name(name: &str) -> Option<String> {
     versions.into_iter().last().map(String::from)
 }
 
-/// Detect the loader from the instance directory by scanning jars in `mods/`.
-/// Returns the first loader detected, or Vanilla as fallback.
+/// Detect the loader from the instance directory by reading the version JSON's
+/// `mainClass` field. Falls back to Vanilla if no JSON is found.
 pub fn detect_loader_from_dir(dir: &Path) -> crate::state::ModLoader {
-    let mods_dir = dir.join("mods");
-    if !mods_dir.exists() {
-        return crate::state::ModLoader::Vanilla;
-    }
-    let Ok(entries) = fs::read_dir(&mods_dir) else {
-        return crate::state::ModLoader::Vanilla;
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return crate::state::ModLoader::Vanilla,
     };
     for entry in entries.flatten() {
         let path = entry.path();
         if !path.is_file() {
             continue;
         }
-        let Some(file_name) =
-            path.file_name().and_then(|n| n.to_str()) else {
+        let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
             continue;
         };
-        if let Some(loader) = detect_modloader_from_file_name(file_name) {
-            debug!(
-                "Detected loader {} from mod file: {}",
-                loader.as_str(),
-                file_name
-            );
-            return loader;
+        if ext != "json" {
+            continue;
         }
+        let content = match fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let Ok(val) = serde_json::from_str::<Value>(&content) else {
+            continue;
+        };
+        let Some(main_class) = val.get("mainClass").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        return detect_loader_from_main_class(main_class);
     }
     crate::state::ModLoader::Vanilla
 }
 
-/// Detect a ModLoader from a single file name (usually a mod jar).
-fn detect_modloader_from_file_name(name: &str) -> Option<crate::state::ModLoader> {
-    let lower = name.to_lowercase();
-    if lower.contains("fabric") {
-        return Some(crate::state::ModLoader::Fabric);
+/// Parse a Minecraft launcher `mainClass` string and return the corresponding loader.
+fn detect_loader_from_main_class(main_class: &str) -> crate::state::ModLoader {
+    let mc = main_class.to_lowercase();
+    if mc.contains("knot")
+        || mc.contains("fabric.loader")
+        || mc.contains("fabricmc")
+    {
+        return crate::state::ModLoader::Fabric;
     }
-    if lower.contains("quilt") {
-        return Some(crate::state::ModLoader::Quilt);
+    if mc.contains("quilt") {
+        return crate::state::ModLoader::Quilt;
     }
-    if lower.contains("neoforge") {
-        return Some(crate::state::ModLoader::NeoForge);
+    if mc.contains("neoforge") {
+        return crate::state::ModLoader::NeoForge;
     }
-    if lower.contains("forge") {
-        return Some(crate::state::ModLoader::Forge);
+    if mc.contains("forge") {
+        return crate::state::ModLoader::Forge;
     }
-    None
+    crate::state::ModLoader::Vanilla
 }
 
 /// Check whether an instance is quarantined — covers both DB-backed and

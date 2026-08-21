@@ -366,16 +366,30 @@ pub async fn install_minecraft_with_reporter(
             format!("{}-{}", version.id.clone(), it.id.clone())
         });
 
-    // Download version info (5)
-    let mut version_info = download::download_version_info(
-        &state,
-        version,
-        loader_version.as_ref(),
-        Some(repairing),
-        loading_bar.as_ref(),
-        reporter.as_ref(),
-    )
-    .await?;
+    // For .minecraft format, try loading version info from the instance directory first
+    let minecraft_has_local = instance.library_format
+        == libraries::InstanceFormat::Minecraft
+        && libraries::instance_has_local_version(&instance_path, &version_jar);
+
+    let mut version_info = if minecraft_has_local
+        && instance_path.join(format!("{version_jar}.json")).exists()
+    {
+        let json_content = tokio::fs::read_to_string(
+            instance_path.join(format!("{version_jar}.json")),
+        )
+        .await?;
+        serde_json::from_str(&json_content)?
+    } else {
+        download::download_version_info(
+            &state,
+            version,
+            loader_version.as_ref(),
+            Some(repairing),
+            loading_bar.as_ref(),
+            reporter.as_ref(),
+        )
+        .await?
+    };
 
     let key = version_info
         .java_version
@@ -448,22 +462,53 @@ pub async fn install_minecraft_with_reporter(
             )
             .await?;
     }
-    download::download_minecraft(
-        &state,
-        &version_info,
-        loading_bar.as_ref(),
-        &java_version.architecture,
-        repairing,
-        minecraft_updated,
-        reporter.clone(),
-        phase_details.clone(),
-    )
-    .await?;
+    // For .minecraft format with local version, skip downloading minecraft
+    if !minecraft_has_local {
+        if let Some(reporter) = &reporter {
+            reporter
+                .update(
+                    InstallPhaseId::DownloadingMinecraft,
+                    None,
+                    phase_details.clone(),
+                )
+                .await?;
+        }
+        download::download_minecraft(
+            &state,
+            &version_info,
+            loading_bar.as_ref(),
+            &java_version.architecture,
+            repairing,
+            minecraft_updated,
+            reporter.clone(),
+            phase_details.clone(),
+        )
+        .await?;
+    }
 
     let client_path = state
         .directories
         .version_dir(&version_jar)
         .join(format!("{version_jar}.jar"));
+
+    // For .minecraft format, prefer the instance's own version jar
+    let client_path = if instance.library_format
+        == libraries::InstanceFormat::Minecraft
+    {
+        if let Some(local_path) =
+            libraries::instance_version_jar_path(
+                &instance_path,
+                &version_jar,
+                &instance.library_format,
+            )
+        {
+            local_path
+        } else {
+            client_path
+        }
+    } else {
+        client_path
+    };
     if let Some(processors) = &version_info.processors {
         let libraries_dir = state.directories.libraries_dir();
 
@@ -821,15 +866,30 @@ pub async fn launch_minecraft(
             format!("{}-{}", version.id.clone(), it.id.clone())
         });
 
-    let mut version_info = download::download_version_info(
-        &state,
-        version,
-        loader_version.as_ref(),
-        None,
-        None,
-        None,
-    )
-    .await?;
+    // For .minecraft format, try loading version info from the instance directory first
+    let minecraft_has_local = instance.library_format
+        == libraries::InstanceFormat::Minecraft
+        && libraries::instance_has_local_version(&instance_path, &version_jar);
+
+    let mut version_info = if minecraft_has_local
+        && instance_path.join(format!("{version_jar}.json")).exists()
+    {
+        let json_content = tokio::fs::read_to_string(
+            instance_path.join(format!("{version_jar}.json")),
+        )
+        .await?;
+        serde_json::from_str(&json_content)?
+    } else {
+        download::download_version_info(
+            &state,
+            version,
+            loader_version.as_ref(),
+            None,
+            None,
+            None,
+        )
+        .await?
+    };
     if version_info.logging.is_none() {
         let requires_logging_info = version_index
             <= minecraft
@@ -871,6 +931,25 @@ pub async fn launch_minecraft(
         .version_dir(&version_jar)
         .join(format!("{version_jar}.jar"));
 
+    // For .minecraft format, prefer the instance's own version jar
+    let client_path = if instance.library_format
+        == libraries::InstanceFormat::Minecraft
+    {
+        if let Some(local_path) =
+            libraries::instance_version_jar_path(
+                &instance_path,
+                &version_jar,
+                &instance.library_format,
+            )
+        {
+            local_path
+        } else {
+            client_path
+        }
+    } else {
+        client_path
+    };
+
     let args = version_info.arguments.clone().unwrap_or_default();
     let mut command = match wrapper {
         Some(hook) => {
@@ -907,6 +986,16 @@ pub async fn launch_minecraft(
     }
 
     let natives_dir = state.directories.version_natives_dir(&version_jar);
+    // For .minecraft format, prefer the instance's own natives directory
+    let natives_dir = if minecraft_has_local {
+        libraries::instance_natives_dir(
+            &instance_path,
+            &version_jar,
+            &instance.library_format,
+        )
+    } else {
+        natives_dir
+    };
     if !natives_dir.exists() {
         io::create_dir_all(&natives_dir).await?;
     }

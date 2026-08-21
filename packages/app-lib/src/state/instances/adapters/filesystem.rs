@@ -13,13 +13,29 @@ pub(crate) struct ScannedContentFile {
 
 pub(crate) fn scan_content_files(
     instance_dir: &Path,
+    shared_dirs: &[PathBuf],
 ) -> crate::Result<Vec<ScannedContentFile>> {
     let instance_dir = io::canonicalize(instance_dir)?;
     let mut files = Vec::new();
 
+    // Scan the instance directory first
+    scan_instance_dir(&instance_dir, &mut files)?;
+
+    // For .minecraft format, also scan shared root-level directories
+    for shared_dir in shared_dirs {
+        scan_instance_dir(shared_dir, &mut files)?;
+    }
+
+    Ok(files)
+}
+
+fn scan_instance_dir(
+    dir: &Path,
+    files: &mut Vec<ScannedContentFile>,
+) -> crate::Result<()> {
     for project_type in ProjectType::iterator() {
         let folder = project_type.get_folder();
-        let folder_path = instance_dir.join(folder);
+        let folder_path = dir.join(folder);
 
         if !folder_path.exists() {
             continue;
@@ -63,8 +79,7 @@ pub(crate) fn scan_content_files(
             });
         }
     }
-
-    Ok(files)
+    Ok(())
 }
 
 pub(crate) fn project_type_from_relative_path(
