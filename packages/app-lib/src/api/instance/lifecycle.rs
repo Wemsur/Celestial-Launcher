@@ -2,8 +2,8 @@ use crate::event::InstancePayloadType;
 use crate::event::emit::emit_instance;
 use crate::state::instances::adapters::sqlite::instance_rows;
 use crate::state::{
-    CreateInstance, EditInstance, InstanceLink, InstanceMetadata, ModLoader,
-    State,
+    CreateInstance, EditInstance, Instance, InstanceLink, InstanceMetadata,
+    ModLoader, State,
 };
 
 #[tracing::instrument]
@@ -71,6 +71,10 @@ pub async fn edit(
                         &state,
                         &inst.path,
                     );
+                let library_format = inst.library_format.clone();
+                let mut saved = false;
+
+                // Try instance.json first (Modrinth format, or .minecraft with sidecar)
                 if let Some(mut instance_json) =
                     crate::state::libraries::InstanceJson::read_from_dir(&dir)?
                 {
@@ -92,7 +96,6 @@ pub async fn edit(
                     if let Some(link) = &patch.link {
                         instance_json.link = Some(link.clone());
                     }
-                    // Update launch overrides
                     if let Some(launch_patch) = &patch.launch_overrides {
                         let overrides =
                             instance_json.launch_overrides.get_or_insert_with(|| {
@@ -122,15 +125,12 @@ pub async fn edit(
                             overrides.hooks = launch_patch.hooks.clone().unwrap_or_default();
                         }
                     }
-                    // Update update_channel
                     if let Some(update_channel) = patch.update_channel {
                         instance_json.update_channel = update_channel;
                     }
-                    // Update groups
                     if let Some(groups) = &patch.groups {
                         instance_json.groups = groups.clone();
                     }
-                    // Update content set fields (game_version, loader, loader_version)
                     if let Some(cs_patch) = &patch.content_set_patch {
                         if let Some(ref gv) = cs_patch.game_version {
                             instance_json.game_version = Some(gv.clone());
@@ -143,6 +143,73 @@ pub async fn edit(
                         }
                     }
                     instance_json.write_to_dir(&dir)?;
+                    saved = true;
+                }
+
+                // Fall back to celestial.json for .minecraft instances without instance.json
+                if !saved && library_format == crate::state::libraries::InstanceFormat::Minecraft {
+                    let mut celestial =
+                        crate::state::libraries::CelestialJson::read_from_dir(&dir)?
+                            .unwrap_or_default();
+
+                    if let Some(name) = &patch.name {
+                        celestial.name = Some(name.clone());
+                    }
+                    if let Some(icon_path) = &patch.icon_path {
+                        celestial.icon_path = icon_path.clone();
+                    }
+                    if let Some(last_played) = &patch.last_played {
+                        celestial.last_played = *last_played;
+                    }
+                    if let Some(stpt) = patch.submitted_time_played {
+                        celestial.submitted_time_played = stpt;
+                    }
+                    if let Some(rtp) = patch.recent_time_played {
+                        celestial.recent_time_played = rtp;
+                    }
+                    if let Some(link) = &patch.link {
+                        celestial.link = Some(link.clone());
+                    }
+                    if let Some(launch_patch) = &patch.launch_overrides {
+                        let overrides =
+                            celestial.launch_overrides.get_or_insert_with(|| {
+                                crate::state::InstanceLaunchOverridesData::new(
+                                    instance_id.to_string(),
+                                )
+                            });
+                        if let Some(java_path) = &launch_patch.java_path {
+                            overrides.java_path = java_path.clone();
+                        }
+                        if let Some(extra_launch_args) = &launch_patch.extra_launch_args {
+                            overrides.extra_launch_args = extra_launch_args.clone();
+                        }
+                        if let Some(custom_env_vars) = &launch_patch.custom_env_vars {
+                            overrides.custom_env_vars = custom_env_vars.clone();
+                        }
+                        if let Some(memory) = &launch_patch.memory {
+                            overrides.memory = *memory;
+                        }
+                        if let Some(force_fullscreen) = &launch_patch.force_fullscreen {
+                            overrides.force_fullscreen = *force_fullscreen;
+                        }
+                        if let Some(game_resolution) = &launch_patch.game_resolution {
+                            overrides.game_resolution = *game_resolution;
+                        }
+                        if launch_patch.hooks.is_some() {
+                            overrides.hooks = launch_patch.hooks.clone().unwrap_or_default();
+                        }
+                    }
+                    if let Some(update_channel) = patch.update_channel {
+                        celestial.update_channel = update_channel;
+                    }
+                    if let Some(groups) = &patch.groups {
+                        celestial.groups = groups.clone();
+                    }
+                    celestial.write_to_dir(&dir)?;
+                    saved = true;
+                }
+
+                if saved {
                     found = true;
                     break;
                 }
@@ -155,7 +222,7 @@ pub async fn edit(
             );
         }
 
-        // Return fresh metadata from JSON
+        // Re-scan to pick up any changes
         let inst = json_instances
             .into_iter()
             .find(|i| i.id == instance_id)
@@ -191,4 +258,79 @@ pub async fn remove(instance_id: &str) -> crate::Result<()> {
     emit_instance(instance_id, InstancePayloadType::Removed).await?;
 
     Ok(())
+}
+
+/// Rename a `.minecraft`-format instance directory and its version files.
+/// Returns the new instance metadata.
+#[tracing::instrument]
+pub async fn rename(
+    instance_id: &str,
+    new_name: String,
+) -> crate::Result<InstanceMetadata> {
+    let state = State::get().await?;
+
+    let json_instances =
+        crate::state::libraries::list_instances_from_json(&state).await?;
+    let inst = match json_instances.iter().find(|i| i.id == instance_id) {
+        Some(i) => i.clone(),
+        None => {
+            return Err(
+                crate::ErrorKind::InputError("Unknown instance".to_string())
+                    .into(),
+            );
+        }
+    };
+
+    let dir =
+        crate::state::libraries::resolve_instance_dir(&state, &inst.path);
+
+    if inst.library_format != crate::state::libraries::InstanceFormat::Minecraft {
+        return Err(
+            crate::ErrorKind::InputError(
+                "Rename is only supported for .minecraft format instances".to_string(),
+            )
+            .into(),
+        );
+    }
+
+    let new_dir =
+        crate::state::libraries::rename_minecraft_instance(&dir, &new_name)?;
+
+    // Update the celestial.json (or create one if missing) name field
+    let celestial =
+        crate::state::libraries::CelestialJson::read_from_dir(&new_dir)?
+            .unwrap_or_default();
+    let mut updated_celestial = celestial.clone();
+    updated_celestial.name = Some(new_name.clone());
+    updated_celestial.write_to_dir(&new_dir)?;
+
+    // Emit event so the frontend knows the instance moved
+    emit_instance(instance_id, InstancePayloadType::Edited).await?;
+
+    // Return fresh metadata — the scan will pick up the new path from
+    // the sidecar name, and the path itself must be refreshed. We rebuild
+    // from the new directory name directly.
+    let id =
+        crate::state::libraries::instance_id_from_path(
+            new_dir.to_string_lossy().as_ref(),
+        );
+    Ok(crate::api::instance::get::instance_metadata_from_instance(
+        &Instance {
+            id,
+            path: new_dir.to_string_lossy().to_string(),
+            applied_content_set_id: None,
+            install_stage: crate::state::InstanceInstallStage::Installed,
+            launcher_feature_version:
+                crate::state::LauncherFeatureVersion::MOST_RECENT,
+            update_channel: updated_celestial.update_channel,
+            name: new_name,
+            icon_path: updated_celestial.icon_path.clone(),
+            created: inst.created,
+            modified: chrono::Utc::now(),
+            last_played: updated_celestial.last_played,
+            submitted_time_played: updated_celestial.submitted_time_played,
+            recent_time_played: updated_celestial.recent_time_played,
+            library_format: crate::state::libraries::InstanceFormat::Minecraft,
+        },
+    ))
 }

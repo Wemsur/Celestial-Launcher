@@ -52,6 +52,7 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             instance_kill,
             instance_edit,
             instance_edit_icon,
+            instance_rename,
             instance_share_can_current_user_use,
             instance_share_get_users,
             instance_share_invite_users,
@@ -826,6 +827,14 @@ pub async fn instance_edit_icon(
 ) -> Result<()> {
     theseus::instance::edit_icon(instance_id, icon_path).await?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn instance_rename(
+    instance_id: &str,
+    new_name: String,
+) -> Result<theseus::data::InstanceMetadata> {
+    Ok(theseus::instance::rename(instance_id, new_name).await?)
 }
 
 #[tauri::command]

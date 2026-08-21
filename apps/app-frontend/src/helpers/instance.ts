@@ -339,6 +339,11 @@ export async function edit_icon(instanceId: string, iconPath: string | null): Pr
 	return await invoke('plugin:instance|instance_edit_icon', { instanceId, iconPath })
 }
 
+// Renames a .minecraft-format instance (renames the folder and its version files)
+export async function rename(instanceId: string, newName: string): Promise<GameInstance> {
+	return await invoke('plugin:instance|instance_rename', { instanceId, newName })
+}
+
 export type SharedInstanceUsers = {
 	user_ids: string[]
 	users: SharedInstanceUser[]

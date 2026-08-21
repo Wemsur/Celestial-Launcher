@@ -223,6 +223,79 @@ impl InstanceJson {
     }
 }
 
+/// Lightweight sidecar for `.minecraft`-format instances that lack an `instance.json`.
+/// Stores only launcher-managed settings (no game_version/loader/loader_version).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub(crate) struct CelestialJson {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_played: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link: Option<InstanceLink>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch_overrides: Option<InstanceLaunchOverridesData>,
+    #[serde(default)]
+    pub groups: Vec<String>,
+    #[serde(default)]
+    pub update_channel: ReleaseChannel,
+    #[serde(default)]
+    pub submitted_time_played: u64,
+    #[serde(default)]
+    pub recent_time_played: u64,
+}
+
+impl CelestialJson {
+    pub(crate) fn read_from_dir(dir: &Path) -> crate::Result<Option<Self>> {
+        let json_path = dir.join("celestial.json");
+        if !json_path.exists() {
+            return Ok(None);
+        }
+        let content = fs::read_to_string(&json_path)?;
+        let instance: Self = serde_json::from_str(&content)?;
+        Ok(Some(instance))
+    }
+
+    pub(crate) fn write_to_dir(&self, dir: &Path) -> crate::Result<()> {
+        fs::create_dir_all(dir)?;
+        let json_path = dir.join("celestial.json");
+        let content = serde_json::to_string_pretty(self)?;
+        fs::write(&json_path, content)?;
+        Ok(())
+    }
+
+    pub(crate) fn launch_overrides(
+        &self,
+        instance_id: &str,
+    ) -> crate::state::InstanceLaunchOverrides {
+        match self.launch_overrides.as_ref() {
+            Some(data) => crate::state::InstanceLaunchOverrides {
+                instance_id: instance_id.to_string(),
+                java_path: data.java_path.clone(),
+                extra_launch_args: data.extra_launch_args.clone(),
+                custom_env_vars: data.custom_env_vars.clone(),
+                memory: data.memory,
+                force_fullscreen: data.force_fullscreen,
+                game_resolution: data.game_resolution,
+                hooks: data.hooks.clone(),
+            },
+            None => crate::state::InstanceLaunchOverrides::empty(
+                instance_id.to_string(),
+            ),
+        }
+    }
+
+    pub(crate) fn groups(&self) -> &[String] {
+        &self.groups
+    }
+
+    pub(crate) fn update_channel(&self) -> ReleaseChannel {
+        self.update_channel
+    }
+}
+
 pub(crate) fn instance_id_from_path(path: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(path.as_bytes());
@@ -308,17 +381,75 @@ pub async fn list_instances_from_json(
                 continue;
             }
 
-            let Some(instance_json) =
-                InstanceJson::read_from_dir(&dir)?
-            else {
-                continue;
-            };
-
-            let instance = instance_json.to_instance_with_format(
-                dir.to_string_lossy().as_ref(),
-                library.format.clone(),
-            );
-            instances.push(instance);
+            // For Modrinth format, require instance.json; for .minecraft format,
+            // derive a minimal instance from the directory even without one.
+            match library.format {
+                InstanceFormat::Modrinth => {
+                    let Some(instance_json) =
+                        InstanceJson::read_from_dir(&dir)?
+                    else {
+                        continue;
+                    };
+                    let instance = instance_json.to_instance_with_format(
+                        dir.to_string_lossy().as_ref(),
+                        library.format.clone(),
+                    );
+                    instances.push(instance);
+                }
+                InstanceFormat::Minecraft => {
+                    if let Some(instance_json) =
+                        InstanceJson::read_from_dir(&dir)?
+                    {
+                        let instance = instance_json.to_instance_with_format(
+                            dir.to_string_lossy().as_ref(),
+                            library.format.clone(),
+                        );
+                        instances.push(instance);
+                    } else {
+                        // No sidecar — try celestial.json first, then fall back to dir name.
+                        let id = instance_id_from_path(dir.to_string_lossy().as_ref());
+                        let celestial =
+                            CelestialJson::read_from_dir(&dir)?;
+                        let name = celestial
+                            .as_ref()
+                            .and_then(|c| c.name.clone())
+                            .or_else(|| {
+                                dir.file_name()
+                                    .and_then(|n| n.to_str())
+                                    .map(|s| s.to_string())
+                            })
+                            .unwrap_or_default();
+                        instances.push(Instance {
+                            id,
+                            path: dir.to_string_lossy().to_string(),
+                            applied_content_set_id: None,
+                            install_stage: crate::state::InstanceInstallStage::Installed,
+                            launcher_feature_version:
+                                crate::state::LauncherFeatureVersion::MOST_RECENT,
+                            update_channel: celestial
+                                .as_ref()
+                                .map(|c| c.update_channel.clone())
+                                .unwrap_or_default(),
+                            name,
+                            icon_path: celestial.as_ref().and_then(|c| c.icon_path.clone()),
+                            created: Utc::now(),
+                            modified: Utc::now(),
+                            last_played: celestial
+                                .as_ref()
+                                .and_then(|c| c.last_played),
+                            submitted_time_played: celestial
+                                .as_ref()
+                                .map(|c| c.submitted_time_played)
+                                .unwrap_or(0),
+                            recent_time_played: celestial
+                                .as_ref()
+                                .map(|c| c.recent_time_played)
+                                .unwrap_or(0),
+                            library_format: library.format.clone(),
+                        });
+                    }
+                }
+            }
         }
     }
 
@@ -670,6 +801,13 @@ pub async fn find_json_instance(
             let Some(instance_json) =
                 InstanceJson::read_from_dir(&dir)?
             else {
+                // For .minecraft format, derive instance ID from path and check for a version JSON
+                if library.format == InstanceFormat::Minecraft {
+                    let id = instance_id_from_path(dir.to_string_lossy().as_ref());
+                    if id == instance_id {
+                        return Ok(Some(resolve_instance_dir(state, &dir.to_string_lossy().to_string())));
+                    }
+                }
                 continue;
             };
             let instance = instance_json.to_instance_with_format(
@@ -839,4 +977,74 @@ pub async fn is_instance_quarantined(
         })
         .map(|j| j.quarantined)
         .unwrap_or(false))
+}
+
+/// Rename a `.minecraft`-format instance directory and its version files.
+/// Returns the new absolute instance directory path on success.
+pub(crate) fn rename_minecraft_instance(
+    old_dir: &Path,
+    new_name: &str,
+) -> crate::Result<PathBuf> {
+    // Compute new parent (versions/<new_name>)
+    let parent = old_dir
+        .parent()
+        .ok_or_else(|| {
+            crate::ErrorKind::InputError(
+                "Cannot determine parent directory for instance".to_string(),
+            )
+        })?;
+    let old_filestem = old_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| {
+            crate::ErrorKind::InputError("Invalid instance directory name".to_string())
+        })?;
+    let new_dir = parent.join(new_name);
+
+    // Rename the instance directory
+    if new_dir.exists() {
+        return Err(
+            crate::ErrorKind::InputError(format!(
+                "A directory named '{}' already exists",
+                new_name
+            ))
+            .into(),
+        );
+    }
+    fs::rename(old_dir, &new_dir)?;
+
+    // Rename only the version-specific files and natives directory.
+    // Do NOT rename other files like content_cache.json, usercache.json, etc.
+    let mut had_jar = false;
+    let mut had_json = false;
+    for entry in fs::read_dir(&new_dir)? {
+        let entry = entry?;
+        let file_name = entry.file_name().to_string_lossy().to_string();
+        let new_file_name = if file_name == format!("{old_filestem}.jar") {
+            format!("{new_name}.jar")
+        } else if file_name == format!("{old_filestem}.json") {
+            format!("{new_name}.json")
+        } else if file_name == format!("{old_filestem}-natives") {
+            format!("{new_name}-natives")
+        } else {
+            continue;
+        };
+        fs::rename(entry.path(), new_dir.join(&new_file_name))?;
+        if file_name.ends_with(".jar") {
+            had_jar = true;
+        } else if file_name.ends_with(".json") {
+            had_json = true;
+        }
+    }
+    // Ensure we renamed at least the version manifest; the jar may or may not exist.
+    if !had_json {
+        return Err(
+            crate::ErrorKind::InputError(format!(
+                "No version JSON found in instance directory"
+            ))
+            .into(),
+        );
+    }
+
+    Ok(new_dir)
 }

@@ -20,7 +20,7 @@ import { useRouter } from 'vue-router'
 import ConfirmDeleteInstanceModal from '@/components/ui/modal/ConfirmDeleteInstanceModal.vue'
 import { trackEvent } from '@/helpers/analytics'
 import { install_duplicate_instance } from '@/helpers/install'
-import { edit, edit_icon, list, remove } from '@/helpers/instance'
+import { edit, edit_icon, list, remove, rename } from '@/helpers/instance'
 import { injectInstanceSettings } from '@/providers/instance-settings'
 
 import type { GameInstance } from '../../../helpers/types'
@@ -143,6 +143,10 @@ const editInstanceObject = computed(() => ({
 	groups: groups.value.map((x) => x.trim().substring(0, 32)).filter((x) => x.length > 0),
 }))
 
+const isMinecraftFormat = computed(() =>
+	instance.value.path.includes('.minecraft'),
+)
+
 const toggleGroup = (group: string) => {
 	if (groups.value.includes(group)) {
 		groups.value = groups.value.filter((x) => x !== group)
@@ -161,10 +165,26 @@ const addCategory = () => {
 }
 
 watch(
-	[title, groups, groups],
+	[title, groups],
 	async () => {
 		if (removing.value) return
-		await edit(instance.value.id, editInstanceObject.value).catch(handleError)
+		const patch = {
+			name: title.value.trim().substring(0, 32) ?? 'Instance',
+			groups: groups.value.map((x) => x.trim().substring(0, 32)).filter((x) => x.length > 0),
+		}
+		if (isMinecraftFormat.value) {
+			// For .minecraft instances, rename uses a dedicated command
+			// that also renames the folder and version files.
+			if (patch.name !== instance.value.name) {
+				await rename(instance.value.id, patch.name).catch(handleError)
+			}
+			// Groups are saved via edit (written to celestial.json)
+			if (JSON.stringify(patch.groups) !== JSON.stringify(instance.value.groups)) {
+				await edit(instance.value.id, { groups: patch.groups }).catch(handleError)
+			}
+		} else {
+			await edit(instance.value.id, patch).catch(handleError)
+		}
 	},
 	{ deep: true },
 )

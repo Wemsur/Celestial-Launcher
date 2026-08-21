@@ -224,6 +224,7 @@ fn main() {
                         "instance_kill",
                         "instance_edit",
                         "instance_edit_icon",
+                        "instance_rename",
                         "instance_share_can_current_user_use",
                         "instance_share_get_users",
                         "instance_share_invite_users",
@@ -240,6 +241,7 @@ fn main() {
                         "library_list",
                         "library_add",
                         "library_remove",
+                        "library_default_path",
                     ])
                     .default_permission(
                         DefaultPermissionRule::AllowAllCommands,
