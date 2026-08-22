@@ -1588,6 +1588,19 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			<NavButton v-if="true" v-tooltip.right="'世界'" to="/worlds">
 				<WorldIcon />
 			</NavButton>
+            <NavButton
+                v-tooltip.right="formatMessage(messages.library)"
+                to="/library"
+                :is-primary="(r) => r.path === '/library' || r.path === '/library'"
+                :is-subpage="
+					() =>
+						route.path.startsWith('/instance') ||
+						((route.path.startsWith('/browse') || route.path.startsWith('/project')) &&
+							route.query.i)
+				"
+            >
+                <LibraryIcon />
+            </NavButton>
 			<NavButton
 				v-tooltip.right="formatMessage(commonMessages.discoverContentLabel)"
 				to="/browse/modpack"
@@ -1598,19 +1611,6 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			</NavButton>
 			<NavButton v-tooltip.right="formatMessage(appMessages.skinSelectorLabel)" to="/skins">
 				<ShirtIcon />
-			</NavButton>
-			<NavButton
-				v-tooltip.right="formatMessage(messages.library)"
-				to="/library"
-				:is-primary="(r) => r.path === '/library' || r.path === '/library'"
-				:is-subpage="
-					() =>
-						route.path.startsWith('/instance') ||
-						((route.path.startsWith('/browse') || route.path.startsWith('/project')) &&
-							route.query.i)
-				"
-			>
-				<LibraryIcon />
 			</NavButton>
 <!--			<NavButton
 				v-tooltip.right="'Modrinth Hosting'"

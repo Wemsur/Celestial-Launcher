@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { LibraryIcon, PlusIcon } from '@modrinth/assets'
+import {BoxIcon, FolderSearchIcon, LibraryIcon, PlusIcon, SettingsIcon} from '@modrinth/assets'
 import {
-	ButtonStyled,
-	DropdownSelect,
-	injectNotificationManager,
-	NavTabs,
-	NewModal as Modal,
-	StyledInput,
+    ButtonStyled, commonMessages,
+    DropdownSelect,
+    injectNotificationManager,
+    NavTabs,
+    NewModal as Modal,
+    StyledInput,
 } from '@modrinth/ui'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
@@ -19,6 +19,7 @@ import { list } from '@/helpers/instance'
 import type { InstanceFormat } from '@/helpers/library'
 import { library_default_path, library_list } from '@/helpers/library'
 import { useRootBreadcrumb } from '@/providers/breadcrumbs'
+import NavButton from "@/components/ui/NavButton.vue";
 
 const { handleError } = injectNotificationManager()
 const showCreationModal = inject('showCreationModal')
@@ -175,13 +176,25 @@ function closeAddLibraryModal() {
 				:links="tabLinks"
 				:active-href="route.path"
 			/>
-			<button
+<!--			<button
 				class="btn btn-brand rounded-full w-8 h-8 p-0 flex items-center justify-center transition-all hover:scale-105"
 				:aria-label="$t('common.add')"
 				@click="addLibraryModalRef?.show()"
 			>
 				<PlusIcon class="size-4" />
-			</button>
+			</button>-->
+<!--            <NavButton
+                v-tooltip.right="formatMessage(commonMessages.settingsLabel)"
+                :to="() => appSettingsModal?.show()"
+            >
+                <SettingsIcon />
+            </NavButton>-->
+            <NavButton
+                :to="() => addLibraryModalRef?.show()"
+            >
+                <PlusIcon />
+            </NavButton>
+
 		</div>
 
 		<!-- Add Library Modal -->
@@ -191,30 +204,44 @@ function closeAddLibraryModal() {
 			:closable="false"
 			noblur
 		>
-			<div class="flex flex-col gap-4">
+			<div class="flex flex-col gap-4 w-[500px]">
 				<div class="flex flex-col gap-1">
-					<span class="text-sm font-medium text-primary">库名称（可选）</span>
-					<StyledInput
-						v-model="addLibraryName"
-						placeholder="留空则使用文件夹名"
-						variant="outlined"
-					/>
+                    <h2 class="m-0 text-lg font-semibold text-contrast">
+                        库名称（可选）
+                    </h2>
+                    <StyledInput
+                        id="appDir"
+                        v-model="addLibraryName"
+                        placeholder="留空则使用文件夹名"
+                        type="text"
+                        wrapper-class="w-full"
+                    >
+                    </StyledInput>
 				</div>
-				<div class="flex flex-col gap-1">
-					<span class="text-sm font-medium text-primary">路径</span>
-					<StyledInput
-						v-model="addLibraryPath"
-						placeholder="选择文件夹或输入路径"
-						variant="outlined"
-						:append-action="true"
-					>
-						<template #right>
-							<ButtonStyled variant="secondary" size="small" @click="pickFolder">
-								浏览
-							</ButtonStyled>
-						</template>
-					</StyledInput>
-				</div>
+                <h2 class="m-0 text-lg font-semibold text-contrast">
+                    库位置
+                </h2>
+                <StyledInput
+                    id="appDir"
+                    v-model="addLibraryPath"
+                    placeholder="选择文件夹或输入路径"
+                    :icon="BoxIcon"
+                    type="text"
+                    wrapper-class="w-full"
+                >
+                    <template #right>
+                        <ButtonStyled circular>
+                            <button
+                                v-tooltip="'浏览文件夹'"
+                                :aria-label="'浏览文件夹'"
+                                class="ml-1.5"
+                                @click="pickFolder"
+                            >
+                                <FolderSearchIcon aria-hidden="true" />
+                            </button>
+                        </ButtonStyled>
+                    </template>
+                </StyledInput>
 				<div class="flex flex-col gap-1">
 					<span class="text-sm font-medium text-primary">格式</span>
 					<DropdownSelect

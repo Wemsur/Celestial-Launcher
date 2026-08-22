@@ -747,7 +747,7 @@
     "defaultMessage": "加载器"
   },
   "creation-flow.modal.custom-setup.library.label": {
-    "defaultMessage": "库"
+    "defaultMessage": "版本库"
   },
   "creation-flow.modal.custom-setup.library.placeholder": {
     "defaultMessage": "选择库（可选）"
