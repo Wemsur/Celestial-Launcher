@@ -4,49 +4,52 @@
 		class="flex items-center gap-2 mr-1.5"
 		data-tauri-drag-region-exclude
 	>
-		<ButtonStyled type="transparent" circular>
-			<button class="relative expanded-button" @click="() => getCurrentWindow().minimize()">
-				<MinimizeIcon />
-			</button>
-		</ButtonStyled>
-		<ButtonStyled type="transparent" circular>
-			<button class="relative expanded-button" @click="() => getCurrentWindow().toggleMaximize()">
-				<RestoreIcon v-if="isMaximized" />
-				<MaximizeIcon v-else />
-			</button>
-		</ButtonStyled>
-		<ButtonStyled
-			type="transparent"
-			color="red"
-			color-fill="none"
-			hover-color-fill="background"
-			circular
+		<IconButton
+			type="quiet"
+			label="Minimize window"
+			class="relative expanded-button"
+			@click="() => getCurrentWindow().minimize()"
 		>
-			<button class="relative expanded-button close-button" @click="handleClose">
-				<XIcon />
-			</button>
-		</ButtonStyled>
+			<MinimizeIcon />
+		</IconButton>
+		<IconButton
+			type="quiet"
+			label="Toggle maximize window"
+			class="relative expanded-button"
+			@click="() => getCurrentWindow().toggleMaximize()"
+		>
+			<RestoreIcon v-if="isMaximized" />
+			<MaximizeIcon v-else />
+		</IconButton>
+		<IconButton
+			type="quiet"
+			label="Close window"
+			class="relative expanded-button close-button"
+			@click="handleClose"
+		>
+			<XIcon />
+		</IconButton>
 	</section>
 </template>
 
 <script setup>
 import { MaximizeIcon, MinimizeIcon, RestoreIcon, XIcon } from '@modrinth/assets'
-import { ButtonStyled } from '@modrinth/ui'
+import { IconButton } from '@modrinth/ui'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { saveWindowState, StateFlags } from '@tauri-apps/plugin-window-state'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
+import { useAppSettings } from '@/composables/use-app-settings.ts'
 import { get as getSettings } from '@/helpers/settings.ts'
 import { getOS } from '@/helpers/utils.js'
-import { useTheming } from '@/store/state'
 
-const themeStore = useTheming()
+const appSettings = useAppSettings()
 
 const nativeDecorations = ref(true)
 const isMaximized = ref(false)
 const os = ref('')
 
-const alwaysShowAppControls = computed(() => themeStore.getFeatureFlag('always_show_app_controls'))
+const alwaysShowAppControls = computed(() => appSettings.getFeatureFlag('always_show_app_controls'))
 
 const showControls = computed(
 	() =>

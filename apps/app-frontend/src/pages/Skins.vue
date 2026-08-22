@@ -2,15 +2,15 @@
 import {
 	CheckIcon,
 	EditIcon,
-	ExcitedRinthbot,
 	EyeIcon,
-	LogInIcon,
+	InfoIcon,
 	RotateCounterClockwiseIcon,
 	ShirtIcon,
 	SpinnerIcon,
+	WindowsIcon,
 } from '@modrinth/assets'
 import {
-	ButtonStyled,
+	Button,
 	commonMessages,
 	ConfirmModal,
 	defineMessages,
@@ -32,6 +32,8 @@ import EarsModIcon from '@/assets/skins/ears-mod.png'
 import type AccountsCard from '@/components/ui/AccountsCard.vue'
 import EditSkinModal from '@/components/ui/skin/EditSkinModal.vue'
 import VirtualSkinSectionList from '@/components/ui/skin/VirtualSkinSectionList.vue'
+import { useAppSettings } from '@/composables/use-app-settings.ts'
+import { handleSevereError } from '@/composables/use-error.js'
 import { trackEvent } from '@/helpers/analytics'
 import { check_reachable, get_default_user, login as login_flow, users } from '@/helpers/auth'
 import type { RenderResult } from '@/helpers/rendering/batch-skin-renderer.ts'
@@ -58,8 +60,6 @@ import {
 } from '@/helpers/skins.ts'
 import { hasPride26Badge } from '@/helpers/user-campaigns.ts'
 import { useRootBreadcrumb } from '@/providers/breadcrumbs'
-import { handleSevereError } from '@/store/error'
-import { useTheming } from '@/store/state'
 import { appMessages } from '@/utils/app-messages'
 
 useRootBreadcrumb({
@@ -173,6 +173,10 @@ const messages = defineMessages({
 		id: 'app.skins.apply-button',
 		defaultMessage: 'Apply',
 	},
+	demoApplyTooltip: {
+		id: 'app.skins.demo.apply-tooltip',
+		defaultMessage: 'Sign in to apply skins.',
+	},
 	editSkinButton: {
 		id: 'app.skins.preview.edit-button',
 		defaultMessage: 'Edit skin',
@@ -189,22 +193,17 @@ const messages = defineMessages({
 		id: 'app.skins.toggle-ears-features-on',
 		defaultMessage: 'Toggle on',
 	},
-	excitedRinthbotAlt: {
-		id: 'app.skins.sign-in.rinthbot-alt',
-		defaultMessage: 'Excited Modrinth Bot',
+	demoTitle: {
+		id: 'app.skins.demo.title',
+		defaultMessage: 'Editing with a demo account',
 	},
-	signInTitle: {
-		id: 'app.skins.sign-in.title',
-		defaultMessage: 'Please sign in',
-	},
-	signInDescription: {
-		id: 'app.skins.sign-in.description',
-		defaultMessage:
-			'Please sign into your Minecraft account to use the skin management features of the Modrinth app.',
+	demoDescription: {
+		id: 'app.skins.demo.description',
+		defaultMessage: 'Sign in to your Minecraft account to save and apply skins!',
 	},
 	signInButton: {
 		id: 'app.skins.sign-in.button',
-		defaultMessage: 'Sign In',
+		defaultMessage: 'Sign in to Microsoft',
 	},
 })
 
@@ -218,7 +217,7 @@ const { addNotification, handleError } = notifications
 const auth = injectAuth()
 const client = injectModrinthClient()
 
-const themeStore = useTheming()
+const appSettings = useAppSettings()
 const skins = ref<Skin[]>([])
 const capes = ref<Cape[]>([])
 const offline = ref(!navigator.onLine)
@@ -340,9 +339,11 @@ const skinTexture = computedAsync(async () => {
 })
 const capeTexture = computed(() => currentCape.value?.texture)
 const skinVariant = computed(() => selectedSkin.value?.variant)
-const skinNametag = computed(() => (themeStore.hideNametagSkinsPage ? undefined : username.value))
+const skinNametag = computed(() => (appSettings.hideNametagSkinsPage ? undefined : username.value))
 const isSkinManagementReadOnly = computed(
-	() => offline.value || (authServerQuery.isError.value && !authServerQuery.isLoading.value),
+	() =>
+		!!currentUser.value &&
+		(offline.value || (authServerQuery.isError.value && !authServerQuery.isLoading.value)),
 )
 const hasPendingSkinChange = computed(
 	() => !skinsMatch(selectedSkin.value, originalSelectedSkin.value),
@@ -756,6 +757,7 @@ function schedulePendingSkinRefresh() {
 async function applySelectedSkin() {
 	const skinToApply = selectedSkin.value
 	if (
+		!currentUser.value ||
 		!skinToApply ||
 		!hasPendingSkinChange.value ||
 		isApplyingSkin.value ||
@@ -1048,6 +1050,7 @@ async function checkUserChanges() {
 	try {
 		const defaultId = await get_default_user()
 		if (defaultId !== currentUserId.value) {
+			await accountsCard.value?.refreshValues()
 			await loadCurrentUser()
 			await loadCapes()
 			await loadSkins()
@@ -1117,6 +1120,7 @@ await loadSkins()
 	<EditSkinModal
 		ref="editSkinModal"
 		:capes="capes"
+		:demo="!currentUser"
 		@saved="onSkinSaved"
 		@deleted="() => loadSkins()"
 	/>
@@ -1135,7 +1139,7 @@ await loadSkins()
 		@proceed="deleteSkin"
 	/>
 
-	<div v-if="currentUser" class="skin-layout box-border min-h-full p-4">
+	<div class="skin-layout box-border grow p-4" :class="{ 'pb-40': !currentUser }">
 		<div class="sticky top-6 self-start p-2 pt-0">
 			<h1 class="m-0 text-2xl font-bold flex items-center gap-2">
 				{{ formatMessage(appMessages.skinSelectorLabel) }}
@@ -1171,13 +1175,15 @@ await loadSkins()
 								class="skin-preview-actions flex w-full items-center justify-center gap-1.5"
 								:class="selectedSkinHasEarsFeatures ? 'flex-nowrap' : 'flex-wrap'"
 							>
-								<button
+								<Button
 									v-tooltip="
 										selectedSkinHasEarsFeatures
 											? formatMessage(commonMessages.resetButton)
 											: undefined
 									"
-									class="skin-preview-action-button flex h-10 min-w-0 cursor-pointer items-center justify-center gap-2 rounded-[14px] border-0 bg-surface-4 px-4 py-2.5 text-base font-semibold leading-5 text-contrast shadow-md transition-[filter,transform] duration-200 enabled:hover:brightness-[--hover-brightness] enabled:focus-visible:brightness-[--hover-brightness] enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 [&>svg]:size-5 [&>svg]:shrink-0"
+									type="base"
+									size="lg"
+									class="skin-preview-action-button"
 									:disabled="isApplyingSkin || isSkinManagementReadOnly"
 									:aria-label="formatMessage(commonMessages.resetButton)"
 									@click="resetSelectedSkin"
@@ -1186,13 +1192,16 @@ await loadSkins()
 									<span class="skin-preview-action-label">
 										{{ formatMessage(commonMessages.resetButton) }}
 									</span>
-								</button>
-								<button
+								</Button>
+								<Button
 									v-tooltip="
 										selectedSkinHasEarsFeatures ? formatMessage(messages.applyButton) : undefined
 									"
-									class="skin-preview-action-button flex h-10 min-w-0 cursor-pointer items-center justify-center gap-2 rounded-[14px] border-0 bg-brand px-4 py-2.5 text-base font-semibold leading-5 text-[rgba(0,0,0,0.9)] shadow-md transition-[filter,transform] duration-200 enabled:hover:brightness-[--hover-brightness] enabled:focus-visible:brightness-[--hover-brightness] enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 [&>svg]:size-5 [&>svg]:shrink-0"
-									:disabled="isApplyingSkin || isSkinManagementReadOnly"
+									type="colored"
+									color="brand"
+									size="lg"
+									class="skin-preview-action-button"
+									:disabled="!currentUser || isApplyingSkin || isSkinManagementReadOnly"
 									:aria-label="formatMessage(messages.applyButton)"
 									@click="applySelectedSkin"
 								>
@@ -1201,17 +1210,18 @@ await loadSkins()
 									<span class="skin-preview-action-label">
 										{{ formatMessage(messages.applyButton) }}
 									</span>
-								</button>
+								</Button>
 							</div>
-							<button
+							<Button
 								v-else
-								class="flex h-10 min-w-0 cursor-pointer items-center justify-center gap-2 rounded-[14px] border-0 bg-surface-4 px-4 py-2.5 text-base font-semibold leading-5 shadow-md transition-[filter,transform] duration-200 enabled:hover:brightness-[--hover-brightness] enabled:focus-visible:brightness-[--hover-brightness] enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 [&>svg]:size-5 [&>svg]:shrink-0"
+								type="base"
+								size="lg"
 								:disabled="!selectedSkin || isSkinManagementReadOnly"
 								@click="(e: MouseEvent) => selectedSkin && editSkinModal?.show(e, selectedSkin)"
 							>
 								<EditIcon />
 								{{ formatMessage(messages.editSkinButton) }}
-							</button>
+							</Button>
 
 							<div
 								v-if="selectedSkinHasEarsFeatures"
@@ -1240,28 +1250,28 @@ await loadSkins()
 										>Ears</router-link
 									>
 								</div>
-								<ButtonStyled type="outlined">
-									<button
-										class="ears-feature-toggle-button !h-10 !rounded-[14px] !px-4 shadow-md"
-										:aria-pressed="earsFeaturesEnabled"
-										:aria-label="
-											formatMessage(
-												earsFeaturesEnabled
-													? messages.toggleEarsFeaturesOff
-													: messages.toggleEarsFeaturesOn,
-											)
-										"
-										@click="earsFeaturesEnabled = !earsFeaturesEnabled"
-									>
-										{{
-											formatMessage(
-												earsFeaturesEnabled
-													? messages.toggleEarsFeaturesOff
-													: messages.toggleEarsFeaturesOn,
-											)
-										}}
-									</button>
-								</ButtonStyled>
+								<Button
+									type="outlined"
+									size="lg"
+									class="ears-feature-toggle-button shadow-md"
+									:aria-pressed="earsFeaturesEnabled"
+									:aria-label="
+										formatMessage(
+											earsFeaturesEnabled
+												? messages.toggleEarsFeaturesOff
+												: messages.toggleEarsFeaturesOn,
+										)
+									"
+									@click="earsFeaturesEnabled = !earsFeaturesEnabled"
+								>
+									{{
+										formatMessage(
+											earsFeaturesEnabled
+												? messages.toggleEarsFeaturesOff
+												: messages.toggleEarsFeaturesOn,
+										)
+									}}
+								</Button>
 								<Toggle
 									v-model="earsFeaturesEnabled"
 									v-tooltip="
@@ -1311,79 +1321,34 @@ await loadSkins()
 		</div>
 	</div>
 
-	<div v-else class="box-border flex min-h-full items-center justify-center">
+	<div v-if="!currentUser" class="sticky w-full bottom-0 z-20 p-4 pt-0">
 		<div
-			class="relative mx-auto flex w-full max-w-xl flex-col gap-5 rounded-lg bg-bg-raised p-7 shadow-lg"
+			class="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 rounded-[20px] border border-solid border-surface-5 bg-surface-3 p-4"
 		>
-			<div
-				class="absolute top-0 left-0 w-full h-[1px] opacity-40 bg-gradient-to-r from-transparent via-green-500 to-transparent"
-				style="
-					background: linear-gradient(
-						to right,
-						transparent 2rem,
-						var(--color-green) calc(100% - 13rem),
-						var(--color-green) calc(100% - 5rem),
-						transparent calc(100% - 2rem)
-					);
-				"
-			></div>
-
-			<div class="flex flex-col gap-5">
-				<h1 class="text-3xl font-extrabold m-0">{{ formatMessage(messages.signInTitle) }}</h1>
-				<p class="text-lg m-0">
-					{{ formatMessage(messages.signInDescription) }}
-				</p>
-				<ButtonStyled v-show="accountsCard" color="brand" :disabled="accountsCard.loginDisabled">
-					<button :disabled="accountsCard.loginDisabled" @click="login">
-						<LogInIcon v-if="!accountsCard.loginDisabled" />
-						<SpinnerIcon v-else class="animate-spin" />
-						正版登录
-					</button>
-				</ButtonStyled>
-                <ButtonStyled v-show="accountsCard" color="primary" :disabled="accountsCard.loginDisabled">
-                    <button :disabled="accountsCard.loginDisabled" @click="offlineModalRef?.show()">
-                        <LogInIcon v-if="!accountsCard.loginDisabled" />
-                        <SpinnerIcon v-else class="animate-spin" />
-                        离线登录
-                    </button>
-                </ButtonStyled>
+			<div class="flex min-w-0 grow items-start gap-3">
+				<InfoIcon class="size-6 shrink-0 text-blue" />
+				<div class="flex min-w-0 flex-col gap-1">
+					<p class="m-0 text-lg font-semibold leading-6 text-contrast">
+						{{ formatMessage(messages.demoTitle) }}
+					</p>
+					<p class="m-0 text-base leading-6 text-primary">
+						{{ formatMessage(messages.demoDescription) }}
+					</p>
+				</div>
 			</div>
+			<Button
+				v-show="accountsCard"
+				type="colored"
+				color="brand"
+				:disabled="accountsCard.loginDisabled"
+				@click="login"
+			>
+				<SpinnerIcon v-if="accountsCard.loginDisabled" class="animate-spin" />
+				<WindowsIcon v-else />
+				{{ formatMessage(messages.signInButton) }}
+			</Button>
 		</div>
 	</div>
-    <NewModal
-        ref="offlineModalRef"
-        header="添加离线账户"
-        :max-width="'500px'"
-    >
-        <form class="space-y-6 min-w-[400px]" @submit.prevent="handleCreateOffline">
-            <label class="flex flex-col gap-2">
-                <span class="font-semibold text-contrast">用户名</span>
-                <StyledInput
-                    ref="offlineInputRef"
-                    v-model="offlineUsername"
-                    wrapper-class="w-full"
-                    placeholder="请输入玩家名..."
-                />
-                <div v-if="offlineError" class="text-sm text-red">{{ offlineError }}</div>
-            </label>
-        </form>
-        <template #actions>
-            <div class="flex gap-2 justify-end">
-                <ButtonStyled type="outlined">
-                    <button @click="hideOfflineModal">
-                        <XIcon class="h-5 w-5" />
-                        取消
-                    </button>
-                </ButtonStyled>
-                <ButtonStyled color="brand">
-                    <button :disabled="offlineSubmitting" @click="handleCreateOffline">
-                        <EditIcon class="h-5 w-5" />
-                        添加
-                    </button>
-                </ButtonStyled>
-            </div>
-        </template>
-    </NewModal>
 </template>
 
 <style lang="scss" scoped>

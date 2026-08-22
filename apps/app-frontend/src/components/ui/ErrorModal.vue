@@ -9,16 +9,22 @@ import {
 	WrenchIcon,
 	XIcon,
 } from '@modrinth/assets'
-import { ButtonStyled, Collapsible, injectNotificationManager } from '@modrinth/ui'
+import {
+	Button,
+	ButtonLink,
+	Collapsible,
+	IconButton,
+	injectNotificationManager,
+} from '@modrinth/ui'
 import { computed, ref } from 'vue'
 
 import { ChatIcon } from '@/assets/icons'
 import ModalWrapper from '@/components/ui/modal/ModalWrapper.vue'
+import { handleSevereError } from '@/composables/use-error.js'
 import { trackEvent } from '@/helpers/analytics'
 import { login as login_flow, set_default_user } from '@/helpers/auth.js'
 import { install_existing_instance } from '@/helpers/install'
 import { cancel_directory_change } from '@/helpers/settings.ts'
-import { handleSevereError } from '@/store/error.js'
 
 const { handleError } = injectNotificationManager()
 
@@ -273,12 +279,10 @@ async function copyToClipboard(text) {
 				</template>
 			</div>
 			<div class="flex items-center gap-2">
-				<ButtonStyled>
-					<a :href="supportLink" @click="errorModal.hide()"><ChatIcon /> Get support</a>
-				</ButtonStyled>
-				<ButtonStyled v-if="closable">
-					<button @click="errorModal.hide()"><XIcon /> Close</button>
-				</ButtonStyled>
+				<ButtonLink :href="supportLink" @click="errorModal.hide()"
+					><ChatIcon /> Get support</ButtonLink
+				>
+				<Button v-if="closable" @click="errorModal.hide()"><XIcon /> Close</Button>
 			</div>
 			<template v-if="hasDebugInfo">
 				<div class="flex flex-col gap-2">
@@ -307,16 +311,15 @@ async function copyToClipboard(text) {
 								>
 									{{ debugInfo }}
 								</div>
-								<ButtonStyled circular>
-									<button
-										v-tooltip="'Copy debug info'"
-										:disabled="copied"
-										@click="copyToClipboard(debugInfo)"
-									>
-										<template v-if="copied"> <CheckIcon class="text-green" /> </template>
-										<template v-else> <CopyIcon /> </template>
-									</button>
-								</ButtonStyled>
+								<IconButton
+									v-tooltip="'Copy debug info'"
+									:label="'Copy debug info'"
+									:disabled="copied"
+									@click="copyToClipboard(debugInfo)"
+								>
+									<template v-if="copied"> <CheckIcon class="text-green" /> </template>
+									<template v-else> <CopyIcon /> </template>
+								</IconButton>
 							</div>
 						</Collapsible>
 					</div>

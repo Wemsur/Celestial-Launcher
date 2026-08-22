@@ -1,12 +1,12 @@
 use crate::api::pack::import::ImportLauncherType;
 use crate::api::pack::install_from::{CreatePackInstance, CreatePackLocation};
 use crate::state::{
-    InstanceInstallStage, InstanceLink, InstanceMetadata, ModLoader,
+    InstanceIconConfig, InstanceInstallStage, InstanceLink, InstanceMetadata,
+    ModLoader,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use uuid::Uuid;
 
 pub type InstallModpackPreview = CreatePackInstance;
 
@@ -162,6 +162,8 @@ pub enum InstallRequest {
         loader: ModLoader,
         loader_version: Option<String>,
         icon_path: Option<String>,
+        #[serde(default)]
+        icon_config: Option<InstanceIconConfig>,
         link: InstanceLink,
         #[serde(default)]
         library_path: Option<String>,
@@ -302,6 +304,10 @@ impl InstallRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    feature = "export-ts",
+    derive(ts_rs::TS, postcard_bindgen::PostcardBindings)
+)]
 #[serde(rename_all = "snake_case")]
 pub enum InstallJobKind {
     CreateInstance,
@@ -347,6 +353,10 @@ impl InstallJobKind {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    feature = "export-ts",
+    derive(ts_rs::TS, postcard_bindgen::PostcardBindings)
+)]
 #[serde(rename_all = "snake_case")]
 pub enum InstallJobStatus {
     Queued,
@@ -388,8 +398,14 @@ impl InstallJobStatus {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(
+    feature = "export-ts",
+    derive(ts_rs::TS, postcard_bindgen::PostcardBindings)
+)]
+#[serde_binhum::serde_binhum]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[cfg_attr(feature = "export-ts", ts(tag = "type", rename_all = "snake_case"))]
 pub enum InstallTarget {
     NewInstance { instance_id: Option<String> },
     ExistingInstance { instance_id: String },
@@ -410,6 +426,10 @@ pub struct InstallProgressState {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    feature = "export-ts",
+    derive(ts_rs::TS, postcard_bindgen::PostcardBindings)
+)]
 #[serde(rename_all = "snake_case")]
 pub enum InstallPhaseId {
     PreparingInstance,
@@ -427,21 +447,35 @@ pub enum InstallPhaseId {
     RollingBack,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(
+    feature = "export-ts",
+    derive(ts_rs::TS, postcard_bindgen::PostcardBindings)
+)]
+#[serde_binhum::serde_binhum]
 pub struct InstallProgress {
     pub current: u64,
     pub total: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     pub secondary: Option<InstallProgressSecondary>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(
+    feature = "export-ts",
+    derive(ts_rs::TS, postcard_bindgen::PostcardBindings)
+)]
 pub struct InstallProgressSecondary {
     pub current: u64,
     pub total: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    feature = "export-ts",
+    derive(ts_rs::TS, postcard_bindgen::PostcardBindings)
+)]
 #[serde(rename_all = "snake_case")]
 pub enum InstallJavaStep {
     Resolving,
@@ -451,8 +485,14 @@ pub enum InstallJavaStep {
     Validating,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(
+    feature = "export-ts",
+    derive(ts_rs::TS, postcard_bindgen::PostcardBindings)
+)]
+#[serde_binhum::serde_binhum]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[cfg_attr(feature = "export-ts", ts(tag = "type", rename_all = "snake_case"))]
 pub enum InstallPhaseDetails {
     Empty,
     Instance {
@@ -491,52 +531,74 @@ pub struct InstallJobPaths {
     pub json_backed_previous_install_stage: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, bon::Builder)]
+#[derive(Clone, Debug, bon::Builder)]
+#[cfg_attr(
+    feature = "export-ts",
+    derive(ts_rs::TS, postcard_bindgen::PostcardBindings)
+)]
+#[serde_binhum::serde_binhum]
 #[builder(start_fn = new)]
 pub struct InstallErrorContext {
     #[builder(start_fn, into)]
     pub operation: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     #[builder(into)]
     pub source_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     #[builder(into)]
     pub target_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     #[builder(into)]
     pub file_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     #[builder(into)]
     pub entry_path: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     #[builder(default)]
     pub urls: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     #[builder(into)]
     pub expected_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     pub expected_size: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     pub project_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     pub version_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     #[builder(into)]
     pub minecraft_version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     #[builder(into)]
     pub loader: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     pub java_version: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     #[builder(into)]
     pub os: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     #[builder(into)]
     pub arch: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(
+    feature = "export-ts",
+    derive(ts_rs::TS, postcard_bindgen::PostcardBindings)
+)]
 pub struct InstallJobDisplay {
     pub title: String,
     pub icon: Option<String>,
@@ -548,30 +610,48 @@ pub struct InstallRollbackState {
     pub install_stage: InstanceInstallStage,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(
+    feature = "export-ts",
+    derive(ts_rs::TS, postcard_bindgen::PostcardBindings)
+)]
+#[serde_binhum::serde_binhum]
 pub struct InstallErrorView {
     pub code: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     pub phase: Option<InstallPhaseId>,
     pub message: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     pub reason: Option<crate::SharedInstanceUnavailableReason>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     pub api: Option<InstallApiErrorDetails>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     pub context: Option<InstallErrorContext>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(
+    feature = "export-ts",
+    derive(ts_rs::TS, postcard_bindgen::PostcardBindings)
+)]
+#[serde_binhum::serde_binhum]
 pub struct InstallApiErrorDetails {
     pub error: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     pub status: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     pub method: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     pub url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export-ts", ts(optional))]
     pub route: Option<String>,
 }
 
@@ -620,8 +700,12 @@ impl InstallErrorView {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(
+    feature = "export-ts",
+    derive(ts_rs::TS, postcard_bindgen::PostcardBindings)
+)]
 pub struct InstallJobSnapshot {
-    pub job_id: Uuid,
+    pub job_id: String,
     pub instance_id: Option<String>,
     pub kind: InstallJobKind,
     pub status: InstallJobStatus,
@@ -632,7 +716,7 @@ pub struct InstallJobSnapshot {
     pub display: Option<InstallJobDisplay>,
     pub error: Option<InstallErrorView>,
     pub rollback_error: Option<InstallErrorView>,
-    pub created: DateTime<Utc>,
-    pub modified: DateTime<Utc>,
-    pub finished: Option<DateTime<Utc>>,
+    pub created: String,
+    pub modified: String,
+    pub finished: Option<String>,
 }

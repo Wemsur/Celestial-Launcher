@@ -1,10 +1,14 @@
 <template>
 	<div ref="containerRef" class="relative inline-block w-full">
 		<!-- Searchable mode: input trigger -->
-		<div v-if="searchable" class="relative w-full rounded-xl bg-surface-4">
+		<div
+			v-if="searchable"
+			class="relative w-full rounded-xl"
+			:class="{ 'bg-surface-4': searchInputVariant === 'surface' }"
+		>
 			<!--
 				Selection mirror: horizontal padding must match StyledInput (filled + left icon uses `pl-10`,
-				else `pl-3`) and `searchableInputClass` when the chevron is shown (`!pr-9`), or the overlay
+				else `pl-3`) and `resolvedSearchInputClass` when the chevron is shown (`!pr-9`), or the overlay
 				text will not line up with the transparent input text / caret.
 			-->
 			<div
@@ -24,6 +28,7 @@
 				:name="searchName"
 				:placeholder="searchPlaceholder || placeholder"
 				:disabled="disabled"
+				:clearable="clearable"
 				:autocomplete="searchAutocomplete"
 				:autocorrect="searchAutocorrect"
 				:autocapitalize="searchAutocapitalize"
@@ -31,13 +36,14 @@
 				:inputmode="searchInputmode"
 				:input-attrs="searchInputAttrs"
 				wrapper-class="w-full !bg-transparent"
-				:input-class="searchableInputClass"
+				:input-class="resolvedSearchInputClass"
 				class="relative z-[1]"
 				@input="handleSearchInput"
 				@keydown="handleSearchKeydown"
 				@focusin="handleSearchFocus"
 				@focusout="handleSearchFocusout"
 				@click="handleSearchClick"
+				@clear="handleSearchClear"
 			>
 				<template v-if="showChevron" #right>
 					<ChevronLeftIcon
@@ -49,19 +55,19 @@
 		</div>
 
 		<!-- Standard mode: button trigger -->
-		<span
+		<ButtonFrame
 			v-else
 			ref="triggerRef"
-			role="button"
-			tabindex="0"
-			class="relative flex min-h-5 w-full items-center justify-between overflow-hidden rounded-xl bg-surface-4 px-4 py-2 text-left transition-all duration-200 text-button-text gap-2.5"
+			as="button"
+			native-type="button"
+			:type="triggerType"
+			:size="triggerSize"
+			:interaction="triggerInteraction"
+			:disabled="disabled"
 			:class="[
+				'min-w-full w-full !justify-between overflow-hidden text-left',
 				props.triggerClass,
-				{
-					'z-[9999]': isOpen,
-					'cursor-not-allowed opacity-50': disabled,
-					'cursor-pointer hover:brightness-[115%] active:brightness-[115%]': !disabled,
-				},
+				{ 'z-[9999]': isOpen },
 			]"
 			:aria-expanded="isOpen"
 			:aria-haspopup="listbox ? 'listbox' : 'menu'"
@@ -78,7 +84,7 @@
 				/>
 				<span
 					v-if="selectedOption"
-					class="min-w-0 truncate text-primary font-semibold leading-tight"
+					class="min-w-0 truncate font-semibold leading-tight text-inherit"
 				>
 					<slot name="selected" :label="selectedTriggerText">{{ selectedTriggerText }}</slot>
 				</span>
@@ -94,15 +100,10 @@
 					:class="isOpen ? (openDirection === 'down' ? 'rotate-90' : '-rotate-90') : '-rotate-90'"
 				/>
 			</div>
-		</span>
+		</ButtonFrame>
 
 		<Teleport to="#teleports">
-			<Transition
-				enter-active-class="transition-opacity duration-150"
-				leave-active-class="transition-opacity duration-150"
-				enter-from-class="opacity-0"
-				leave-to-class="opacity-0"
-			>
+			<Transition name="floating-expand">
 				<div
 					v-if="shouldRenderDropdown"
 					ref="dropdownRef"
@@ -110,7 +111,6 @@
 					:class="[
 						props.dropdownClass,
 						openDirection === 'up' ? 'shadow-[0_-25px_50px_-12px_rgb(0,0,0,0.25)]' : 'shadow-2xl',
-						props.dropdownClass,
 					]"
 					:style="dropdownStyle"
 					:role="listbox ? 'listbox' : 'menu'"
@@ -217,6 +217,13 @@ import {
 	watch,
 } from 'vue'
 
+import ButtonFrame from './buttons/ButtonFrame.vue'
+import type {
+	ButtonElementHandle,
+	ButtonInteraction,
+	ButtonSize,
+	ButtonType,
+} from './buttons/types'
 import StyledInput from './StyledInput.vue'
 
 export interface ComboboxOption<T> {
@@ -232,6 +239,8 @@ export interface ComboboxOption<T> {
 	action?: () => void
 	searchTerms?: string[]
 }
+
+export type ComboboxSearchInputVariant = 'surface' | 'button'
 
 type OverlayScrollbarsInstance = NonNullable<ReturnType<typeof OverlayScrollbars>>
 type ViewportRect = {
@@ -273,6 +282,7 @@ const props = withDefaults(
 		placeholder?: string
 		disabled?: boolean
 		searchable?: boolean
+		clearable?: boolean
 		searchPlaceholder?: string
 		listbox?: boolean
 		showChevron?: boolean
@@ -281,6 +291,10 @@ const props = withDefaults(
 		displayValue?: string
 		searchValue?: string
 		triggerClass?: string
+		/** Shared button frame style for non-searchable combobox triggers. */
+		triggerType?: ButtonType
+		triggerSize?: ButtonSize
+		triggerInteraction?: ButtonInteraction
 		dropdownClass?: string
 		/** Additional selectors to ignore when detecting outside clicks */
 		outsideClickIgnore?: string[]
@@ -306,11 +320,13 @@ const props = withDefaults(
 		searchAutocapitalize?: 'none' | 'off' | 'sentences' | 'words' | 'characters'
 		searchSpellcheck?: boolean
 		searchInputAttrs?: Record<string, string | number | boolean | undefined>
+		searchInputVariant?: ComboboxSearchInputVariant
 	}>(),
 	{
 		placeholder: 'Select an option',
 		disabled: false,
 		searchable: false,
+		clearable: false,
 		searchPlaceholder: 'Search...',
 		listbox: true,
 		showChevron: true,
@@ -322,6 +338,10 @@ const props = withDefaults(
 		selectSearchTextOnFocus: false,
 		showSearchIcon: false,
 		searchType: 'text',
+		searchInputVariant: 'surface',
+		triggerType: 'base',
+		triggerSize: 'md',
+		triggerInteraction: 'surface',
 		outsideClickIgnore: () => [],
 	},
 )
@@ -343,7 +363,7 @@ const searchQuery = ref('')
 const userHasTyped = ref(false)
 const focusedIndex = ref(-1)
 const containerRef = ref<HTMLElement>()
-const triggerRef = ref<HTMLElement>()
+const triggerRef = ref<ButtonElementHandle>()
 const searchTriggerRef = ref<InstanceType<typeof StyledInput>>()
 const dropdownRef = ref<HTMLElement>()
 const optionsScrollbarRef = ref<HTMLElement>()
@@ -357,10 +377,11 @@ const effectiveTriggerEl = computed(() => {
 	if (props.searchable && searchTriggerRef.value) {
 		return (searchTriggerRef.value as unknown as { $el: HTMLElement }).$el as HTMLElement
 	}
-	return triggerRef.value
+
+	return triggerRef.value?.element ?? undefined
 })
 const outsideClickIgnoreTargets = computed(() => [
-	triggerRef,
+	effectiveTriggerEl,
 	containerRef,
 	...props.outsideClickIgnore,
 ])
@@ -388,8 +409,8 @@ const searchSelectionOverlayVisible = computed(() => {
 	return true
 })
 
-const searchableInputClass = computed(() => {
-	const parts = ['!bg-transparent']
+const resolvedSearchInputClass = computed(() => {
+	const parts = [props.searchInputVariant === 'button' ? '!bg-button-bg' : '!bg-transparent']
 	if (props.showChevron) parts.push('!pr-9')
 	if (searchSelectionOverlayVisible.value) {
 		parts.push('!text-transparent [caret-color:var(--color-text-primary)] selection:bg-transparent')
@@ -469,7 +490,7 @@ function setInitialFocus() {
 
 function determineOpenDirection(
 	triggerRect: DOMRect,
-	dropdownRect: DOMRect,
+	dropdownRect: { width: number; height: number },
 	viewport: ViewportRect,
 ): 'up' | 'down' {
 	if (props.forceDirection) {
@@ -490,7 +511,7 @@ function determineOpenDirection(
 
 function calculateVerticalPosition(
 	triggerRect: DOMRect,
-	dropdownRect: DOMRect,
+	dropdownRect: { width: number; height: number },
 	direction: 'up' | 'down',
 	viewport: ViewportRect,
 ): number {
@@ -504,7 +525,7 @@ function calculateVerticalPosition(
 
 function calculateHorizontalPosition(
 	triggerRect: DOMRect,
-	dropdownRect: DOMRect,
+	dropdownRect: { width: number; height: number },
 	viewport: ViewportRect,
 ): number {
 	const minLeft = viewport.offsetLeft + DROPDOWN_VIEWPORT_MARGIN
@@ -547,7 +568,7 @@ async function updateDropdownPosition() {
 	await nextTick()
 
 	const triggerRect = effectiveTriggerEl.value.getBoundingClientRect()
-	const width = resolveDropdownWidth(triggerRect.width)
+	const width = resolveDropdownWidth(effectiveTriggerEl.value.offsetWidth)
 	const minWidth = resolveCssSize(props.dropdownMinWidth) ?? '0px'
 
 	dropdownStyle.value = {
@@ -558,7 +579,10 @@ async function updateDropdownPosition() {
 
 	await nextTick()
 
-	const dropdownRect = dropdownRef.value.getBoundingClientRect()
+	const dropdownRect = {
+		width: dropdownRef.value.offsetWidth,
+		height: dropdownRef.value.offsetHeight,
+	}
 	const viewport = getViewportRect()
 
 	const direction = determineOpenDirection(triggerRect, dropdownRect, viewport)
@@ -642,7 +666,7 @@ function closeDropdown() {
 
 	if (!props.searchable) {
 		nextTick(() => {
-			triggerRef.value?.focus()
+			effectiveTriggerEl.value?.focus()
 		})
 	}
 }
@@ -827,6 +851,12 @@ function handleSearchInput() {
 	if (!isOpen.value) {
 		openDropdown()
 	}
+}
+
+function handleSearchClear() {
+	userHasTyped.value = true
+	emit('searchInput', searchQuery.value)
+	closeDropdown()
 }
 
 function handleSearchFocus(event: FocusEvent) {

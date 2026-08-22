@@ -5,7 +5,8 @@
 				:class="{ shown: visible }"
 				class="tauri-overlay"
 				data-tauri-drag-region
-				@click="() => (closeOnClickOutside && closable ? hide() : {})"
+				@pointerdown="onTauriOverlayPointerDown"
+				@click="onTauriOverlayClick"
 			/>
 			<div
 				:class="[
@@ -42,33 +43,28 @@
 						</div>
 						<div class="flex items-center gap-2">
 							<slot name="header-actions" />
-							<ButtonStyled v-if="closable" circular>
-								<button
-									v-tooltip="closeLabel"
-									:aria-label="closeLabel"
-									:disabled="disableClose"
-									@click="hide"
-								>
-									<XIcon aria-hidden="true" />
-								</button>
-							</ButtonStyled>
+							<IconButton
+								v-if="closable"
+								v-tooltip="closeLabel"
+								:label="closeLabel"
+								:disabled="disableClose"
+								@click="hide"
+							>
+								<XIcon aria-hidden="true" />
+							</IconButton>
 						</div>
 					</div>
 
-					<ButtonStyled
+					<IconButton
 						v-if="props.mergeHeader && closable"
+						v-tooltip="closeLabel"
+						:label="closeLabel"
 						class="absolute top-4 right-4 z-10"
-						circular
+						:disabled="disableClose"
+						@click="hide"
 					>
-						<button
-							v-tooltip="closeLabel"
-							:aria-label="closeLabel"
-							:disabled="disableClose"
-							@click="hide"
-						>
-							<XIcon aria-hidden="true" />
-						</button>
-					</ButtonStyled>
+						<XIcon aria-hidden="true" />
+					</IconButton>
 
 					<div v-if="scrollable" class="relative flex-1 min-h-0 flex flex-col">
 						<Transition
@@ -143,12 +139,13 @@
 import { XIcon } from '@modrinth/assets'
 import { computed, nextTick, onUnmounted, ref } from 'vue'
 
+import { IconButton } from '#ui/components/base/buttons'
+
 import { useVIntl } from '../../composables/i18n'
 import { useModalStack } from '../../composables/modal-stack'
 import { useScrollIndicator } from '../../composables/scroll-indicator'
 import { injectModalBehavior } from '../../providers'
 import { commonMessages } from '../../utils/common-messages'
-import ButtonStyled from '../base/ButtonStyled.vue'
 
 const { formatMessage } = useVIntl()
 
@@ -217,6 +214,30 @@ const props = withDefaults(
 )
 
 const effectiveNoblur = computed(() => props.noblur ?? modalBehavior?.noblur.value ?? false)
+
+const TAURI_DRAG_THRESHOLD_PX = 4
+let tauriPointerScreen: { x: number; y: number } | null = null
+
+function onTauriOverlayPointerDown(event: PointerEvent) {
+	if (event.button !== 0) {
+		return
+	}
+	tauriPointerScreen = { x: event.screenX, y: event.screenY }
+}
+
+function onTauriOverlayClick(event: MouseEvent) {
+	const start = tauriPointerScreen
+	tauriPointerScreen = null
+	if (
+		start &&
+		Math.hypot(event.screenX - start.x, event.screenY - start.y) >= TAURI_DRAG_THRESHOLD_PX
+	) {
+		return
+	}
+	if (props.closeOnClickOutside && props.closable && !props.disableClose) {
+		hide()
+	}
+}
 
 const computedFade = computed(() => {
 	if (props.fade) return props.fade

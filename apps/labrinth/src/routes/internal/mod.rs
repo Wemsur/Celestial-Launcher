@@ -1,5 +1,6 @@
 pub mod admin;
 pub mod affiliate;
+pub mod analytics_event;
 pub mod attribution;
 pub mod billing;
 pub mod blocked_users;
@@ -14,6 +15,7 @@ pub mod medal;
 pub mod moderation;
 pub mod mural;
 pub mod pats;
+pub mod privacy;
 pub mod search;
 pub mod server_ping;
 pub mod session;
@@ -31,10 +33,15 @@ pub fn config(cfg: &mut web::ServiceConfig) {
             .wrap(default_cors())
             .configure(admin::config)
             .configure(blocked_users::config)
+            .configure(privacy::config)
             .configure(session::config)
             .configure(flows::config)
             .configure(pats::config)
             .configure(oauth_clients::config)
+            .service(
+                web::scope("/analytics-event")
+                    .configure(analytics_event::config),
+            )
             .service(web::scope("/moderation").configure(moderation::config))
             .service(web::scope("/affiliate").configure(affiliate::config))
             .service(web::scope("/campaign").configure(campaign::config))
@@ -50,11 +57,6 @@ pub fn config(cfg: &mut web::ServiceConfig) {
             .configure(medal::config)
             .configure(mural::config)
             .configure(statuses::config),
-    )
-    .service(
-        web::scope("/v3/analytics-event")
-            .wrap(default_cors())
-            .configure(super::v3::analytics_event::config),
     );
 }
 
@@ -68,6 +70,7 @@ pub fn config(cfg: &mut web::ServiceConfig) {
 	paths(
 		admin::count_download,
 		blocked_users::block_status,
+		privacy::invite_privacy_status,
 		admin::force_reindex,
 		admin::force_reindex_project,
 		session::list,
@@ -180,10 +183,9 @@ pub fn config(cfg: &mut web::ServiceConfig) {
 		medal::redeem,
 		mural::get_bank_details,
 		statuses::ws_init,
-		super::v3::analytics_event::analytics_events_get,
-		super::v3::analytics_event::analytics_event_create,
-		super::v3::analytics_event::analytics_event_edit,
-		super::v3::analytics_event::analytics_event_delete,
+		analytics_event::analytics_event_create,
+		analytics_event::analytics_event_edit,
+		analytics_event::analytics_event_delete,
 	),
 	modifiers(&InternalPathModifier, &SecurityAddon)
 )]

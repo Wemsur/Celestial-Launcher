@@ -191,6 +191,9 @@
   "analytics.chart.tooltip.hide-entry": {
     "message": "在圖表中隱藏 {name}"
   },
+  "analytics.chart.tooltip.no-data": {
+    "message": "沒有數據"
+  },
   "analytics.chart.tooltip.pinned": {
     "message": "圖表工具提示已固定"
   },
@@ -975,7 +978,7 @@
     "message": "取消追蹤專案"
   },
   "collection.delete-modal.description": {
-    "message": "這將永久刪除這個收藏。此動作無法復原。"
+    "message": "這會永久刪除這個收藏，這項動作無法復原。"
   },
   "collection.delete-modal.title": {
     "message": "確定要刪除這個收藏嗎？"
@@ -996,7 +999,7 @@
     "message": "建立時間：{ago}"
   },
   "collection.label.curated-by": {
-    "message": "策劃者"
+    "message": "策展人"
   },
   "collection.label.no-projects": {
     "message": "收藏中暫無專案"
@@ -1477,9 +1480,6 @@
   },
   "dashboard.collections.sort.recently-updated": {
     "message": "最近更新"
-  },
-  "dashboard.creator-tax-form-modal.close-button": {
-    "message": "關閉"
   },
   "dashboard.creator-tax-form-modal.confirmation.download-button": {
     "message": "下載 {formType}"
@@ -2846,9 +2846,6 @@
   "layout.footer.social.discord": {
     "message": "Discord"
   },
-  "layout.footer.social.github": {
-    "message": "GitHub"
-  },
   "layout.footer.social.mastodon": {
     "message": "Mastodon"
   },
@@ -2973,16 +2970,13 @@
     "message": "每批 {amount} 個"
   },
   "modpack-scan-modal.batch.placeholder": {
-    "message": "批量數量"
+    "message": "批次數量"
   },
   "modpack-scan-modal.delete-all-groups-confirmation.description": {
     "message": "這會永久刪除這個專案的所有引用標註群組及其中的所有檔案，這項動作無法復原。"
   },
   "modpack-scan-modal.delete-all-groups.error": {
     "message": "無法清除所有群組：{error}"
-  },
-  "modpack-scan-modal.delete-all-groups.proceed": {
-    "message": "清除"
   },
   "modpack-scan-modal.delete-all-groups.success": {
     "message": "已成功清除所有群組。"
@@ -3022,9 +3016,6 @@
   },
   "modpack-scan-modal.scanning": {
     "message": "正在掃描..."
-  },
-  "modpack-scan-modal.success": {
-    "message": "成功"
   },
   "modpack-scan-modal.title": {
     "message": "模組包掃描（{scanned}/{total} 個檔案）"
@@ -3935,11 +3926,26 @@
   "project.settings.tags.featured-tags": {
     "message": "精選標籤"
   },
-  "project.settings.tags.featured-tags-description": {
-    "message": "你可以選擇最多 3 個最相關的標籤作為精選標籤。如果沒有選完 3 個標籤，系統可能會自動將其他標籤選為精選標籤。"
+  "project.settings.tags.featured-tags-required": {
+    "message": "你必須選擇至少一個精選標籤。"
+  },
+  "project.settings.tags.featured-tags-select-description": {
+    "message": "請選擇最相關的標籤。這些標籤會顯示在其他標籤之前。"
   },
   "project.settings.tags.features-description": {
     "message": "請選擇你的{type}包含的功能。"
+  },
+  "project.settings.tags.group-title.categories": {
+    "message": "{showType, select, yes {{types}類別} other {類別}}"
+  },
+  "project.settings.tags.group-title.features": {
+    "message": "{showType, select, yes {{types}功能} other {功能}}"
+  },
+  "project.settings.tags.group-title.performance-impact": {
+    "message": "{showType, select, yes {{types}效能影響} other {效能影響}}"
+  },
+  "project.settings.tags.group-title.resolutions": {
+    "message": "{showType, select, yes {{types}解析度} other {解析度}}"
   },
   "project.settings.tags.multiple-resolution-tags-warning": {
     "message": "你選擇了 {count} 個解析度標籤（{tags}）。資源包通常應該只會有一個解析度標籤。"
@@ -3953,9 +3959,6 @@
   "project.settings.tags.select-at-least-one-category": {
     "message": "請選擇至少一個類別再選擇精選標籤。"
   },
-  "project.settings.tags.tagging-importance-description": {
-    "message": "精確的標籤對於協助使用者找到你的{type}非常重要。請務必選擇所有合適的標籤。"
-  },
   "project.settings.tags.title": {
     "message": "標籤"
   },
@@ -3967,18 +3970,6 @@
   },
   "project.settings.tags.too-many-tags-server-soft-warning": {
     "message": "你選擇了 {count} 個標籤。請考慮減少到 12 個或更少，以確保你的伺服器主題更明確，並更容易被搜尋到。"
-  },
-  "project.settings.tags.upload-version-first": {
-    "message": "請先上傳一個版本再選擇標籤！"
-  },
-  "project.settings.title": {
-    "message": "設定"
-  },
-  "project.settings.visit-dashboard": {
-    "message": "前往專案資訊主頁"
-  },
-  "project.status.archived.message": {
-    "message": "{title} 已封存。{title} 將不會再收到任何後續更新，除非作者決定解除封存該專案。"
   },
   "project.versions.copy-id-option": {
     "message": "複製 ID"
@@ -4709,23 +4700,14 @@
   "settings.applications.button.add-redirect-uri": {
     "message": "新增重新導向 URI"
   },
-  "settings.applications.button.cancel": {
-    "message": "取消"
-  },
   "settings.applications.button.create": {
     "message": "建立應用程式"
   },
   "settings.applications.button.delete": {
     "message": "刪除"
   },
-  "settings.applications.button.edit": {
-    "message": "編輯"
-  },
   "settings.applications.button.new": {
     "message": "新的應用程式"
-  },
-  "settings.applications.button.save-changes": {
-    "message": "儲存變更"
   },
   "settings.applications.button.upload-icon": {
     "message": "上傳圖示"
@@ -4799,11 +4781,23 @@
   "settings.authorizations.about-this-app": {
     "message": "關於這個應用程式"
   },
+  "settings.authorizations.created-by": {
+    "message": "由 {user} 建立"
+  },
   "settings.authorizations.description": {
-    "message": "當你使用 Modrinth 帳號授權應用程式時，即代表你授予該應用程式存取你帳戶的權限。你可以隨時在這裡管理並審查帳號的存取權。"
+    "message": "當你使用 Modrinth 帳號授權應用程式時，即代表你授予該應用程式存取你帳號的權限。你可以隨時在這裡管理並審查帳號的存取權。"
+  },
+  "settings.authorizations.empty-state.description": {
+    "message": "你授權的應用程式將顯示在這裡。"
+  },
+  "settings.authorizations.empty-state.heading": {
+    "message": "沒有授權任何應用程式"
   },
   "settings.authorizations.head-title": {
     "message": "授權"
+  },
+  "settings.authorizations.official-tooltip": {
+    "message": "這個應用程式由 Modrinth 官方帳號建立。"
   },
   "settings.authorizations.revoke.action": {
     "message": "撤銷"
@@ -4813,6 +4807,9 @@
   },
   "settings.authorizations.revoke.confirm.title": {
     "message": "確定要撤銷這個應用程式的授權嗎？"
+  },
+  "settings.authorizations.unofficial-disclosure": {
+    "message": "儘管名稱如此，這個應用程式與 Modrinth 沒有任何關聯。"
   },
   "settings.billing.charges.description": {
     "message": "你對 Modrinth 帳號的所有過往支付紀錄皆會列於這裡："
@@ -5015,95 +5012,11 @@
   "settings.display.banner.developer-mode.description": {
     "message": "開發人員模式<strong>已啟用</strong>。這個模式可以讓你查看 Modrinth 各項內容的內部 ID，如果你是使用 Modrinth API 的開發人員，這項功能可能會對你有所幫助。按 5 次頁面底部的 Modrinth 標誌即可切換開發人員模式。"
   },
-  "settings.display.flags.description": {
-    "message": "針對這部裝置，設定要啟用或停用的特定功能。"
-  },
-  "settings.display.flags.title": {
-    "message": "功能開關"
-  },
   "settings.display.notification.developer-mode-deactivated.text": {
     "message": "開發者模式已被停用"
   },
   "settings.display.notification.developer-mode-deactivated.title": {
     "message": "開發人員模式已停用"
-  },
-  "settings.display.project-list-layouts.datapack": {
-    "message": "資料包頁面"
-  },
-  "settings.display.project-list-layouts.description": {
-    "message": "依你偏好，設定這部裝置的專案清單版面配置。"
-  },
-  "settings.display.project-list-layouts.mod": {
-    "message": "模組頁面"
-  },
-  "settings.display.project-list-layouts.mode.gallery": {
-    "message": "圖庫"
-  },
-  "settings.display.project-list-layouts.mode.grid": {
-    "message": "網格"
-  },
-  "settings.display.project-list-layouts.mode.rows": {
-    "message": "列"
-  },
-  "settings.display.project-list-layouts.modpack": {
-    "message": "模組包頁面"
-  },
-  "settings.display.project-list-layouts.plugin": {
-    "message": "插件頁面"
-  },
-  "settings.display.project-list-layouts.resourcepack": {
-    "message": "資源包頁面"
-  },
-  "settings.display.project-list-layouts.server": {
-    "message": "伺服器頁面"
-  },
-  "settings.display.project-list-layouts.shader": {
-    "message": "光影包頁面"
-  },
-  "settings.display.project-list-layouts.title": {
-    "message": "專案清單版面配置"
-  },
-  "settings.display.project-list-layouts.user": {
-    "message": "使用者個人檔案頁面"
-  },
-  "settings.display.project-list.layouts.collection": {
-    "message": "收藏"
-  },
-  "settings.display.sidebar.advanced-rendering.description": {
-    "message": "啟用進階繪製（如模糊效果）；若無硬體加速可能會導致效能問題。"
-  },
-  "settings.display.sidebar.advanced-rendering.title": {
-    "message": "進階繪製"
-  },
-  "settings.display.sidebar.external-links-new-tab.description": {
-    "message": "在新分頁中開啟 Modrinth 的外部連結。這項設定僅適用於外部連結，內部連結和 Markdown 說明中的連結仍會在同一個分頁中開啟，而廣告和編輯頁面的連結會在新分頁中開啟。"
-  },
-  "settings.display.sidebar.external-links-new-tab.title": {
-    "message": "在新分頁中開啟外部連結"
-  },
-  "settings.display.sidebar.hide-app-promos.description": {
-    "message": "在主導覽列中隱藏「下載 Modrinth App」按鈕。你仍可在登入頁面或頁尾找到 Modrinth 應用程式頁面。"
-  },
-  "settings.display.sidebar.hide-app-promos.title": {
-    "message": "隱藏 Modrinth App 廣告"
-  },
-  "settings.display.sidebar.left-aligned-content-sidebar.title": {
-    "message": "內容頁面左側邊欄"
-  },
-  "settings.display.sidebar.right-aligned-content-sidebar.description": {
-    "message": "使側邊欄靠頁面內容左側對齊。"
-  },
-  "settings.display.sidebar.right-aligned-filters-sidebar.description": {
-    "message": "使篩選側邊欄靠搜尋結果右側對齊。"
-  },
-  "settings.display.sidebar.right-aligned-filters-sidebar.title": {
-    "message": "搜尋頁面右側篩選側邊欄"
-  },
-  "settings.display.theme.description": {
-    "message": "請為這部裝置選擇你偏好的色彩主題。"
-  },
-  "settings.display.theme.title": {
-    "message": "色彩主題"
   },
   "settings.head-title": {
     "message": "顯示設定"

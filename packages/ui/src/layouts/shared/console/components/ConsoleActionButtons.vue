@@ -1,43 +1,43 @@
 <template>
 	<div class="flex items-center gap-1">
-		<ButtonStyled v-if="showClear && hasLogs" type="transparent">
-			<button
-				v-tooltip="clearDisabled ? clearDisabledTooltip : undefined"
-				:disabled="clearDisabled"
-				@click="emit('clear')"
-			>
-				<XIcon />
-				清空
-			</button>
-		</ButtonStyled>
-		<ButtonStyled v-if="showDelete" type="transparent" hover-color-fill="background" color="red">
-			<button
-				v-tooltip="deleteDisabled ? deleteDisabledTooltip : undefined"
-				:disabled="deleteDisabled"
-				@click="emit('delete')"
-			>
-				<TrashIcon />
-				删除
-			</button>
-		</ButtonStyled>
-		<ButtonStyled v-if="hasLogs" type="transparent">
-			<button
-				v-tooltip="shareDisabled ? shareDisabledTooltip : undefined"
-				:disabled="shareDisabled || sharing"
-				@click="emit('share')"
-			>
-				<SpinnerIcon v-if="sharing" class="animate-spin" />
-				<ShareIcon v-else />
-				分享
-			</button>
-		</ButtonStyled>
-		<ButtonStyled type="transparent">
-			<button @click="emit('toggle-fullscreen')">
-				<ContractIcon v-if="fullscreen" />
-				<ExpandIcon v-else />
-				{{ fullscreen ? '恢复' : '全屏' }}
-			</button>
-		</ButtonStyled>
+		<Button
+			v-if="showClear && hasLogs"
+			v-tooltip="clearDisabled ? clearDisabledTooltip : undefined"
+			type="quiet"
+			:disabled="clearDisabled"
+			@click="emit('clear')"
+		>
+			<XIcon />
+			清空
+		</Button>
+		<Button
+			v-if="showDelete"
+			v-tooltip="deleteDisabled ? deleteDisabledTooltip : undefined"
+			type="quiet"
+			color="red"
+			:disabled="deleteDisabled"
+			class="hover:!bg-red focus-visible:!bg-red hover:!text-[var(--color-accent-contrast)] focus-visible:!text-[var(--color-accent-contrast)]"
+			@click="emit('delete')"
+		>
+			<TrashIcon />
+			删除
+		</Button>
+		<Button
+			v-if="hasLogs"
+			v-tooltip="shareDisabled ? shareDisabledTooltip : undefined"
+			type="quiet"
+			:disabled="shareDisabled || sharing"
+			@click="emit('share')"
+		>
+			<SpinnerIcon v-if="sharing" class="animate-spin" />
+			<ShareIcon v-else />
+			分享
+		</Button>
+		<Button type="quiet" @click="emit('toggle-fullscreen')">
+			<ContractIcon v-if="fullscreen" />
+			<ExpandIcon v-else />
+			{{ fullscreen ? 'Collapse' : 'Expand' }}
+		</Button>
 	</div>
 </template>
 

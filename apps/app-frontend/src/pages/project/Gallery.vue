@@ -14,39 +14,37 @@
 			</span>
 		</Card>
 	</div>
-	<div v-if="expandedGalleryItem" class="expanded-image-modal" @click="hideImage">
-		<div class="content">
-			<img
-				class="image"
-				:class="{ 'zoomed-in': zoomedIn }"
-				:src="
-					expandedGalleryItem.raw_url
-						? expandedGalleryItem.raw_url
-						: 'https://cdn.modrinth.com/placeholder-banner.svg'
-				"
-				:alt="expandedGalleryItem.title ? expandedGalleryItem.title : 'gallery-image'"
-				@click.stop="() => {}"
-			/>
+	<Teleport to="#teleports">
+		<div v-if="expandedGalleryItem" class="expanded-image-modal" @click="hideImage">
+			<div class="content">
+				<img
+					class="image"
+					:class="{ 'zoomed-in': zoomedIn }"
+					:src="
+						expandedGalleryItem.raw_url
+							? expandedGalleryItem.raw_url
+							: 'https://cdn.modrinth.com/placeholder-banner.svg'
+					"
+					:alt="expandedGalleryItem.title ? expandedGalleryItem.title : 'gallery-image'"
+					@click.stop="() => {}"
+				/>
 
-			<div class="floating" @click.stop="() => {}">
-				<div class="text">
-					<h2 v-if="expandedGalleryItem.title">
-						{{ expandedGalleryItem.title }}
-					</h2>
-					<p v-if="expandedGalleryItem.description">
-						{{ expandedGalleryItem.description }}
-					</p>
-				</div>
-				<div class="controls">
-					<div class="buttons">
-						<ButtonStyled circular>
-							<button class="close" @click="hideImage">
+				<div class="floating" @click.stop="() => {}">
+					<div class="text">
+						<h2 v-if="expandedGalleryItem.title">
+							{{ expandedGalleryItem.title }}
+						</h2>
+						<p v-if="expandedGalleryItem.description">
+							{{ expandedGalleryItem.description }}
+						</p>
+					</div>
+					<div class="controls">
+						<div class="buttons">
+							<IconButton label="Close" class="close" @click="hideImage">
 								<XIcon aria-hidden="true" />
-							</button>
-						</ButtonStyled>
-						<ButtonStyled circular>
-							<a
-								class="open btn icon-only"
+							</IconButton>
+							<ButtonLink
+								class="open btn icon-only !w-9 !px-0 !rounded-full"
 								target="_blank"
 								:href="
 									expandedGalleryItem.raw_url
@@ -55,29 +53,33 @@
 								"
 							>
 								<ExternalIcon aria-hidden="true" />
-							</a>
-						</ButtonStyled>
-						<ButtonStyled circular>
-							<button @click="zoomedIn = !zoomedIn">
+							</ButtonLink>
+							<IconButton label="Toggle zoom" @click="zoomedIn = !zoomedIn">
 								<ExpandIcon v-if="!zoomedIn" aria-hidden="true" />
 								<ContractIcon v-else aria-hidden="true" />
-							</button>
-						</ButtonStyled>
-						<ButtonStyled v-if="filteredGallery.length > 1" circular>
-							<button class="previous" @click="previousImage()">
+							</IconButton>
+							<IconButton
+								v-if="filteredGallery.length > 1"
+								label="Previous image"
+								class="previous"
+								@click="previousImage()"
+							>
 								<LeftArrowIcon aria-hidden="true" />
-							</button>
-						</ButtonStyled>
-						<ButtonStyled v-if="filteredGallery.length > 1" circular>
-							<button class="next" @click="nextImage()">
+							</IconButton>
+							<IconButton
+								v-if="filteredGallery.length > 1"
+								label="Next image"
+								class="next"
+								@click="nextImage()"
+							>
 								<RightArrowIcon aria-hidden="true" />
-							</button>
-						</ButtonStyled>
+							</IconButton>
+						</div>
 					</div>
 				</div>
 			</div>
 		</div>
-	</div>
+	</Teleport>
 </template>
 
 <script setup>
@@ -90,10 +92,10 @@ import {
 	RightArrowIcon,
 	XIcon,
 } from '@modrinth/assets'
-import { ButtonStyled, Card, useFormatDateTime } from '@modrinth/ui'
+import { ButtonLink, Card, IconButton, useFormatDateTime } from '@modrinth/ui'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
-import { hide_ads_window, show_ads_window } from '@/helpers/ads.js'
+import { release_ads_window_hold, take_ads_window_hold } from '@/helpers/ads.js'
 import { trackEvent } from '@/helpers/analytics'
 
 const MC_SERVER_BANNER_NAME = '__mc_server_banner__'
@@ -118,10 +120,14 @@ const filteredGallery = computed(
 const expandedGalleryItem = ref(null)
 const expandedGalleryIndex = ref(0)
 const zoomedIn = ref(false)
+let adsWindowHold = false
 
 const hideImage = () => {
 	expandedGalleryItem.value = null
-	show_ads_window()
+	if (adsWindowHold) {
+		adsWindowHold = false
+		release_ads_window_hold()
+	}
 }
 
 const nextImage = () => {
@@ -149,7 +155,10 @@ const previousImage = () => {
 }
 
 const expandImage = (item, index) => {
-	hide_ads_window()
+	if (!adsWindowHold) {
+		adsWindowHold = true
+		take_ads_window_hold()
+	}
 	expandedGalleryItem.value = item
 	expandedGalleryIndex.value = index
 	zoomedIn.value = false
@@ -181,6 +190,10 @@ onMounted(() => {
 
 onUnmounted(() => {
 	document.removeEventListener('keydown', keyListener)
+	if (adsWindowHold) {
+		adsWindowHold = false
+		release_ads_window_hold()
+	}
 })
 </script>
 

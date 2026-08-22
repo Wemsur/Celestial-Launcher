@@ -47,38 +47,17 @@
   "app.action-bar.view-logs": {
     "message": "Tignan ang logs"
   },
-  "app.appearance-settings.advanced-rendering.description": {
-    "message": "Pagpapagana ng masalimuot na pagrerender katulad ng paglalabo na maaaring magdudulot ng mga isyu sa performance kapag walang hardware-acceleration."
-  },
-  "app.appearance-settings.advanced-rendering.title": {
-    "message": "Masalimuot na pagrerender"
-  },
-  "app.appearance-settings.color-theme.description": {
-    "message": "Piliin ang iyong mas gustong kulay para sa Modrinth app."
-  },
-  "app.appearance-settings.color-theme.title": {
-    "message": "Tema ng kulay"
-  },
-  "app.appearance-settings.default-landing-page.description": {
-    "message": "Pagpapalit ng pahina na bubuksan ng launcher."
-  },
   "app.appearance-settings.default-landing-page.home": {
     "message": "Tahanan"
   },
   "app.appearance-settings.default-landing-page.library": {
     "message": "Librarya"
   },
-  "app.appearance-settings.default-landing-page.title": {
-    "message": "Panimulang pahina ng paglapag"
-  },
   "app.appearance-settings.hide-nametag.description": {
     "message": "Pagtatago ng nametag na nasa itaas ng iyong manlalaro sa loob ng pahina ng mga skin."
   },
   "app.appearance-settings.hide-nametag.title": {
     "message": "Itago ang nametag"
-  },
-  "app.appearance-settings.jump-back-into-worlds.description": {
-    "message": "Pagsasali ng mga kamakailang mundo sa seksiyong \"Jump back in\" sa pahina ng Tahanan."
   },
   "app.appearance-settings.jump-back-into-worlds.title": {
     "message": "Bumalik sa mga mundo"
@@ -88,12 +67,6 @@
   },
   "app.appearance-settings.minimize-launcher.title": {
     "message": "Liitin ang launcher"
-  },
-  "app.appearance-settings.native-decorations.description": {
-    "message": "Gamitin ang system window frame (kailangan i-restart ang app)."
-  },
-  "app.appearance-settings.native-decorations.title": {
-    "message": "Native decorations"
   },
   "app.appearance-settings.show-play-time.description": {
     "message": "Magpapakita ang katagal ng iyong paglalaro sa isang instansiya."
@@ -269,9 +242,6 @@
   "app.settings.tabs.appearance": {
     "message": "Itsura"
   },
-  "app.settings.tabs.default-instance-options": {
-    "message": "Mga pagpipilian sa default na instansiya"
-  },
   "app.settings.tabs.java-installations": {
     "message": "Mga instalasyon ng Java"
   },
@@ -355,9 +325,6 @@
   },
   "app.world.world-item.offline": {
     "message": "Offline"
-  },
-  "app.world.world-item.players-online": {
-    "message": "{count} online"
   },
   "friends.action.add-friend": {
     "message": "Magdagdag ng kaibigan"
@@ -514,18 +481,6 @@
   },
   "instance.settings.tabs.general.edit-icon.select": {
     "message": "Pumili ng ikono"
-  },
-  "instance.settings.tabs.general.library-groups": {
-    "message": "Mga grupo ng librerya"
-  },
-  "instance.settings.tabs.general.library-groups.create": {
-    "message": "Lumikha ng bagong grupo"
-  },
-  "instance.settings.tabs.general.library-groups.description": {
-    "message": "Binibigyan ng mga grupo ng librerya na iyong maayos ang iyong mga instansiya sa iba't-ibang pangkat in iyong librerya."
-  },
-  "instance.settings.tabs.general.library-groups.enter-name": {
-    "message": "Ilagay ang pangalan ng grupo"
   },
   "instance.settings.tabs.general.name": {
     "message": "Pangalan"
@@ -701,16 +656,7 @@
   "search.filter.locked.instance.sync": {
     "message": "Maki-sync sa instansiya"
   },
-  "search.filter.locked.server": {
-    "message": "Handog ng server"
-  },
   "search.filter.locked.server-environment.title": {
     "message": "Mga mod sa panig ng client lamang ang maidadaragdag sa instansiyang server"
-  },
-  "search.filter.locked.server-game-version.title": {
-    "message": "Ang bersiyon ng laro ay handog ng server"
-  },
-  "search.filter.locked.server-loader.title": {
-    "message": "Ang loader ay handog na ng server"
   }
 }

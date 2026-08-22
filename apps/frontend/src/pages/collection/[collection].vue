@@ -16,13 +16,17 @@
 			<div class="flex w-[30rem] flex-col gap-3">
 				<div class="flow-root">
 					<div class="group relative float-end ml-4">
-						<OverflowMenu
-							v-tooltip="formatMessage(messages.editIconButton)"
-							:dropdown-id="`${baseId}-edit-icon`"
+						<TeleportOverflowMenu
+							:label="formatMessage(messages.editIconButton)"
+							:tooltip="formatMessage(messages.editIconButton)"
 							class="m-0 cursor-pointer appearance-none border-none bg-transparent p-0 transition-transform group-active:scale-95"
 							:options="[
 								{
 									id: 'select',
+									label:
+										previewImage || collection.icon_url
+											? formatMessage(messages.replaceIcon)
+											: formatMessage(messages.selectIcon),
 									action: () => {
 										const input = iconInputRef?.$el?.querySelector('input')
 										input?.click()
@@ -30,7 +34,7 @@
 								},
 								{
 									id: 'remove',
-									color: 'danger',
+									label: formatMessage(messages.removeIconButton),
 									action: () => {
 										deletedIcon = true
 										previewImage = null
@@ -64,7 +68,7 @@
 								<XIcon />
 								{{ formatMessage(messages.removeIconButton) }}
 							</template>
-						</OverflowMenu>
+						</TeleportOverflowMenu>
 						<FileInput
 							id="collection-icon-input"
 							ref="iconInputRef"
@@ -117,23 +121,19 @@
 					</RadioButtons>
 				</div>
 				<div class="flex justify-end gap-2">
-					<ButtonStyled>
-						<button class="w-24" @click="() => editModal?.hide()">
-							<XIcon aria-hidden="true" />
-							{{ formatMessage(commonMessages.cancelButton) }}
-						</button>
-					</ButtonStyled>
-					<ButtonStyled color="brand">
-						<button class="w-36" :disabled="saving" @click="save()">
-							<SpinnerIcon v-if="saving" class="animate-spin" aria-hidden="true" />
-							<SaveIcon v-else aria-hidden="true" />
-							{{
-								saving
-									? formatMessage(commonMessages.savingButton)
-									: formatMessage(commonMessages.saveButton)
-							}}
-						</button>
-					</ButtonStyled>
+					<Button class="w-24" @click="() => editModal?.hide()">
+						<XIcon aria-hidden="true" />
+						{{ formatMessage(commonMessages.cancelButton) }}
+					</Button>
+					<Button type="colored" color="brand" class="w-36" :disabled="saving" @click="save()">
+						<SpinnerIcon v-if="saving" class="animate-spin" aria-hidden="true" />
+						<SaveIcon v-else aria-hidden="true" />
+						{{
+							saving
+								? formatMessage(commonMessages.savingButton)
+								: formatMessage(commonMessages.saveButton)
+						}}
+					</Button>
 				</div>
 			</div>
 		</NewModal>
@@ -204,31 +204,29 @@
 						</div>
 						<div class="col-span-2 flex items-center gap-2 sm:col-span-1">
 							<template v-if="canEdit">
-								<ButtonStyled size="large">
-									<button @click="openEditModal">
-										<EditIcon aria-hidden="true" />
-										{{ formatMessage(commonMessages.editButton) }}
-									</button>
-								</ButtonStyled>
-								<ButtonStyled size="large" circular type="transparent">
-									<OverflowMenu
-										:dropdown-id="`${baseId}-more-options`"
-										:options="[
-											{
-												id: 'delete',
-												color: 'red',
-												action: () => deleteModal?.show(),
-											},
-										]"
-										:aria-label="formatMessage(commonMessages.moreOptionsButton)"
-									>
-										<MoreVerticalIcon aria-hidden="true" />
-										<template #delete>
-											<TrashIcon aria-hidden="true" />
-											{{ formatMessage(commonMessages.deleteLabel) }}
-										</template>
-									</OverflowMenu>
-								</ButtonStyled>
+								<Button size="xl" @click="openEditModal">
+									<EditIcon aria-hidden="true" />
+									{{ formatMessage(commonMessages.editButton) }}
+								</Button>
+								<TeleportOverflowMenu
+									type="quiet"
+									size="xl"
+									:label="formatMessage(commonMessages.moreOptionsButton)"
+									:options="[
+										{
+											id: 'delete',
+											label: formatMessage(commonMessages.deleteLabel),
+											tone: 'red',
+											action: () => deleteModal?.show(),
+										},
+									]"
+								>
+									<MoreVerticalIcon aria-hidden="true" />
+									<template #delete>
+										<TrashIcon aria-hidden="true" />
+										{{ formatMessage(commonMessages.deleteLabel) }}
+									</template>
+								</TeleportOverflowMenu>
 							</template>
 						</div>
 					</div>
@@ -309,71 +307,44 @@
 						}
 					}),
 				]"
-				class="mb-4"
+				replace
+				page-nav
 			/>
 
-			<ProjectCardList
+			<ProjectList
 				v-if="projects && projects?.length > 0"
+				:projects="displayedProjects"
 				:layout="cosmetics.searchDisplayMode.collection"
 			>
-				<ProjectCard
-					v-for="project in (route.params.projectType !== undefined
-						? projects.filter(
-								(x) =>
-									x.project_type ===
-									route.params.projectType.substr(0, route.params.projectType.length - 1),
-							)
-						: projects
-					)
-						.slice()
-						.sort((a, b) => b.downloads - a.downloads)"
-					:key="project.id"
-					:link="`/${project.project_type}/${project.slug ?? project.id}`"
-					:title="project.title"
-					:icon-url="project.icon_url"
-					:banner="project.gallery.find((element) => element.featured)?.url"
-					:summary="project.description"
-					:date-updated="project.updated"
-					:downloads="project.downloads ?? 0"
-					:followers="project.followers ?? 0"
-					:tags="project.categories"
-					:environment="{
-						clientSide: project.client_side,
-						serverSide: project.server_side,
-					}"
-					:color="project.color"
-					:layout="
-						cosmetics.searchDisplayMode.collection === 'grid' ||
-						cosmetics.searchDisplayMode.collection === 'gallery'
-							? 'grid'
-							: 'list'
-					"
-				>
-					<template v-if="canEdit || collection.id === 'following'" #actions>
-						<ButtonStyled v-if="canEdit">
-							<button class="remove-btn" :disabled="removing" @click="() => removeProject(project)">
-								<SpinnerIcon v-if="removing" class="animate-spin" aria-hidden="true" />
-								<XIcon v-else aria-hidden="true" />
-								{{ formatMessage(messages.removeProjectButton) }}
-							</button>
-						</ButtonStyled>
-						<ButtonStyled v-if="collection.id === 'following'">
-							<button @click="unfollowProject(project)">
-								<HeartMinusIcon aria-hidden="true" />
-								{{ formatMessage(messages.unfollowProjectButton) }}
-							</button>
-						</ButtonStyled>
-					</template>
-				</ProjectCard>
-			</ProjectCardList>
+				<template v-if="canEdit || collection.id === 'following'" #actions="{ project }">
+					<Button
+						v-if="canEdit"
+						class="remove-btn"
+						:disabled="removing"
+						@click="() => removeProject(project)"
+					>
+						<SpinnerIcon v-if="removing" class="animate-spin" aria-hidden="true" />
+						<XIcon v-else aria-hidden="true" />
+						{{ formatMessage(messages.removeProjectButton) }}
+					</Button>
+					<Button v-if="collection.id === 'following'" @click="unfollowProject(project)">
+						<HeartMinusIcon aria-hidden="true" />
+						{{ formatMessage(messages.unfollowProjectButton) }}
+					</Button>
+				</template>
+			</ProjectList>
 			<EmptyState v-else type="empty-inbox" :heading="formatMessage(messages.noProjectsLabel)">
 				<template #actions>
-					<ButtonStyled v-if="auth.user && auth.user.id === creator.id" color="brand">
-						<nuxt-link class="mx-auto w-min" to="/discover/mods">
-							<CompassIcon class="size-5" />
-							{{ formatMessage(messages.discoverModsButton) }}
-						</nuxt-link>
-					</ButtonStyled>
+					<ButtonLink
+						v-if="auth.user && auth.user.id === creator.id"
+						type="colored"
+						color="brand"
+						class="mx-auto w-min"
+						to="/discover/mods"
+					>
+						<CompassIcon class="size-5" />
+						{{ formatMessage(messages.discoverModsButton) }}
+					</ButtonLink>
 				</template>
 			</EmptyState>
 		</NormalPage>
@@ -400,7 +371,9 @@ import {
 } from '@modrinth/assets'
 import {
 	Avatar,
-	ButtonStyled,
+	Button,
+	ButtonLink,
+	catalogProjectTypes,
 	commonMessages,
 	commonProjectTypeCategoryMessages,
 	commonProjectTypeSentenceMessages,
@@ -409,6 +382,7 @@ import {
 	defineMessages,
 	EmptyState,
 	FileInput,
+	filterProjectsByType,
 	HorizontalRule,
 	injectModrinthClient,
 	injectNotificationManager,
@@ -417,12 +391,12 @@ import {
 	NewModal,
 	normalizeChildren,
 	NormalPage,
-	OverflowMenu,
-	ProjectCard,
-	ProjectCardList,
+	parseProjectTypeRouteParam,
+	ProjectList,
 	RadioButtons,
 	SidebarCard,
 	StyledInput,
+	TeleportOverflowMenu,
 	useCompactNumber,
 	useFormatDateTime,
 	useRelativeTime,
@@ -451,8 +425,6 @@ const router = useRouter()
 const auth = await useAuth()
 const cosmetics = useCosmetics()
 const queryClient = useQueryClient()
-const baseId = useId()
-
 async function fetchProjectsByIds(projectIds) {
 	const segmentSize = 800
 	const segments = []
@@ -460,21 +432,13 @@ async function fetchProjectsByIds(projectIds) {
 		segments.push(projectIds.slice(i, i + segmentSize))
 	}
 	const results = await Promise.all(
-		segments.map((ids) => api.labrinth.projects_v2.getMultiple(ids)),
+		segments.map((ids) => api.labrinth.projects_v3.getMultiple(ids)),
 	)
-	const projects = results.flat()
-	for (const project of projects) {
-		project.categories = project.categories.concat(project.loaders)
-	}
-	return projects
+	return results.flat()
 }
 
 async function fetchFollowedProjects(userId) {
-	const projects = await api.labrinth.users_v2.getFollowedProjects(userId)
-	for (const project of projects) {
-		project.categories = project.categories.concat(project.loaders)
-	}
-	return projects
+	return api.labrinth.users_v3.getFollowedProjects(userId)
 }
 
 const messages = defineMessages({
@@ -737,7 +701,7 @@ watch(
 				}),
 				ogTitle: formatMessage(messages.collectionTitle, { name: col.name }),
 				ogDescription: col.description,
-				ogImage: col.icon_url ?? 'https://cdn.modrinth.com/placeholder.png',
+				ogImage: col.icon_url ?? 'https://cdn-raw.modrinth.com/placeholder-square.png',
 				ogUrl: canonicalUrl,
 				robots: col.status === 'listed' ? 'all' : 'noindex',
 			})
@@ -762,13 +726,13 @@ const canEdit = computed(
 		collection.value.id !== 'following',
 )
 
-const projectTypes = computed(() => {
-	const projectSet = new Set(
-		projects.value?.map((project) => project?.project_type).filter((x) => x !== undefined) || [],
-	)
-	projectSet.delete('project')
-	return Array.from(projectSet)
-})
+const projectTypes = computed(() => catalogProjectTypes(projects.value ?? []))
+
+const displayedProjects = computed(() =>
+	filterProjectsByType(projects.value ?? [], parseProjectTypeRouteParam(route.params.projectType))
+		.slice()
+		.sort((a, b) => b.downloads - a.downloads),
+)
 
 function getProjectTypeSentenceMessage(type) {
 	return commonProjectTypeSentenceMessages[type] ?? commonProjectTypeSentenceMessages.project

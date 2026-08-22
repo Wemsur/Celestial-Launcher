@@ -21,26 +21,27 @@ import {
 import type { MessageDescriptor } from '@modrinth/ui'
 import {
 	Avatar,
-	ButtonStyled,
+	BulletDivider,
+	Button,
 	commonMessages,
 	defineMessages,
 	injectNotificationManager,
-	OverflowMenu,
 	SmartClickable,
 	TagItem,
+	TeleportOverflowMenu,
 	useFormatDateTime,
 	useFormatNumber,
 	useRelativeTime,
 	useVIntl,
 } from '@modrinth/ui'
 import { getPingLevel } from '@modrinth/utils'
-import { convertFileSrc } from '@tauri-apps/api/core'
 import dayjs from 'dayjs'
 import { Tooltip } from 'floating-vue'
 import type { Component } from 'vue'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { getInstanceIconUrl } from '@/helpers/instance'
 import { copyToClipboard, createInstanceShortcut } from '@/helpers/utils'
 import type {
 	ProtocolVersion,
@@ -125,7 +126,7 @@ const props = withDefaults(
 
 const playingOtherWorld = computed(() => props.playingInstance && !props.playingWorld)
 const hasPlayersTooltip = computed(
-	() => !!props.serverStatus?.players?.sample && props.serverStatus.players?.sample?.length > 0,
+	() => !!props.serverStatus?.players?.sample && props.serverStatus.players.sample.length > 0,
 )
 const serverIncompatible = computed(
 	() =>
@@ -155,18 +156,31 @@ async function createShortcut() {
 
 		addNotification({
 			type: 'success',
-			title: '快捷方式已创建',
+			title: formatMessage(messages.shortcutCreated),
 		})
 	} catch (error) {
 		addNotification({
 			type: 'error',
-			title: '创建快捷方式失败',
+			title: formatMessage(messages.shortcutCreationFailed),
 			text: error instanceof Error ? error.message : '',
 		})
 	}
 }
 
 const messages = defineMessages({
+	shortcutCreated: {
+		id: 'instance.worlds.shortcut-created',
+		defaultMessage: 'Shortcut created',
+	},
+	shortcutCreationFailed: {
+		id: 'instance.worlds.shortcut-creation-failed',
+		defaultMessage: 'Failed to create shortcut',
+	},
+	moreOptions: { id: 'instance.worlds.more-options', defaultMessage: 'More options' },
+	instanceLocked: {
+		id: 'instance.worlds.instance-locked',
+		defaultMessage: 'This instance has been locked',
+	},
 	hardcore: {
 		id: 'instance.worlds.hardcore',
 		defaultMessage: 'Hardcore mode',
@@ -246,7 +260,7 @@ const messages = defineMessages({
 })
 </script>
 <template>
-	<SmartClickable>
+	<SmartClickable class="[--active-scale:0.985]">
 		<template v-if="instanceId" #clickable>
 			<router-link
 				class="no-click-animation"
@@ -254,7 +268,7 @@ const messages = defineMessages({
 			/>
 		</template>
 		<div
-			class="grid grid-cols-[auto_minmax(0,3fr)_minmax(0,4fr)_auto] items-center gap-2 p-3 bg-bg-raised card-shadow smart-clickable:highlight-on-hover rounded-xl"
+			class="clickable-card grid grid-cols-[auto_minmax(0,3fr)_minmax(0,4fr)_auto] items-center gap-2 p-3 bg-bg-raised border border-solid border-surface-4 smart-clickable:highlight-on-hover rounded-[20px] transition-[filter] ease-out [--hover-brightness:1.25] min-h-20"
 			:class="{
 				'world-item-highlighted': highlighted,
 			}"
@@ -266,10 +280,12 @@ const messages = defineMessages({
 						: world.icon
 				"
 				size="48px"
+				no-shadow
+				class="!rounded-[14px]"
 			/>
-			<div class="flex flex-col justify-between h-full">
-				<div class="flex items-center gap-2">
-					<div class="text-lg text-contrast font-bold truncate smart-clickable:underline-on-hover">
+			<div class="flex flex-col justify-center gap-0.5 h-full">
+				<div class="flex items-center gap-1.5">
+					<div class="text-base text-contrast font-semibold truncate">
 						{{ world.name }}
 					</div>
 					<TagItem
@@ -312,17 +328,17 @@ const messages = defineMessages({
 							</template>
 							<template v-else>
 								<SignalIcon
-									v-tooltip="serverStatus ? `${serverStatus.ping}ms` : null"
+									v-tooltip="`${serverStatus.ping}ms`"
 									aria-hidden="true"
-									:style="`--_signal-${getPingLevel(serverStatus.ping || 0)}: var(--color-green)`"
+									:style="`--_signal-${getPingLevel(serverStatus.ping ?? 0)}: var(--color-green)`"
 									stroke-width="3px"
-									class="shrink-0"
-									:class="{
-										'smart-clickable:allow-pointer-events': serverStatus,
-									}"
+									class="shrink-0 smart-clickable:allow-pointer-events"
 								/>
 								<Tooltip :disabled="!hasPlayersTooltip">
-									<span :class="{ 'cursor-help': hasPlayersTooltip }">
+									<span
+										class="smart-clickable:allow-pointer-events"
+										:class="{ 'cursor-help': hasPlayersTooltip }"
+									>
 										{{
 											formatMessage(messages.playersOnline, {
 												count: formatNumber(serverStatus.players?.online ?? 0),
@@ -331,7 +347,7 @@ const messages = defineMessages({
 									</span>
 									<template #popper>
 										<div class="flex flex-col gap-1">
-											<span v-for="player in serverStatus.players?.sample" :key="player.name">
+											<span v-for="player in serverStatus.players?.sample" :key="player.id">
 												{{ player.name }}
 											</span>
 										</div>
@@ -345,7 +361,24 @@ const messages = defineMessages({
 						</template>
 					</div>
 				</div>
-				<div class="flex items-center gap-2 text-sm text-secondary">
+				<div class="flex items-center gap-1.5 text-sm text-secondary">
+					<template v-if="instanceId">
+						<router-link
+							data-no-card-click
+							class="flex items-center gap-1 truncate hover:underline text-secondary smart-clickable:allow-pointer-events"
+							:to="`/instance/${instanceId}`"
+						>
+							<Avatar
+								:src="getInstanceIconUrl(instanceIcon)"
+								size="16px"
+								:tint-by="instanceId"
+								class="shrink-0"
+								no-shadow
+							/>
+							<span class="truncate">{{ instanceName }}</span>
+						</router-link>
+						<BulletDivider class="shrink-0" />
+					</template>
 					<div
 						v-tooltip="world.last_played ? formatDateTime(world.last_played) : null"
 						class="w-fit shrink-0"
@@ -354,29 +387,10 @@ const messages = defineMessages({
 						}"
 					>
 						<template v-if="world.last_played">
-							{{
-								formatMessage(commonMessages.playedLabel, {
-									ago: formatRelativeTime(dayjs(world.last_played).toISOString()),
-								})
-							}}
+							{{ formatRelativeTime(dayjs(world.last_played).toISOString()) }}
 						</template>
 						<template v-else> {{ formatMessage(messages.notPlayedYet) }} </template>
 					</div>
-					<template v-if="instanceId">
-						•
-						<router-link
-							class="flex items-center gap-1 truncate hover:underline text-secondary smart-clickable:allow-pointer-events"
-							:to="`/instance/${instanceId}`"
-						>
-							<Avatar
-								:src="instanceIcon ? convertFileSrc(instanceIcon) : undefined"
-								size="16px"
-								:tint-by="instanceId"
-								class="shrink-0"
-							/>
-							<span class="truncate">{{ instanceName }}</span>
-						</router-link>
-					</template>
 				</div>
 			</div>
 			<div
@@ -412,182 +426,195 @@ const messages = defineMessages({
 				</template>
 			</div>
 			<div class="flex gap-1 justify-end smart-clickable:allow-pointer-events">
-				<ButtonStyled
+				<Button
 					v-if="(playingWorld || (locked && playingInstance)) && !startingInstance"
+					type="colored"
 					color="red"
+					@click="emit('stop')"
 				>
-					<button @click="emit('stop')">
-						<StopCircleIcon aria-hidden="true" />
-						{{ formatMessage(commonMessages.stopButton) }}
-					</button>
-				</ButtonStyled>
-				<ButtonStyled v-else>
-					<button
-						v-tooltip="
-							quarantined
-								? 'This instance has been locked'
-								: world.type === 'server'
-									? !supportsServerQuickPlay
-										? formatMessage(messages.noServerQuickPlay)
-										: playingOtherWorld
-											? formatMessage(messages.gameAlreadyOpen)
-											: !serverStatus
-												? formatMessage(messages.noContact)
-												: serverIncompatible
-													? formatMessage(messages.incompatibleServer)
-													: null
-									: !supportsWorldQuickPlay
-										? formatMessage(messages.noSingleplayerQuickPlay)
-										: playingOtherWorld || locked
-											? formatMessage(messages.gameAlreadyOpen)
-											: null
-						"
-						:disabled="
-							quarantined ||
-							playingOtherWorld ||
-							startingInstance ||
-							(world.type == 'server' && !supportsServerQuickPlay) ||
-							(world.type == 'singleplayer' && !supportsWorldQuickPlay)
-						"
-						@click="emit('play')"
-					>
-						<SpinnerIcon v-if="startingInstance && playingWorld" class="animate-spin" />
-						<PlayIcon v-else aria-hidden="true" />
-						{{ formatMessage(commonMessages.playButton) }}
-					</button>
-				</ButtonStyled>
-				<ButtonStyled circular type="transparent">
-					<OverflowMenu
-						:options="[
-							{
-								id: 'play-instance',
-								shown: !!instanceId,
-								disabled: playingInstance || quarantined,
-								action: () => emit('play-instance'),
+					<StopCircleIcon aria-hidden="true" />
+					{{ formatMessage(commonMessages.stopButton) }}
+				</Button>
+				<Button
+					v-else
+					v-tooltip="
+						quarantined
+							? formatMessage(messages.instanceLocked)
+							: world.type === 'server'
+								? !supportsServerQuickPlay
+									? formatMessage(messages.noServerQuickPlay)
+									: playingOtherWorld
+										? formatMessage(messages.gameAlreadyOpen)
+										: !serverStatus
+											? formatMessage(messages.noContact)
+											: serverIncompatible
+												? formatMessage(messages.incompatibleServer)
+												: null
+								: !supportsWorldQuickPlay
+									? formatMessage(messages.noSingleplayerQuickPlay)
+									: playingOtherWorld || locked
+										? formatMessage(messages.gameAlreadyOpen)
+										: null
+					"
+					:disabled="
+						quarantined ||
+						playingOtherWorld ||
+						startingInstance ||
+						(world.type == 'server' && !supportsServerQuickPlay) ||
+						(world.type == 'singleplayer' && !supportsWorldQuickPlay)
+					"
+					type="colored"
+					color="brand"
+					@click="emit('play')"
+				>
+					<SpinnerIcon v-if="startingInstance && playingWorld" class="animate-spin" />
+					<PlayIcon v-else aria-hidden="true" />
+					{{ formatMessage(commonMessages.playButton) }}
+				</Button>
+				<TeleportOverflowMenu
+					type="quiet"
+					:label="formatMessage(messages.moreOptions)"
+					:options="[
+						{
+							id: 'play-instance',
+							label: formatMessage(messages.playInstance),
+							shown: !!instanceId,
+							disabled: playingInstance || quarantined,
+							action: () => emit('play-instance'),
+						},
+						{
+							id: 'open-instance',
+							label: formatMessage(messages.viewInstance),
+							shown: !!instanceId,
+							action: () => router.push(`/instance/${encodeURIComponent(instanceId)}`),
+						},
+						{
+							id: 'refresh',
+							label: formatMessage(commonMessages.refreshButton),
+							shown: world.type === 'server',
+							action: () => emit('refresh'),
+						},
+						{
+							id: 'copy-address',
+							label: formatMessage(messages.copyAddress),
+							shown: world.type === 'server',
+							action: () => copyToClipboard((world as ServerWorld).address),
+						},
+						{
+							id: 'edit',
+							label: formatMessage(commonMessages.editButton),
+							action: () => emit('edit'),
+							shown: !instanceId,
+							disabled: locked || managed,
+							tooltip: locked
+								? formatMessage(messages.worldInUse)
+								: managed
+									? formatMessage(messages.linkedServer)
+									: undefined,
+						},
+						{
+							id: 'open-folder',
+							label: formatMessage(commonMessages.openFolderButton),
+							shown: world.type === 'singleplayer',
+							action: () => (world.type === 'singleplayer' ? emit('open-folder', world) : {}),
+						},
+						{
+							type: 'divider',
+							shown: !!instanceId,
+						},
+						{
+							id: 'dont-show-on-home',
+							label: formatMessage(messages.dontShowOnHome),
+							shown: !!instanceId,
+							action: () => {
+								set_world_display_status(
+									instanceId,
+									world.type,
+									getWorldIdentifier(world),
+									'hidden',
+								).then(() => {
+									emit('update')
+								})
 							},
-							{
-								id: 'open-instance',
-								shown: !!instanceId,
-								action: () => router.push(`/instance/${encodeURIComponent(instanceId)}`),
-							},
-							{
-								id: 'refresh',
-								shown: world.type === 'server',
-								action: () => emit('refresh'),
-							},
-							{
-								id: 'copy-address',
-								shown: world.type === 'server',
-								action: () => copyToClipboard((world as ServerWorld).address),
-							},
-							{
-								id: 'edit',
-								action: () => emit('edit'),
-								shown: !instanceId,
-								disabled: locked || managed,
-								tooltip: locked
-									? formatMessage(messages.worldInUse)
-									: managed
-										? formatMessage(messages.linkedServer)
-										: undefined,
-							},
-							{
-								id: 'open-folder',
-								shown: world.type === 'singleplayer',
-								action: () => (world.type === 'singleplayer' ? emit('open-folder', world) : {}),
-							},
-							{
-								divider: true,
-								shown: !!instanceId,
-							},
-							{
-								id: 'dont-show-on-home',
-								shown: !!instanceId,
-								action: () => {
-									set_world_display_status(
-										instanceId,
-										world.type,
-										getWorldIdentifier(world),
-										'hidden',
-									).then(() => {
-										emit('update')
-									})
-								},
-							},
-							{
-								id: 'create-shortcut',
-								shown: !!shortcutInstanceId && !quarantined,
-								action: () => createShortcut(),
-							},
-							{
-								divider: true,
-								shown: !instanceId,
-							},
-							{
-								id: 'delete',
-								color: 'red',
-								hoverFilled: true,
-								action: () => emit('delete'),
-								shown: !instanceId,
-								disabled: locked || managed,
-								tooltip: locked
-									? formatMessage(messages.worldInUse)
-									: managed
-										? formatMessage(messages.linkedServer)
-										: undefined,
-							},
-						]"
-					>
-						<MoreVerticalIcon aria-hidden="true" />
-						<template #play-instance>
-							<PlayIcon aria-hidden="true" />
-							{{ formatMessage(messages.playInstance) }}
-						</template>
-						<template #open-instance>
-							<EyeIcon aria-hidden="true" />
-							{{ formatMessage(messages.viewInstance) }}
-						</template>
-						<template #edit>
-							<EditIcon aria-hidden="true" />
-							{{ formatMessage(commonMessages.editButton) }}
-						</template>
-						<template #open-folder>
-							<FolderOpenIcon aria-hidden="true" />
-							{{ formatMessage(commonMessages.openFolderButton) }}
-						</template>
-						<template #copy-address>
-							<ClipboardCopyIcon aria-hidden="true" />
-							{{ formatMessage(messages.copyAddress) }}
-						</template>
-						<template #refresh>
-							<UpdatedIcon aria-hidden="true" />
-							{{ formatMessage(commonMessages.refreshButton) }}
-						</template>
-						<template #create-shortcut>
-							<ExternalIcon aria-hidden="true" />
-							{{ formatMessage(messages.createShortcut) }}
-						</template>
-						<template #dont-show-on-home>
-							<XIcon aria-hidden="true" />
-							{{ formatMessage(messages.dontShowOnHome) }}
-						</template>
-						<template #delete>
-							<TrashIcon aria-hidden="true" />
-							{{
-								formatMessage(
-									world.type === 'server'
-										? commonMessages.removeButton
-										: commonMessages.deleteLabel,
-								)
-							}}
-						</template>
-					</OverflowMenu>
-				</ButtonStyled>
+						},
+						{
+							id: 'create-shortcut',
+							label: formatMessage(messages.createShortcut),
+							shown: !!shortcutInstanceId && !quarantined,
+							action: () => createShortcut(),
+						},
+						{
+							type: 'divider',
+							shown: !instanceId,
+						},
+						{
+							id: 'delete',
+							label: formatMessage(
+								world.type === 'server' ? commonMessages.removeButton : commonMessages.deleteLabel,
+							),
+							tone: 'red',
+							action: () => emit('delete'),
+							shown: !instanceId,
+							disabled: locked || managed,
+							tooltip: locked
+								? formatMessage(messages.worldInUse)
+								: managed
+									? formatMessage(messages.linkedServer)
+									: undefined,
+						},
+					]"
+				>
+					<MoreVerticalIcon aria-hidden="true" />
+					<template #play-instance>
+						<PlayIcon aria-hidden="true" />
+						{{ formatMessage(messages.playInstance) }}
+					</template>
+					<template #open-instance>
+						<EyeIcon aria-hidden="true" />
+						{{ formatMessage(messages.viewInstance) }}
+					</template>
+					<template #edit>
+						<EditIcon aria-hidden="true" />
+						{{ formatMessage(commonMessages.editButton) }}
+					</template>
+					<template #open-folder>
+						<FolderOpenIcon aria-hidden="true" />
+						{{ formatMessage(commonMessages.openFolderButton) }}
+					</template>
+					<template #copy-address>
+						<ClipboardCopyIcon aria-hidden="true" />
+						{{ formatMessage(messages.copyAddress) }}
+					</template>
+					<template #refresh>
+						<UpdatedIcon aria-hidden="true" />
+						{{ formatMessage(commonMessages.refreshButton) }}
+					</template>
+					<template #create-shortcut>
+						<ExternalIcon aria-hidden="true" />
+						{{ formatMessage(messages.createShortcut) }}
+					</template>
+					<template #dont-show-on-home>
+						<XIcon aria-hidden="true" />
+						{{ formatMessage(messages.dontShowOnHome) }}
+					</template>
+					<template #delete>
+						<TrashIcon aria-hidden="true" />
+						{{
+							formatMessage(
+								world.type === 'server' ? commonMessages.removeButton : commonMessages.deleteLabel,
+							)
+						}}
+					</template>
+				</TeleportOverflowMenu>
 			</div>
 		</div>
 	</SmartClickable>
 </template>
 <style scoped lang="scss">
+.clickable-card:has([data-no-card-click]:hover) {
+	--hover-brightness: 1;
+}
+
 .world-item-highlighted {
 	position: relative;
 	animation: fade-highlight 4s ease-out;

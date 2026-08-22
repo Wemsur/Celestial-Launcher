@@ -1,8 +1,12 @@
 <template>
 	<div
 		data-pyro-server-list-root
-		class="relative mx-auto mb-6 flex w-full flex-col p-6"
-		:class="serverList.length ? 'min-h-screen' : 'min-h-[calc(100vh-14.5rem)]'"
+		class="relative mx-auto flex w-full flex-col p-6"
+		:class="
+			serverList.length && !showEmptyState
+				? 'min-h-screen mb-6'
+				: 'min-h-[calc(100vh-14.5rem)] h-full py-0'
+		"
 	>
 		<ServersGuestPlanModal
 			ref="guestPlanModal"
@@ -75,14 +79,17 @@
 						</li>
 					</ul>
 				</div>
-				<ButtonStyled size="large" type="standard" color="brand">
-					<AutoLink class="mt-6 !w-full" to="https://support.modrinth.com">{{
-						formatMessage(messages.contactSupportButton)
-					}}</AutoLink>
-				</ButtonStyled>
-				<ButtonStyled size="large" @click="() => router.go(0)">
-					<button class="mt-3 !w-full">{{ formatMessage(messages.reloadButton) }}</button>
-				</ButtonStyled>
+				<ButtonLink
+					type="colored"
+					color="brand"
+					size="xl"
+					class="mt-6 !w-full"
+					to="https://support.modrinth.com"
+					>{{ formatMessage(messages.contactSupportButton) }}</ButtonLink
+				>
+				<Button size="xl" class="mt-3 !w-full" @click="() => router.go(0)">{{
+					formatMessage(messages.reloadButton)
+				}}</Button>
 			</div>
 		</div>
 
@@ -106,12 +113,10 @@
 						:placeholder="formatMessage(messages.searchPlaceholder, { count: filteredData.length })"
 						wrapper-class="w-full md:w-72"
 					/>
-					<ButtonStyled type="standard" color="brand">
-						<button @click="openPurchaseModal">
-							<PlusIcon />
-							{{ formatMessage(messages.newServerButton) }}
-						</button>
-					</ButtonStyled>
+					<Button type="colored" color="brand" @click="openPurchaseModal">
+						<PlusIcon />
+						{{ formatMessage(messages.newServerButton) }}
+					</Button>
 				</div>
 			</div>
 
@@ -133,7 +138,7 @@
 				<div
 					v-else-if="showEmptyState"
 					key="empty"
-					class="flex h-full flex-col items-center justify-center gap-8 grow max-h-[1100px]"
+					class="flex h-full flex-col items-center justify-center gap-8 grow"
 				>
 					<ServerListEmpty
 						:logged-in="loggedIn"
@@ -231,8 +236,6 @@
 import type { Archon, Labrinth } from '@modrinth/api-client'
 import { HammerIcon, LoaderCircleIcon, PlusIcon, SearchIcon } from '@modrinth/assets'
 import {
-	AutoLink,
-	ButtonStyled,
 	CopyCode,
 	defineMessages,
 	injectAuth,
@@ -255,6 +258,7 @@ import type Stripe from 'stripe'
 import { type ComponentPublicInstance, computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { Button, ButtonLink } from '#ui/components/base/buttons'
 import ServersUpgradeModalWrapper from '#ui/components/billing/ServersUpgradeModalWrapper.vue'
 import type { ServerListingOwner } from '#ui/components/servers/access'
 import MedalServerListing from '#ui/components/servers/marketing/MedalServerListing.vue'
@@ -331,6 +335,10 @@ const messages = defineMessages({
 	handleErrorTitle: {
 		id: 'servers.manage.handle-error.title',
 		defaultMessage: 'An error occurred',
+	},
+	unknownError: {
+		id: 'servers.manage.error.unknown',
+		defaultMessage: 'Unknown error',
 	},
 	purchaseUnavailableTitle: {
 		id: 'servers.manage.purchase-unavailable.title',
@@ -677,7 +685,9 @@ function handleError(err: unknown) {
 }
 
 function formatFetchError(error: unknown) {
-	return error instanceof Error && error.message ? error.message : 'Unknown error'
+	return error instanceof Error && error.message
+		? error.message
+		: formatMessage(messages.unknownError)
 }
 
 function handleSignIn() {

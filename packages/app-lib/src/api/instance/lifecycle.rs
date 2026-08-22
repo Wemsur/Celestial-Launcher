@@ -4,6 +4,7 @@ use crate::state::instances::adapters::sqlite::instance_rows;
 use crate::state::{
     CreateInstance, EditInstance, Instance, InstanceLink, InstanceMetadata,
     ModLoader, State,
+    InstanceIconConfig,
 };
 
 #[tracing::instrument]
@@ -14,10 +15,14 @@ pub(crate) async fn create(
     modloader: ModLoader,
     loader_version: Option<String>,
     icon_path: Option<String>,
+    icon_config: Option<InstanceIconConfig>,
     link: InstanceLink,
     library_path: Option<String>,
 ) -> crate::Result<InstanceMetadata> {
     let state = State::get().await?;
+    if let Some(icon_config) = &icon_config {
+        super::icon::validate_generated_icon_config(icon_config)?;
+    }
     let instance = crate::state::create_instance(
         CreateInstance {
             name,
@@ -26,6 +31,7 @@ pub(crate) async fn create(
             loader: modloader,
             loader_version,
             icon_path,
+            icon_config,
             link,
             library_path,
         },
@@ -253,6 +259,11 @@ pub async fn remove(instance_id: &str) -> crate::Result<()> {
     let _instance =
         instance_rows::get_instance_display_info(instance_id, &state.pool)
             .await?;
+    crate::install::runner::cancel_jobs_for_instance_deletion(
+        instance_id,
+        &state,
+    )
+    .await?;
     crate::state::remove_instance(instance_id, &state).await?;
 
     emit_instance(instance_id, InstancePayloadType::Removed).await?;

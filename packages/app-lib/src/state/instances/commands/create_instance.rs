@@ -6,8 +6,8 @@ use crate::state::instances::{
     adapters::sqlite::{content_rows, instance_rows},
 };
 use crate::state::{
-    InstanceInstallStage, LauncherFeatureVersion, ModLoader, ReleaseChannel,
-    State,
+    InstanceIconConfig, InstanceInstallStage, LauncherFeatureVersion,
+    ModLoader, ReleaseChannel, State,
 };
 use crate::util::fetch;
 use crate::util::io;
@@ -24,6 +24,7 @@ pub struct CreateInstance {
     pub loader: ModLoader,
     pub loader_version: Option<String>,
     pub icon_path: Option<String>,
+    pub icon_config: Option<InstanceIconConfig>,
     pub link: InstanceLink,
     pub library_path: Option<String>,
 }
@@ -135,8 +136,12 @@ pub(crate) async fn create_instance(
             None
         };
 
-        let icon_path =
-            resolve_icon_path(input.icon_path.as_deref(), state).await?;
+        let icon_path = resolve_icon_path(
+            input.icon_path.as_deref(),
+            matches!(&input.link, InstanceLink::SharedInstance { .. }),
+            state,
+        )
+        .await?;
         let now = Utc::now();
         let abs_path_str = full_path.to_string_lossy().to_string();
         let instance_id = libraries::instance_id_from_path(&abs_path_str);
@@ -175,6 +180,14 @@ pub(crate) async fn create_instance(
 
         let mut tx = state.pool.begin().await?;
         instance_rows::insert_instance(&instance, &mut tx).await?;
+        if let Some(icon_config) = &input.icon_config {
+            instance_rows::update_instance_icon_config(
+                &instance_id,
+                Some(icon_config),
+                &mut tx,
+            )
+            .await?;
+        }
         content_rows::insert_content_set(&content_set, &mut tx).await?;
         instance_rows::upsert_instance_link(&instance_id, &input.link, &mut tx)
             .await?;
@@ -290,8 +303,9 @@ async fn path_available(
         .is_none())
 }
 
-async fn resolve_icon_path(
+pub(crate) async fn resolve_icon_path(
     icon_path: Option<&str>,
+    ignore_missing_remote_icon: bool,
     state: &State,
 ) -> crate::Result<Option<String>> {
     let Some(icon) = icon_path else {
@@ -299,7 +313,7 @@ async fn resolve_icon_path(
     };
 
     let file = if icon.starts_with("https://") || icon.starts_with("http://") {
-        let bytes = fetch::fetch(
+        let bytes = match fetch::fetch(
             icon,
             None,
             None,
@@ -307,7 +321,16 @@ async fn resolve_icon_path(
             &state.fetch_semaphore,
             &state.pool,
         )
-        .await?;
+        .await
+        {
+            Ok(bytes) => bytes,
+            Err(error)
+                if ignore_missing_remote_icon && is_not_found_error(&error) =>
+            {
+                return Ok(None);
+            }
+            Err(error) => return Err(error),
+        };
         crate::api::instance::cache_icon(bytes, state).await?
     } else {
         crate::api::instance::cache_icon_from_path(
@@ -318,6 +341,18 @@ async fn resolve_icon_path(
     };
 
     Ok(Some(file.to_string_lossy().to_string()))
+}
+
+fn is_not_found_error(error: &crate::Error) -> bool {
+    match error.raw.as_ref() {
+        crate::ErrorKind::FetchError(error) => {
+            error.status() == Some(reqwest::StatusCode::NOT_FOUND)
+        }
+        crate::ErrorKind::LabrinthError(error) => {
+            error.status == Some(reqwest::StatusCode::NOT_FOUND.as_u16())
+        }
+        _ => false,
+    }
 }
 
 fn content_source_kind(link: &InstanceLink) -> ContentSourceKind {

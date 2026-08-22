@@ -34,23 +34,19 @@
 						<div
 							class="flex items-center gap-2 rounded-2xl border border-solid border-surface-5 bg-surface-4 p-4"
 						>
-							<Avatar :src="auth.user.avatar_url" size="32px" />
+							<Avatar :src="auth.user.avatar_url" size="32px" circle />
 							<span class="font-medium text-contrast">{{ auth.user.username }}</span>
 
-							<ButtonStyled color="red" type="transparent">
-								<button type="button" class="ml-auto" @click="logout">
-									{{ formatMessage(commonMessages.signOutButton) }}
-								</button>
-							</ButtonStyled>
+							<Button type="quiet" color="red" native-type="button" class="ml-auto" @click="logout">
+								{{ formatMessage(commonMessages.signOutButton) }}
+							</Button>
 						</div>
 					</template>
 					<template v-else>
-						<ButtonStyled color="brand">
-							<nuxt-link class="button-like w-fit" :to="signInRoute">
-								<LogInIcon />
-								{{ formatMessage(commonMessages.signInButton) }}
-							</nuxt-link>
-						</ButtonStyled>
+						<ButtonLink type="colored" color="brand" class="button-like w-fit" :to="signInRoute">
+							<LogInIcon />
+							{{ formatMessage(commonMessages.signInButton) }}
+						</ButtonLink>
 					</template>
 				</div>
 				<div class="error-box__body">
@@ -92,7 +88,8 @@
 import { AnnoyedRinthbot, LogInIcon, SadRinthbot } from '@modrinth/assets'
 import {
 	Avatar,
-	ButtonStyled,
+	Button,
+	ButtonLink,
 	commonMessages,
 	defineMessage,
 	defineMessages,
@@ -100,39 +97,16 @@ import {
 	LoadingBar,
 	normalizeChildren,
 	NotificationPanel,
-	provideModrinthClient,
-	provideNotificationManager,
-	providePageContext,
 	useVIntl,
 } from '@modrinth/ui'
 
 import Logo404 from '~/assets/images/404.svg'
 import { getSignInRouteObj } from '~/composables/auth.js'
 import { logout } from '~/composables/user.js'
-
-import { createModrinthClient } from './helpers/api.ts'
-import { FrontendNotificationManager } from './providers/frontend-notifications.ts'
-import { setupLoadingStateProvider } from './providers/setup/loading-state.ts'
+import { setupProviders } from '~/providers/setup.ts'
 
 const auth = await useAuth()
-const config = useRuntimeConfig()
-
-provideNotificationManager(new FrontendNotificationManager())
-setupLoadingStateProvider()
-
-const client = createModrinthClient(auth.value, {
-	apiBaseUrl: config.public.apiBaseUrl.replace('/v2/', '/'),
-	archonBaseUrl: config.public.pyroBaseUrl.replace('/v2/', '/'),
-	sharedInstancesBaseUrl: config.public.sharedInstancesBaseUrl,
-	rateLimitKey: config.rateLimitKey,
-})
-provideModrinthClient(client)
-providePageContext({
-	hierarchicalSidebarAvailable: ref(false),
-	showAds: ref(false),
-	adConsentAvailable: ref(false),
-	openExternalUrl: (url) => window.open(url, '_blank'),
-})
+setupProviders(auth)
 
 const { formatMessage } = useVIntl()
 

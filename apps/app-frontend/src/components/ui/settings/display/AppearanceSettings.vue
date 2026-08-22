@@ -1,20 +1,160 @@
 <script setup lang="ts">
-import {TrashIcon} from "@modrinth/assets";
 import {
-    ButtonStyled, Combobox, defineMessages, ThemeSelector, Toggle, useVIntl
+    AppearanceSettingsLayout,
+    injectAuth,
+    injectUserPreferences,
+    provideAppearanceSettings,
+    useSavable,
 } from '@modrinth/ui'
+
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+
+import { type ColorTheme, useTheme, FeatureFlag } from '@/composables/use-theme.ts'
+import { type AppSettings, get, set } from '@/helpers/settings.ts'
+import { getOS } from '@/helpers/utils'
+import { appSettingsModalContextKey } from '@/providers/app-settings-modal'
 import {invoke} from "@tauri-apps/api/core";
-import { computed,onMounted, ref, watch} from 'vue'
+
+import {TrashIcon} from "@modrinth/assets";
 
 import BackgroundImageSettings from '@/components/BackgroundImageSettings.vue'
-import { get, set } from '@/helpers/settings.ts'
-import { getOS } from '@/helpers/utils'
-import { useTheming } from '@/store/state'
-import type { ColorTheme, FeatureFlag } from '@/store/theme.ts'
 
-const themeStore = useTheming()
-const { formatMessage } = useVIntl()
 
+
+const theme = useTheme()
+const auth = injectAuth()
+const { updatePreferences } = injectUserPreferences()
+const settingsModal = inject(appSettingsModalContextKey, null)
+const os = await getOS()
+const settings = ref(await get())
+
+type AppearanceSettingsState = {
+    theme: ColorTheme
+    syncAcrossDevices: boolean
+    advancedRendering: boolean
+    nativeDecorations: boolean
+}
+
+function getAppearanceSettingsState(settings: AppSettings): AppearanceSettingsState {
+    return {
+        theme: settings.theme,
+        syncAcrossDevices: settings.sync_theme_across_devices,
+        advancedRendering: settings.advanced_rendering,
+        nativeDecorations: settings.native_decorations,
+    }
+}
+
+const { saved, current, changes, saving, hasChanges, reset, save } = useSavable(
+    () => getAppearanceSettingsState(settings.value),
+    async (appearanceChanges) => {
+        const value = current.value
+        if (
+            value.syncAcrossDevices &&
+            auth.user.value &&
+            (appearanceChanges.theme !== undefined || appearanceChanges.syncAcrossDevices !== undefined)
+        ) {
+            await updatePreferences({
+                appearance: value.theme === 'system' ? { auto: true } : { auto: false, theme: value.theme },
+            })
+        }
+
+        const nextSettings: AppSettings = {
+            ...settings.value,
+            theme: value.theme,
+            sync_theme_across_devices: value.syncAcrossDevices,
+            advanced_rendering: value.advancedRendering,
+            native_decorations: value.nativeDecorations,
+        }
+
+        await set(nextSettings)
+        settings.value = nextSettings
+        theme.preferred = value.theme
+        theme.syncAcrossDevices = value.syncAcrossDevices
+        theme.advancedRendering = value.advancedRendering
+    },
+)
+
+const themeOptions = computed(() =>
+    theme.options.filter(
+        (option) =>
+            option !== 'retro' || settings.value.developer_mode || current.value.theme === 'retro',
+    ),
+)
+
+function setTheme(value: ColorTheme): void {
+    current.value.theme = value
+}
+
+function setSyncAcrossDevices(enabled: boolean): void {
+    current.value.syncAcrossDevices = enabled
+}
+
+function setAdvancedRendering(enabled: boolean): void {
+    current.value.advancedRendering = enabled
+}
+
+function setNativeDecorations(enabled: boolean): void {
+    current.value.nativeDecorations = enabled
+}
+
+watch(
+    [() => current.value.theme, () => saved.value.theme],
+    ([selectedTheme, savedTheme]) => {
+        theme.preview = selectedTheme === savedTheme ? null : selectedTheme
+    },
+    { immediate: true },
+)
+
+async function saveAppearanceSettings(): Promise<void> {
+    try {
+        await save()
+    } catch {
+        return
+    }
+}
+
+onMounted(() => {
+    settingsModal?.registerUnsavedChangesController({
+        hasChanges: () => hasChanges.value,
+        getOriginal: () => saved.value,
+        getModified: () => changes.value,
+        isSaving: () => saving.value,
+        reset,
+        save: saveAppearanceSettings,
+    })
+})
+
+onBeforeUnmount(() => {
+    theme.preview = null
+    settingsModal?.registerUnsavedChangesController(null)
+})
+
+provideAppearanceSettings({
+    deferPersistence: true,
+    theme: {
+        current: computed(() => current.value.theme),
+        options: themeOptions,
+        system: computed(() => theme.native),
+        set: setTheme,
+        syncAcrossDevices: {
+            value: computed(() => current.value.syncAcrossDevices),
+            set: setSyncAcrossDevices,
+        },
+        syncDisabled: computed(() => !auth.user.value),
+    },
+    advancedRendering: {
+        value: computed(() => current.value.advancedRendering),
+        set: setAdvancedRendering,
+    },
+    nativeDecorations:
+        os !== 'MacOS'
+            ? {
+                value: computed(() => current.value.nativeDecorations),
+                set: setNativeDecorations,
+            }
+            : undefined,
+    updatePreferences,
+})
 // 组件挂载时加载已保存的 hueValue
 onMounted(async () => {
     await themeStore.loadHueValue()
@@ -69,227 +209,12 @@ const filteredThemeOptions = computed(() =>
     themeStore.getThemeOptions().filter(t => !['light', 'dark'].includes(t))
 )
 
-const messages = defineMessages({
-    colorThemeTitle: {
-        id: 'app.appearance-settings.color-theme.title',
-        defaultMessage: 'Color theme',
-    },
-    colorThemeDescription: {
-        id: 'app.appearance-settings.color-theme.description',
-        defaultMessage: 'Select your preferred color theme for Modrinth App.',
-    },
-    advancedRenderingTitle: {
-        id: 'app.appearance-settings.advanced-rendering.title',
-        defaultMessage: 'Advanced rendering',
-    },
-    advancedRenderingDescription: {
-        id: 'app.appearance-settings.advanced-rendering.description',
-        defaultMessage:
-            'Enables advanced rendering such as blur effects that may cause performance issues without hardware-accelerated rendering.',
-    },
-    blurBackgroundTitle: {
-        id: 'app.appearance-settings.blur-background.title',
-        defaultMessage: 'BackgroundBlur',
-    },
-    blurBackgroundDescription: {
-        id: 'app.appearance-settings.blur-background.description',
-        defaultMessage:
-            'Enables background blur when customizing background images.',
-    },
-    hideNametagTitle: {
-        id: 'app.appearance-settings.hide-nametag.title',
-        defaultMessage: 'Hide nametag',
-    },
-    hideNametagDescription: {
-        id: 'app.appearance-settings.hide-nametag.description',
-        defaultMessage: 'Disables the nametag above your player on the skins page.',
-    },
-    nativeDecorationsTitle: {
-        id: 'app.appearance-settings.native-decorations.title',
-        defaultMessage: 'Native decorations',
-    },
-    nativeDecorationsDescription: {
-        id: 'app.appearance-settings.native-decorations.description',
-        defaultMessage: 'Use system window frame (app restart required).',
-    },
-    minimizeLauncherTitle: {
-        id: 'app.appearance-settings.minimize-launcher.title',
-        defaultMessage: 'Minimize launcher',
-    },
-    minimizeLauncherDescription: {
-        id: 'app.appearance-settings.minimize-launcher.description',
-        defaultMessage: 'Minimize the launcher when a Minecraft process starts.',
-    },
-    defaultLandingPageTitle: {
-        id: 'app.appearance-settings.default-landing-page.title',
-        defaultMessage: 'Default landing page',
-    },
-    defaultLandingPageDescription: {
-        id: 'app.appearance-settings.default-landing-page.description',
-        defaultMessage: 'Change the page to which the launcher opens on.',
-    },
-    defaultLandingPageHome: {
-        id: 'app.appearance-settings.default-landing-page.home',
-        defaultMessage: 'Home',
-    },
-    defaultLandingPageLibrary: {
-        id: 'app.appearance-settings.default-landing-page.library',
-        defaultMessage: 'Library',
-    },
-    defaultLandingPageWorlds: {
-        id: 'app.appearance-settings.default-landing-page.worlds',
-        defaultMessage: 'Library',
-    },
-    selectOption: {
-        id: 'app.appearance-settings.select-option',
-        defaultMessage: 'Select an option',
-    },
-    jumpBackIntoWorldsTitle: {
-        id: 'app.appearance-settings.jump-back-into-worlds.title',
-        defaultMessage: 'Jump back into worlds',
-    },
-    jumpBackIntoWorldsDescription: {
-        id: 'app.appearance-settings.jump-back-into-worlds.description',
-        defaultMessage: 'Includes recent worlds in the "Jump back in" section on the Home page.',
-    },
-    toggleSidebarTitle: {
-        id: 'app.appearance-settings.toggle-sidebar.title',
-        defaultMessage: 'Toggle sidebar',
-    },
-    toggleSidebarDescription: {
-        id: 'app.appearance-settings.toggle-sidebar.description',
-        defaultMessage: 'Enables the ability to toggle the sidebar.',
-    },
-    unknownPackWarningTitle: {
-        id: 'app.appearance-settings.unknown-pack-warning.title',
-        defaultMessage: 'Warn me before installing unknown modpacks',
-    },
-    unknownPackWarningDescription: {
-        id: 'app.appearance-settings.unknown-pack-warning.description',
-        defaultMessage:
-            "If you attempt to install a Modrinth Pack file (.mrpack) that isn't hosted on Modrinth, we'll make sure you understand the risks before installing it.",
-    },
-    skipNonEssentialWarningsTitle: {
-        id: 'app.appearance-settings.skip-non-essential-warnings.title',
-        defaultMessage: 'Skip non-essential warnings',
-    },
-    skipNonEssentialWarningsDescription: {
-        id: 'app.appearance-settings.skip-non-essential-warnings.description',
-        defaultMessage:
-            'Automatically skips low-risk confirmations like duplicate modpack installs, normal content deletion, bulk updates, unlinking modpacks, and repair prompts. Dangerous warnings will still be shown.',
-    },
-    showPlayTimeTitle: {
-        id: 'app.appearance-settings.show-play-time.title',
-        defaultMessage: 'Show play time',
-    },
-    showPlayTimeDescription: {
-        id: 'app.appearance-settings.show-play-time.description',
-        defaultMessage: `Displays how much time you've spent playing an instance.`,
-    },
-})
-
-const os = ref(await getOS())
-const settings = ref(await get())
-
-watch(
-    settings,
-    async() => {
-        await set(settings.value)
-    },
-    { deep: true },
-)
 </script>
+
 <template>
-    <h2 class="m-0 text-lg font-semibold text-contrast">
-        {{ formatMessage(messages.colorThemeTitle) }}
-    </h2>
-    <p class="m-0 mt-1">{{ formatMessage(messages.colorThemeDescription) }}</p>
-
-    <ThemeSelector
-        :update-color-theme="
-        (theme: ColorTheme) => {
-            themeStore.setThemeState(theme)
-            settings.theme = theme
-        }
-    "
-        :current-theme="settings.theme"
-        :theme-options="filteredThemeOptions"
-        system-theme-color="system"
-    />
-    <!-- 色相条 -->
-    <div class="mt-4 mb-8">
-        <h2 class="m-0 text-lg font-semibold text-contrast">自定义颜色</h2>
-        <p class="m-0 mt-1">
-            在支持自定义颜色的主题下自定义主题色
-        </p>
-        <div class="relative mt-2 h-4 w-full select-none" style="height:10px">
-            <input
-                type="range"
-                min="0"
-                max="360"
-                :value="themeStore.hueValue"
-                class="h-5 w-full appearance-none rounded-full bg-transparent cursor-pointer focus:shadow-[0_0_0_4px_hsl(var(--brand-hue,217),91%,60%)] [&::-webkit-slider-runnable-track]:rounded-full [&::-moz-range-track]:rounded-full"
-                @input="onHueChange"
-            />
-        </div>
-    </div>
-    <BackgroundImageSettings/>
-    <button id="purge-cache" class="btn min-w-max m-2" @click="delete_background">
-        <TrashIcon/>
-        清除已选择的背景
-    </button>
-
-    <div class="mt-6 flex items-center justify-between">
-        <div>
-            <h2 class="m-0 text-lg font-semibold text-contrast">
-                {{ formatMessage(messages.blurBackgroundTitle) }}
-            </h2>
-            <p class="m-0 mt-1">
-                {{ formatMessage(messages.blurBackgroundDescription) }}
-            </p>
-        </div>
-        <Toggle
-            id="custom-bg-blur"
-            :model-value="themeStore.customBgBlur"
-            @update:model-value="
-			(e) => {
-				themeStore.toggleBgBlur(!!e)
-			}
-			"
-        />
-    </div>
-
-    <div class="mt-6 flex items-center justify-between">
-        <div>
-            <h2 class="m-0 text-lg font-semibold text-contrast">
-                {{ formatMessage(messages.advancedRenderingTitle) }}
-            </h2>
-            <p class="m-0 mt-1">
-                {{ formatMessage(messages.advancedRenderingDescription) }}
-            </p>
-        </div>
-        <Toggle
-            id="advanced-rendering"
-            :model-value="themeStore.advancedRendering"
-            @update:model-value="
-				(e) => {
-					themeStore.advancedRendering = !!e
-					settings.advanced_rendering = themeStore.advancedRendering
-				}
-			"
-        />
-    </div>
-
-    <div v-if="os !== 'MacOS'" class="mt-6 flex items-center justify-between gap-4">
-        <div>
-            <h2 class="m-0 text-lg font-semibold text-contrast">
-                {{ formatMessage(messages.nativeDecorationsTitle) }}
-            </h2>
-            <p class="m-0 mt-1">{{ formatMessage(messages.nativeDecorationsDescription) }}</p>
-        </div>
-        <Toggle id="native-decorations" v-model="settings.native_decorations"/>
-    </div>
+    <AppearanceSettingsLayout />
 </template>
+
 <style lang="scss" scoped>
 /* 轨道高度 */
 input[type="range"] {

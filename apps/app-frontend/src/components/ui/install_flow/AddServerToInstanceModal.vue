@@ -3,20 +3,38 @@ import { CheckIcon, PlusIcon, SearchIcon } from '@modrinth/assets'
 import {
 	Admonition,
 	Avatar,
-	ButtonStyled,
+	Button,
+	defineMessages,
 	injectNotificationManager,
 	StyledInput,
+	useVIntl,
 } from '@modrinth/ui'
 import { useQueryClient } from '@tanstack/vue-query'
-import { convertFileSrc } from '@tauri-apps/api/core'
 import { computed, ref } from 'vue'
 
 import ModalWrapper from '@/components/ui/modal/ModalWrapper.vue'
 import { trackEvent } from '@/helpers/analytics'
-import { list } from '@/helpers/instance'
+import { getInstanceIconUrl, list } from '@/helpers/instance'
 import { add_server_to_instance, get_instance_worlds } from '@/helpers/worlds.ts'
+import { instanceKeys } from '@/pages/instance/query-options'
 
 const { handleError } = injectNotificationManager()
+const { formatMessage } = useVIntl()
+const messages = defineMessages({
+	title: { id: 'app.instance.add-server.title', defaultMessage: 'Add server to instance' },
+	compatibilityWarning: {
+		id: 'app.instance.add-server.compatibility-warning',
+		defaultMessage: 'This server may not be compatible with all instances.',
+	},
+	searchPlaceholder: {
+		id: 'app.instance.add-server.search-placeholder',
+		defaultMessage: 'Search for an instance',
+	},
+	adding: { id: 'app.instance.add-server.adding', defaultMessage: 'Adding...' },
+	added: { id: 'app.instance.add-server.added', defaultMessage: 'Added' },
+	add: { id: 'app.instance.add-server.add', defaultMessage: 'Add' },
+	cancel: { id: 'app.instance.add-server.cancel', defaultMessage: 'Cancel' },
+})
 const queryClient = useQueryClient()
 
 const modal = ref()
@@ -103,25 +121,22 @@ async function addServer(instance) {
 						:to="`/instance/${encodeURIComponent(instance.id)}`"
 						@click="modal.hide()"
 					>
-						<Avatar
-							:src="instance.icon_path ? convertFileSrc(instance.icon_path) : null"
-							class="mr-2 [--size:2rem]"
-						/>
+						<Avatar :src="getInstanceIconUrl(instance.icon_path)" class="mr-2 [--size:2rem]" />
 						{{ instance.name }}
 					</router-link>
-					<ButtonStyled>
-						<button :disabled="instance.added || instance.adding" @click="addServer(instance)">
-							<PlusIcon v-if="!instance.added && !instance.adding" />
-							<CheckIcon v-else-if="instance.added" />
-							{{ instance.adding ? 'Adding...' : instance.added ? 'Added' : 'Add' }}
-						</button>
-					</ButtonStyled>
+					<Button :disabled="instance.added || instance.adding" @click="addServer(instance)">
+						<PlusIcon v-if="!instance.added && !instance.adding" />
+						<CheckIcon v-else-if="instance.added" />
+						{{
+							formatMessage(
+								instance.adding ? messages.adding : instance.added ? messages.added : messages.add,
+							)
+						}}
+					</Button>
 				</div>
 			</div>
 			<div class="input-group push-right">
-				<ButtonStyled>
-					<button @click="modal.hide()">取消</button>
-				</ButtonStyled>
+				<Button @click="modal.hide()">{{ formatMessage(messages.cancel) }}</Button>
 			</div>
 		</div>
 	</ModalWrapper>

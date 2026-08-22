@@ -1,8 +1,9 @@
 <script setup>
 import { BoxIcon, FolderOpenIcon, FolderSearchIcon, TrashIcon } from '@modrinth/assets'
 import {
-	ButtonStyled,
+	Button,
 	defineMessages,
+	IconButton,
 	injectNotificationManager,
 	Slider,
 	StyledInput,
@@ -13,14 +14,14 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { ref, watch } from 'vue'
 
 import ConfirmModalWrapper from '@/components/ui/modal/ConfirmModalWrapper.vue'
+import { useAppSettings } from '@/composables/use-app-settings.ts'
 import { purge_cache_types } from '@/helpers/cache.js'
 import { get, set } from '@/helpers/settings.ts'
 import { showAppDbBackupsFolder } from '@/helpers/utils.js'
-import { useTheming } from '@/store/state'
 
 const { handleError } = injectNotificationManager()
 const { formatMessage } = useVIntl()
-const themeStore = useTheming()
+const appSettings = useAppSettings()
 const settings = ref(await get())
 const purgeCacheConfirmModal = ref(null)
 const alwaysShowCopyDetailsFlag = 'always_show_copy_details'
@@ -144,7 +145,7 @@ async function purgeCache() {
 }
 
 function handlePurgeCacheClick() {
-	if (themeStore.getFeatureFlag('skip_non_essential_warnings')) {
+	if (appSettings.getFeatureFlag('skip_non_essential_warnings')) {
 		void purgeCache()
 		return
 	}
@@ -183,16 +184,14 @@ async function findLauncherDir() {
 				wrapper-class="w-full"
 			>
 				<template #right>
-					<ButtonStyled circular>
-						<button
-							v-tooltip="formatMessage(messages.browseAppDirectory)"
-							:aria-label="formatMessage(messages.browseAppDirectory)"
-							class="ml-1.5"
-							@click="findLauncherDir"
-						>
-							<FolderSearchIcon aria-hidden="true" />
-						</button>
-					</ButtonStyled>
+					<IconButton
+						v-tooltip="formatMessage(messages.browseAppDirectory)"
+						:label="formatMessage(messages.browseAppDirectory)"
+						class="ml-1.5"
+						@click="findLauncherDir"
+					>
+						<FolderSearchIcon aria-hidden="true" />
+					</IconButton>
 				</template>
 			</StyledInput>
 			<p class="m-0 leading-tight text-secondary">
@@ -211,11 +210,11 @@ async function findLauncherDir() {
 			</div>
 			<Toggle
 				id="always-show-copy-details"
-				:model-value="themeStore.getFeatureFlag(alwaysShowCopyDetailsFlag)"
+				:model-value="appSettings.getFeatureFlag(alwaysShowCopyDetailsFlag)"
 				@update:model-value="
 					() => {
-						const newValue = !themeStore.getFeatureFlag(alwaysShowCopyDetailsFlag)
-						themeStore.featureFlags[alwaysShowCopyDetailsFlag] = newValue
+						const newValue = !appSettings.getFeatureFlag(alwaysShowCopyDetailsFlag)
+						appSettings.featureFlags[alwaysShowCopyDetailsFlag] = newValue
 						settings.feature_flags[alwaysShowCopyDetailsFlag] = newValue
 					}
 				"
@@ -235,10 +234,10 @@ async function findLauncherDir() {
 			<h2 class="m-0 text-lg font-semibold text-contrast">
 				{{ formatMessage(messages.appCacheTitle) }}
 			</h2>
-			<button id="purge-cache" class="btn min-w-max" @click="handlePurgeCacheClick">
+			<Button id="purge-cache" class="w-fit" @click="handlePurgeCacheClick">
 				<TrashIcon aria-hidden="true" />
 				{{ formatMessage(messages.purgeCache) }}
-			</button>
+			</Button>
 			<p class="m-0 leading-tight text-secondary">
 				{{ formatMessage(messages.appCacheDescription) }}
 			</p>
@@ -280,10 +279,10 @@ async function findLauncherDir() {
 			<h2 class="mt-0 m-0 text-lg font-semibold text-contrast">
 				{{ formatMessage(messages.appDatabaseBackupsTitle) }}
 			</h2>
-			<button id="open-db-backups-folder" class="btn min-w-max" @click="openDbBackupsFolder">
+			<Button id="open-db-backups-folder" class="w-fit" @click="openDbBackupsFolder">
 				<FolderOpenIcon aria-hidden="true" />
 				{{ formatMessage(messages.openBackupsFolder) }}
-			</button>
+			</Button>
 			<p class="m-0 leading-tight text-secondary">
 				{{ formatMessage(messages.appDatabaseBackupsDescription) }}
 			</p>
