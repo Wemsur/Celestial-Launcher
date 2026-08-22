@@ -228,7 +228,12 @@ pub async fn retry_job(job_id: Uuid) -> crate::Result<InstallJobSnapshot> {
 
     // Restore the real instance_id in paths so `current_instance_id()` works.
     if retry_has_target {
-        let _ = store::update_state(job_id, &job.state, &state).await;
+        if matches!(
+            job.state.target,
+            InstallTarget::NewInstance { instance_id: None }
+        ) {
+            let _ = store::update_state(job_id, &job.state, &state).await;
+        }
     }
     if let Err(error) =
         lock_existing_instance_if_needed(&job.state, &state).await
@@ -399,11 +404,17 @@ async fn start(request: InstallRequest) -> crate::Result<InstallJobSnapshot> {
         }
     };
 
-    // After inserting with null target, keep the job in DB with
-    // instance_id=NULL (JSON-backed instances don't exist in the
-    // instances table — restoring a real ID here would violate the FK).
-    // `paths.json_backed_instance_id` holds the real ID for the rest of the
-    // job lifecycle.
+    // After inserting, restore json_backed_instance_id in paths so
+    // `current_instance_id()` works during the install run. The DB row has
+    // instance_id=NULL for JSON-backed instances (FK constraint), so we
+    // write the ID back into paths here before the job starts running.
+    if matches!(
+        job_state.target,
+        InstallTarget::NewInstance { instance_id: None }
+    ) {
+        let _ = store::update_state(id, &job_state, &state).await;
+    }
+
     if let Err(error) =
         lock_existing_instance_if_needed(&job_state, &state).await
     {

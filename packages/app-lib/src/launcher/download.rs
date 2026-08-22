@@ -27,6 +27,7 @@ use futures::prelude::*;
 use reqwest::Method;
 use std::{
     future::Future,
+    path::PathBuf,
     pin::Pin,
     sync::{
         Arc,
@@ -392,6 +393,7 @@ pub async fn download_minecraft(
     minecraft_updated: bool,
     reporter: Option<InstallProgressReporter>,
     phase_details: InstallPhaseDetails,
+    instance_dir: Option<&PathBuf>,
 ) -> crate::Result<()> {
     tracing::info!("Downloading Minecraft version {}", version.id);
     let progress = if let Some(reporter) = reporter {
@@ -441,7 +443,7 @@ pub async fn download_minecraft(
 
     tokio::try_join! {
         // Total loading sums to 90/60
-        download_client(st, version, loading_bar, force, progress.clone()), // 9
+        download_client(st, version, loading_bar, force, progress.clone(), instance_dir), // 9
         download_log_config(st, version, loading_bar, force, progress.clone()),
         download_assets(st, version.assets == "legacy", &assets_index, loading_bar, amount, force, progress.clone()), // 40
         download_libraries(st, version.libraries.as_slice(), &version.id, loading_bar, amount, java_arch, force, minecraft_updated, progress.clone()) // 40
@@ -460,6 +462,7 @@ pub async fn download_version_info(
     force: Option<bool>,
     loading_bar: Option<&LoadingBarId>,
     reporter: Option<&InstallProgressReporter>,
+    instance_dir: Option<&PathBuf>,
 ) -> crate::Result<GameVersionInfo> {
     let version_id = loader
         .map_or(version.id.clone(), |it| format!("{}-{}", version.id, it.id));
@@ -533,7 +536,26 @@ pub async fn download_version_info(
 
         info.id.clone_from(&version_id);
 
-        write(&path, &serde_json::to_vec(&info)?, &st.io_semaphore).await?;
+        let json_bytes = serde_json::to_vec(&info)?;
+        write(&path, &json_bytes, &st.io_semaphore).await?;
+
+        // For .minecraft format, also write to the instance directory
+        if let Some(inst_dir) = instance_dir {
+            if let Err(e) =
+                crate::state::libraries::write_version_info_to_instance_dir(
+                    inst_dir,
+                    &version_id,
+                    &serde_json::from_slice(&json_bytes)?,
+                )
+                .await
+            {
+                tracing::warn!(
+                    "Failed to write version info to instance dir {}: {e}",
+                    inst_dir.display()
+                );
+            }
+        }
+
         Ok(info)
     }?;
 
@@ -553,6 +575,7 @@ pub async fn download_client(
     loading_bar: Option<&LoadingBarId>,
     force: bool,
     progress: Option<MinecraftDownloadProgress>,
+    instance_dir: Option<&PathBuf>,
 ) -> crate::Result<()> {
     let version = &version_info.id;
     tracing::debug!("Locating client for version {version}");
@@ -585,6 +608,22 @@ pub async fn download_client(
         )
         .await?;
         write(&path, &bytes, &st.io_semaphore).await?;
+
+        // For .minecraft format, also write to the instance directory
+        if let Some(inst_dir) = instance_dir {
+            if let Err(e) =
+                crate::state::libraries::write_version_jar_to_instance_dir(
+                    inst_dir, version, &bytes,
+                )
+                .await
+            {
+                tracing::warn!(
+                    "Failed to write client jar to instance dir {}: {e}",
+                    inst_dir.display()
+                );
+            }
+        }
+
         tracing::trace!("Fetched client version {version}");
     }
     if let Some(loading_bar) = loading_bar {

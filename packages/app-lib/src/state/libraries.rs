@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use tokio::fs as tokio_fs;
 use tracing::{debug, info, warn, error};
 
 /// Retry a closure on `std::io::Error`, with 200ms delay between attempts.
@@ -47,6 +48,11 @@ pub enum InstanceFormat {
     #[default]
     Modrinth,
     Minecraft,
+}
+
+/// Check whether a library path represents .minecraft format.
+pub fn is_minecraft_format_path(path: &str) -> bool {
+    InstanceFormat::from_path(path) == InstanceFormat::Minecraft
 }
 
 impl From<&str> for InstanceFormat {
@@ -617,6 +623,28 @@ pub(crate) async fn ensure_migration_done(state: &State) -> crate::Result<()> {
     Ok(())
 }
 
+/// Resolve an instance directory from its path string, respecting the
+/// library's format.
+///
+/// For Modrinth format: `<library>/profiles/<path>` (if relative).
+/// For `.minecraft` format: `<library>/versions/<path>` (if relative).
+/// Absolute paths are returned as-is.
+pub(crate) fn resolve_instance_dir_for_library(
+    library_path: &Path,
+    instance_path: &str,
+    library_format: &InstanceFormat,
+) -> PathBuf {
+    let path = Path::new(instance_path);
+    if path.is_absolute() {
+        return path.to_path_buf();
+    }
+    let root = match library_format {
+        InstanceFormat::Modrinth => library_path.join("profiles"),
+        InstanceFormat::Minecraft => library_path.join("versions"),
+    };
+    root.join(path)
+}
+
 /// Resolve an instance directory from its path string.
 /// If the path is absolute, return it directly (supports multi-library).
 /// If the path is relative, join it with instances_dir (legacy support).
@@ -768,15 +796,85 @@ pub(crate) fn shared_content_dirs(
     }
 }
 
+/// Get the version ID associated with a `.minecraft` format instance directory.
+/// Returns the instance directory name (e.g. `1.21.1self-x`).
+pub(crate) fn instance_version_id(instance_dir: &Path) -> String {
+    instance_dir
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string()
+}
+
+/// Read and parse the version info JSON from the instance directory.
+/// For .minecraft format instances, this is `<version>.json` in the instance dir.
+/// Falls back to scanning for any `.json` file if no `<version_id>.json` exists.
+pub fn read_version_json_from_instance_dir(
+    instance_dir: &Path,
+) -> crate::Result<Option<serde_json::Value>> {
+    let version_id = instance_version_id(instance_dir);
+    let target_path = instance_dir.join(format!("{version_id}.json"));
+    if target_path.exists() {
+        let content = fs::read_to_string(&target_path)?;
+        let val: serde_json::Value = serde_json::from_str(&content)?;
+        return Ok(Some(val));
+    }
+    // Fall back to scanning for any .json
+    if let Ok(entries) = fs::read_dir(instance_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                let content = match fs::read_to_string(&path) {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
+                let val: serde_json::Value = match serde_json::from_str(&content) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                return Ok(Some(val));
+            }
+        }
+    }
+    Ok(None)
+}
+
 /// Check if a Minecraft-format instance has its own local version data
 /// (version jar and/or version info JSON).
 pub(crate) fn instance_has_local_version(
     instance_dir: &Path,
-    version_jar: &str,
+    version_id: &str,
 ) -> bool {
-    let jar_path = instance_dir.join(format!("{version_jar}.jar"));
-    let json_path = instance_dir.join(format!("{version_jar}.json"));
+    let jar_path = instance_dir.join(format!("{version_id}.jar"));
+    let json_path = instance_dir.join(format!("{version_id}.json"));
     jar_path.exists() || json_path.exists()
+}
+
+/// Write a version info JSON to the instance directory as `<version>.json`.
+/// Called after download during `.minecraft` format install.
+pub(crate) async fn write_version_info_to_instance_dir(
+    instance_dir: &Path,
+    version_id: &str,
+    info: &serde_json::Value,
+) -> crate::Result<()> {
+    tokio_fs::create_dir_all(instance_dir).await?;
+    let json_path = instance_dir.join(format!("{version_id}.json"));
+    let content = serde_json::to_string_pretty(info)?;
+    tokio_fs::write(&json_path, content).await?;
+    Ok(())
+}
+
+/// Write a client JAR to the instance directory as `<version>.jar`.
+/// Called after download during `.minecraft` format install.
+pub(crate) async fn write_version_jar_to_instance_dir(
+    instance_dir: &Path,
+    version_id: &str,
+    bytes: &[u8],
+) -> crate::Result<()> {
+    tokio_fs::create_dir_all(instance_dir).await?;
+    let jar_path = instance_dir.join(format!("{version_id}.jar"));
+    tokio_fs::write(&jar_path, bytes).await?;
+    Ok(())
 }
 
 /// Find a JSON-backed instance by ID. Returns the path used to locate it.
@@ -844,12 +942,56 @@ pub async fn find_json_instance(
     Ok(None)
 }
 
-/// Detect the Minecraft game version from the instance directory by scanning
-/// for a version manifest JSON (e.g. `versions/1.20.1/1.20.1.json`).
-/// If no `versions/` subdirectory exists (common for Modrinth-style profiles
-/// that share a global `.minecraft/versions/`), fall back to using the
-/// instance directory name as a version guess.
+/// Detect the Minecraft game version from the instance directory.
+///
+/// For `.minecraft` format: reads `clientVersion` from the first version JSON
+/// found in the instance directory.
+/// For Modrinth-style profiles that share a global `versions/` cache:
+/// scans `versions/<id>/<id>.json` entries and returns the first match.
+/// Falls back to the instance directory name if nothing is found.
 pub fn detect_game_version_from_dir(dir: &Path) -> Option<String> {
+    // 1. Read clientVersion from a version JSON directly in the instance
+    //    directory (`.minecraft` format: `versions/<instance>/<version>.json`)
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            let content = match fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            let Ok(val) = serde_json::from_str::<Value>(&content) else {
+                continue;
+            };
+            if let Some(cv) = val.get("clientVersion").and_then(|v| v.as_str()) {
+                if !cv.is_empty() {
+                    debug!(
+                        "Read clientVersion '{}' from {}",
+                        cv,
+                        path.display()
+                    );
+                    return Some(cv.to_string());
+                }
+            }
+            // Fall back to the JSON filename stem if it looks like a version ID
+            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                if stem.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false)
+                    && stem.contains('.')
+                {
+                    debug!(
+                        "Using JSON stem '{}' as version from {}",
+                        stem,
+                        path.display()
+                    );
+                    return Some(stem.to_string());
+                }
+            }
+        }
+    }
+
+    // 2. Check for a shared versions/ cache (Modrinth-style profiles)
     let versions_dir = dir.join("versions");
     if versions_dir.exists() {
         if let Ok(entries) = fs::read_dir(&versions_dir) {
@@ -873,9 +1015,8 @@ pub fn detect_game_version_from_dir(dir: &Path) -> Option<String> {
             }
         }
     }
-    // No versions/ subdirectory — this is common for Modrinth profiles
-    // which share a global versions cache. Fall back to the directory name,
-    // which is typically the Minecraft version (e.g. "1.21.8").
+
+    // 3. Fallback: use the instance directory name (e.g. "1.21.4" or "My Instance")
     dir.file_name()
         .and_then(|name| name.to_str())
         .filter(|name| !name.is_empty())

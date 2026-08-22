@@ -242,8 +242,14 @@ async fn resolve_instance_path(
         .unwrap_or_else(|| sanitize_instance_name(name));
     let mut path = base_path.clone();
     let state = State::get().await?;
+    let library_format = if let Some(lib) = library_path {
+        libraries::InstanceFormat::from_path(lib)
+    } else {
+        libraries::InstanceFormat::default()
+    };
     let full_path = if let Some(lib) = library_path {
-        libraries::resolve_instance_dir(&state, lib).join(&path)
+        let lib_path = std::path::Path::new(lib);
+        libraries::resolve_instance_dir_for_library(lib_path, &path, &library_format)
     } else {
         libraries::resolve_instance_dir(&state, &path)
     };
@@ -256,7 +262,8 @@ async fn resolve_instance_path(
     loop {
         path = format!("{base_path} ({which})");
         let full_path = if let Some(lib) = library_path {
-            libraries::resolve_instance_dir(&state, lib).join(&path)
+            let lib_path = std::path::Path::new(lib);
+            libraries::resolve_instance_dir_for_library(lib_path, &path, &library_format)
         } else {
             libraries::resolve_instance_dir(&state, &path)
         };

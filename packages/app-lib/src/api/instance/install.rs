@@ -15,6 +15,19 @@ pub async fn get_optimal_jre_key(
                 "尝试解析不存在的实例 {instance_id}!"
             ))
         })?;
+
+    // For .minecraft format instances, determine the instance dir so we can
+    // write version info and JAR there during download.
+    let inst_dir_for_download =
+        if context.instance.library_format == crate::state::libraries::InstanceFormat::Minecraft
+        {
+            Some(crate::state::libraries::resolve_instance_dir_with_dirs(
+                &state.directories, &context.instance.path,
+            ))
+        } else {
+            None
+        };
+
     let (minecraft, version_index) =
         crate::launcher::resolve_minecraft_manifest(
             &context.applied_content_set.game_version,
@@ -35,6 +48,7 @@ pub async fn get_optimal_jre_key(
         None,
         None,
         None,
+        inst_dir_for_download.as_ref(),
     )
     .await?;
 
