@@ -19,7 +19,7 @@ import {
 	install_get_modpack_preview,
 } from '@/helpers/install'
 import { list } from '@/helpers/instance'
-import { library_list } from '@/helpers/library'
+import { library_default_path, library_list } from '@/helpers/library'
 import { get_loader_versions as getLoaderManifest } from '@/helpers/metadata.js'
 import type { InstanceLoader } from '@/helpers/types'
 import { useTheming } from '@/store/state'
@@ -37,10 +37,18 @@ export function setupCreationModal(notificationManager: AbstractWebNotificationM
 
 	// Load available libraries for the creation modal
 	const availableLibraries = ref<Array<{ path: string; name: string }>>([])
+	const defaultLibraryPath = ref<string | null>(null)
 	watchEffect(async () => {
 		try {
 			const config = await library_list()
 			availableLibraries.value = config.libraries
+		} catch {
+			// ignore
+		}
+	})
+	watchEffect(async () => {
+		try {
+			defaultLibraryPath.value = await library_default_path()
 		} catch {
 			// ignore
 		}
@@ -222,5 +230,6 @@ export function setupCreationModal(notificationManager: AbstractWebNotificationM
 		handleModpackDuplicateCreateAnyway,
 		handleModpackDuplicateGoToInstance,
 		availableLibraries,
+		defaultLibraryPath,
 	}
 }

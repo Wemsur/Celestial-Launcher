@@ -134,6 +134,7 @@ export interface CreationFlowContextValue {
 	initialLoader: string | null
 	initialGameVersion: string | null
 	availableLibraries: Array<{ path: string; name: string }>
+	defaultLibraryPath: string | null
 
 	// State
 	setupType: Ref<SetupType | null>
@@ -233,6 +234,7 @@ export interface CreationFlowOptions {
 	initialLoader?: string
 	initialGameVersion?: string
 	availableLibraries?: Array<{ path: string; name: string }>
+	defaultLibraryPath?: string | null
 	fetchExistingInstanceNames?: () => Promise<string[]>
 	onBack?: () => void
 	searchModpacks?: (query: string, limit?: number) => Promise<ModpackSearchResult>
@@ -262,6 +264,7 @@ export function createCreationFlowContext(
 	const initialLoader = options.initialLoader ?? null
 	const initialGameVersion = options.initialGameVersion ?? null
 	const availableLibraries = options.availableLibraries ?? []
+	const defaultLibraryPath = options.defaultLibraryPath ?? null
 	const onBack = options.onBack ?? null
 	const searchModpacks = options.searchModpacks!
 	const getProjectVersions = options.getProjectVersions!
@@ -561,6 +564,7 @@ export function createCreationFlowContext(
 		initialLoader,
 		initialGameVersion,
 		availableLibraries,
+		defaultLibraryPath,
 		setupType,
 		isImportMode,
 		worldName,

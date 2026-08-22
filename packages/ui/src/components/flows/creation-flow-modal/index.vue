@@ -41,6 +41,7 @@ const props = withDefaults(
 		finishDisabled?: boolean
 		finishDisabledTooltip?: string
 		availableLibraries?: Array<{ path: string; name: string }>
+		defaultLibraryPath?: string | null
 	}>(),
 	{
 		type: 'world',
@@ -84,6 +85,7 @@ const ctx = createCreationFlowContext(
 		finishDisabled: computed(() => props.finishDisabled ?? false),
 		finishDisabledTooltip: computed(() => props.finishDisabledTooltip),
 		availableLibraries: props.availableLibraries ?? [],
+		defaultLibraryPath: props.defaultLibraryPath,
 	},
 )
 provideCreationFlowContext(ctx)

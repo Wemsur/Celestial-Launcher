@@ -317,10 +317,20 @@ onMounted(() => {
 const tags = injectTags()
 
 const libraryOptions = computed(() =>
-	ctx.availableLibraries.map((lib) => ({
-		value: lib.path,
-		label: lib.name || lib.path.split(/[\\/]/).pop() || lib.path,
-	})),
+	ctx.availableLibraries.map((lib) => {
+		const fallbackLabel = lib.name || lib.path.split(/[\\/]/).pop() || lib.path
+		if (ctx.defaultLibraryPath) {
+			const normDefault = ctx.defaultLibraryPath
+				.replace(/\\/g, '/')
+				.toLowerCase()
+				.replace(/\/+$/, '')
+			const normLib = lib.path.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '')
+			if (normLib === normDefault || normLib === normDefault + '/profiles') {
+				return { value: lib.path, label: '默认库' }
+			}
+		}
+		return { value: lib.path, label: fallbackLabel }
+	}),
 )
 
 const loaderVersionTypeItems: LoaderVersionType[] = ['stable', 'latest', 'other']

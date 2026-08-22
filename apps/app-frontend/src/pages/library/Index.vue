@@ -14,12 +14,12 @@ import { inject, onUnmounted, ref, shallowRef, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { NewInstanceImage } from '@/assets/icons'
+import NavButton from "@/components/ui/NavButton.vue";
 import { instance_listener } from '@/helpers/events.js'
 import { list } from '@/helpers/instance'
 import type { InstanceFormat } from '@/helpers/library'
 import { library_default_path, library_list } from '@/helpers/library'
 import { useRootBreadcrumb } from '@/providers/breadcrumbs'
-import NavButton from "@/components/ui/NavButton.vue";
 
 const { handleError } = injectNotificationManager()
 const showCreationModal = inject('showCreationModal')

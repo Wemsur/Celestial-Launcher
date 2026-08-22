@@ -299,6 +299,7 @@ const {
 	handleModpackDuplicateCreateAnyway,
 	handleModpackDuplicateGoToInstance,
 	availableLibraries,
+	defaultLibraryPath,
 } = setupProviders(notificationManager, popupNotificationManager)
 
 const news = ref([])
@@ -1571,6 +1572,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			type="instance"
 			show-snapshot-toggle
 			:available-libraries="availableLibraries"
+			:default-library-path="defaultLibraryPath"
 			:fetch-existing-instance-names="fetchExistingInstanceNames"
 			:search-modpacks="searchModpacks"
 			:get-project-versions="getProjectVersions"

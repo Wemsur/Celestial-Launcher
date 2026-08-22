@@ -14,8 +14,8 @@ import {
 	commonMessages,
 	defineMessage,
 	TabbedModal,
-	UnsavedChangesPopup,
 	type TabbedModalTab,
+	UnsavedChangesPopup,
 	useVIntl,
 } from '@modrinth/ui'
 import type { PlatformTag } from '@modrinth/utils'
