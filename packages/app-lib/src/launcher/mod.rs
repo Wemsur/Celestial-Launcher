@@ -397,6 +397,7 @@ pub async fn install_minecraft_with_reporter(
             loading_bar.as_ref(),
             reporter.as_ref(),
             Some(&instance_path),
+            Some(&local_version_id),
         )
         .await?
     };
@@ -493,6 +494,15 @@ pub async fn install_minecraft_with_reporter(
             reporter.clone(),
             phase_details.clone(),
             Some(&instance_path),
+            Some(&local_version_id),
+            if instance.library_format == libraries::InstanceFormat::Minecraft {
+                Some(libraries::instance_libraries_dir(
+                    &instance_path,
+                    &instance.library_format,
+                ))
+            } else {
+                None
+            },
         )
         .await?;
     }
@@ -908,6 +918,7 @@ pub async fn launch_minecraft(
             None,
             None,
             Some(&instance_path),
+            Some(&local_version_id),
         )
         .await?
     };
@@ -927,6 +938,7 @@ pub async fn launch_minecraft(
                 None,
                 None,
                 Some(&instance_path),
+                Some(&local_version_id),
             )
             .await?;
         }
@@ -1022,6 +1034,19 @@ pub async fn launch_minecraft(
         io::create_dir_all(&natives_dir).await?;
     }
 
+    // For .minecraft format, use the instance's own libraries directory
+    let libraries_dir = if instance.library_format
+        == libraries::InstanceFormat::Minecraft
+    {
+        libraries::instance_libraries_dir(
+            &instance_path,
+            &instance.library_format,
+        )
+    } else {
+        state.directories.libraries_dir()
+    };
+    io::create_dir_all(&libraries_dir).await?;
+
     let quick_play_version =
         QuickPlayVersion::find_version(version_index, &minecraft.versions);
     tracing::debug!(
@@ -1069,10 +1094,10 @@ pub async fn launch_minecraft(
             args.get(&d::minecraft::ArgumentType::Jvm)
                 .map(|x| x.as_slice()),
             &natives_dir,
-            &state.directories.libraries_dir(),
+            &libraries_dir,
             &state.directories.log_configs_dir(),
             &args::get_class_paths(
-                &state.directories.libraries_dir(),
+                &libraries_dir,
                 version_info.libraries.as_slice(),
                 &[&main_class_path, &client_path],
                 &java_version.architecture,

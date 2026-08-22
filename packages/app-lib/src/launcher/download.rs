@@ -394,6 +394,8 @@ pub async fn download_minecraft(
     reporter: Option<InstallProgressReporter>,
     phase_details: InstallPhaseDetails,
     instance_dir: Option<&PathBuf>,
+    instance_version_id: Option<&str>,
+    libraries_dir: Option<PathBuf>,
 ) -> crate::Result<()> {
     tracing::info!("Downloading Minecraft version {}", version.id);
     let progress = if let Some(reporter) = reporter {
@@ -443,10 +445,10 @@ pub async fn download_minecraft(
 
     tokio::try_join! {
         // Total loading sums to 90/60
-        download_client(st, version, loading_bar, force, progress.clone(), instance_dir), // 9
+        download_client(st, version, loading_bar, force, progress.clone(), instance_dir, instance_version_id), // 9
         download_log_config(st, version, loading_bar, force, progress.clone()),
         download_assets(st, version.assets == "legacy", &assets_index, loading_bar, amount, force, progress.clone()), // 40
-        download_libraries(st, version.libraries.as_slice(), &version.id, loading_bar, amount, java_arch, force, minecraft_updated, progress.clone()) // 40
+        download_libraries(st, version.libraries.as_slice(), &version.id, loading_bar, amount, java_arch, force, minecraft_updated, progress.clone(), libraries_dir) // 40
     }?;
 
     tracing::info!("Done downloading Minecraft!");
@@ -463,14 +465,21 @@ pub async fn download_version_info(
     loading_bar: Option<&LoadingBarId>,
     reporter: Option<&InstallProgressReporter>,
     instance_dir: Option<&PathBuf>,
+    instance_version_id: Option<&str>,
 ) -> crate::Result<GameVersionInfo> {
     let version_id = loader
         .map_or(version.id.clone(), |it| format!("{}-{}", version.id, it.id));
-    tracing::debug!("Loading version info for Minecraft {version_id}");
+    // For .minecraft format, the instance directory may use a different ID
+    // (the instance dir name). Use it as the primary key so cache and
+    // instance-dir writes are consistent.
+    let effective_id = instance_version_id.unwrap_or(&version_id);
+    tracing::debug!(
+        "Loading version info for Minecraft {effective_id} (cache id: {version_id})",
+    );
     let path = st
         .directories
-        .version_dir(&version_id)
-        .join(format!("{version_id}.json"));
+        .version_dir(effective_id)
+        .join(format!("{effective_id}.json"));
 
     let res = if path.exists() && !force.unwrap_or(false) {
         io::read(path)
@@ -534,7 +543,7 @@ pub async fn download_version_info(
             info = d::modded::merge_partial_version(partial, info);
         }
 
-        info.id.clone_from(&version_id);
+        info.id = effective_id.to_string();
 
         let json_bytes = serde_json::to_vec(&info)?;
         write(&path, &json_bytes, &st.io_semaphore).await?;
@@ -544,7 +553,7 @@ pub async fn download_version_info(
             if let Err(e) =
                 crate::state::libraries::write_version_info_to_instance_dir(
                     inst_dir,
-                    &version_id,
+                    effective_id,
                     &serde_json::from_slice(&json_bytes)?,
                 )
                 .await
@@ -576,8 +585,10 @@ pub async fn download_client(
     force: bool,
     progress: Option<MinecraftDownloadProgress>,
     instance_dir: Option<&PathBuf>,
+    instance_version_id: Option<&str>,
 ) -> crate::Result<()> {
-    let version = &version_info.id;
+    let cache_version = &version_info.id;
+    let version = instance_version_id.unwrap_or(cache_version);
     tracing::debug!("Locating client for version {version}");
     let client_download = version_info
         .downloads
@@ -590,8 +601,8 @@ pub async fn download_client(
         )?;
     let path = st
         .directories
-        .version_dir(version)
-        .join(format!("{version}.jar"));
+        .version_dir(cache_version)
+        .join(format!("{cache_version}.jar"));
 
     if !path.exists() || force {
         let bytes = fetch_minecraft_file(
@@ -788,12 +799,16 @@ pub async fn download_libraries(
     force: bool,
     minecraft_updated: bool,
     progress: Option<MinecraftDownloadProgress>,
+    libraries_dir: Option<PathBuf>,
 ) -> crate::Result<()> {
     tracing::debug!("Loading libraries");
 
+    let lib_dir = libraries_dir.unwrap_or_else(|| st.directories.libraries_dir());
+    let natives_dir = st.directories.version_natives_dir(version);
+
     tokio::try_join! {
-        io::create_dir_all(st.directories.libraries_dir()),
-        io::create_dir_all(st.directories.version_natives_dir(version))
+        io::create_dir_all(&lib_dir),
+        io::create_dir_all(&natives_dir),
     }?;
     let num_files = libraries.len();
     loading_try_for_each_concurrent(
@@ -805,6 +820,8 @@ pub async fn download_libraries(
         None,
         |library| {
             let progress = progress.clone();
+            let lib_dir = lib_dir.clone();
+            let natives_dir = natives_dir.clone();
             async move {
             if let Some(rules) = &library.rules
                 && !parse_rules(
@@ -844,8 +861,7 @@ pub async fn download_libraries(
                             .minecraft_version(version.to_string())
                             .file_path(library.name.clone())
                             .target_path(
-                                st.directories
-                                    .version_natives_dir(version)
+                                natives_dir
                                     .display()
                                     .to_string(),
                             )
@@ -856,9 +872,7 @@ pub async fn download_libraries(
                     if let Ok(mut archive) =
                         zip::ZipArchive::new(std::io::Cursor::new(&data))
                     {
-                        match archive.extract(
-                            st.directories.version_natives_dir(version),
-                        ) {
+                        match archive.extract(&natives_dir) {
                             Ok(_) => tracing::debug!(
                                 "Fetched native {}",
                                 &library.name
@@ -877,7 +891,7 @@ pub async fn download_libraries(
                 }
             } else {
                 let artifact_path = d::get_path_from_artifact(&library.name)?;
-                let path = st.directories.libraries_dir().join(&artifact_path);
+                let path = lib_dir.join(&artifact_path);
 
                 if path.exists() && !force {
                     return Ok(());

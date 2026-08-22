@@ -49,6 +49,7 @@ pub async fn get_optimal_jre_key(
         None,
         None,
         inst_dir_for_download.as_ref(),
+        None,
     )
     .await?;
 
