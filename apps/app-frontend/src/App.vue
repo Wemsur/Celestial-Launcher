@@ -131,13 +131,9 @@ import { get_opening_command, initialize_state } from '@/helpers/state'
 import { hasActivePride26Midas, hasMidasBadge } from '@/helpers/user-campaigns.ts'
 import { parse_modrinth_user_link } from '@/helpers/users'
 import {
-	areUpdatesEnabled,
-	enqueueUpdateForInstallation,
 	getOS,
-	getUpdateSize,
 	isDev,
 	isNetworkMetered,
-	setRestartAfterPendingUpdate,
 } from '@/helpers/utils.js'
 import { start_join_server, start_join_singleplayer_world } from '@/helpers/worlds.ts'
 import i18n from '@/i18n.config'
@@ -224,8 +220,8 @@ watch(
 )
 const importModal = ref(null)
 
-const unsubscribeSidebarToggle = themeStore.$subscribe(() => {
-	sidebarToggled.value = !themeStore.toggleSidebar
+const unsubscribeSidebarToggle = appSettings.$subscribe(() => {
+	sidebarToggled.value = !appSettings.toggleSidebar
 })
 const forceSidebar = computed(
 	() =>
@@ -490,7 +486,7 @@ onMounted(async () => {
     console.log('Calling applyBackground...')
     await applyBackground()
     console.log('applyBackground completed')
-    await themeStore.loadCustomSettings()
+    await appSettings.loadCustomSettings()
 
 // 检查是否应该显示导入弹窗
     try {

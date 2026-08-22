@@ -51,7 +51,7 @@ import {
 	XIcon,
 } from '@modrinth/assets'
 
-import ButtonStyled from '#ui/components/base/ButtonStyled.vue'
+import { Button } from '#ui/components/base/buttons'
 
 defineProps<{
 	showClear?: boolean

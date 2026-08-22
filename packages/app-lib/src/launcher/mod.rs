@@ -247,6 +247,8 @@ pub(crate) async fn resolve_java_for_launch(
         None,
         None,
         None,
+        None,
+        None,
     )
     .await?;
 

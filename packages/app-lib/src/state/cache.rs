@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fmt::Display;
 use std::hash::Hash;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 // 1 day
 const DEFAULT_ID: &str = "0";

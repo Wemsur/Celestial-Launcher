@@ -137,18 +137,18 @@
         </form>
         <template #actions>
             <div class="flex gap-2 justify-end">
-                <ButtonStyled type="outlined">
+                <Button type="outlined">
                     <button @click="hideOfflineModal">
                         <XIcon class="h-5 w-5" />
                         取消
                     </button>
-                </ButtonStyled>
-                <ButtonStyled color="brand">
+                </Button>
+                <Button type="colored" color="brand">
                     <button :disabled="offlineSubmitting" @click="handleCreateOffline">
                         <EditIcon class="h-5 w-5" />
                         添加
                     </button>
-                </ButtonStyled>
+                </Button>
             </div>
         </template>
     </NewModal>

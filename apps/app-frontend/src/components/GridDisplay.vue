@@ -224,11 +224,11 @@ const filteredResults = computed(() => {
 		})
 	} else if (group === '标签') {
 		instances.forEach((instance) => {
-			if (instance.groups.length === 0) {
-				instance.groups.push('不分组')
+			if (instance.group_ids.length === 0) {
+				instance.group_ids.push('不分组')
 			}
 
-			for (const category of instance.groups) {
+			for (const category of instance.group_ids) {
 				if (!instanceMap.has(category)) {
 					instanceMap.set(category, [])
 				}

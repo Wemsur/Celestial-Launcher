@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {BoxIcon, FolderSearchIcon, LibraryIcon, PlusIcon, SettingsIcon} from '@modrinth/assets'
 import {
-    ButtonStyled, commonMessages,
+    Button, commonMessages,
     DropdownSelect,
     injectNotificationManager,
     NavTabs,
@@ -230,16 +230,9 @@ function closeAddLibraryModal() {
                     wrapper-class="w-full"
                 >
                     <template #right>
-                        <ButtonStyled circular>
-                            <button
-                                v-tooltip="'浏览文件夹'"
-                                :aria-label="'浏览文件夹'"
-                                class="ml-1.5"
-                                @click="pickFolder"
-                            >
-                                <FolderSearchIcon aria-hidden="true" />
-                            </button>
-                        </ButtonStyled>
+                        <Button type="quiet" @click="pickFolder" v-tooltip="'浏览文件夹'" :aria-label="'浏览文件夹'" class="ml-1.5">
+                            <FolderSearchIcon aria-hidden="true" />
+                        </Button>
                     </template>
                 </StyledInput>
 				<div class="flex flex-col gap-1">
@@ -254,16 +247,17 @@ function closeAddLibraryModal() {
 					</DropdownSelect>
 				</div>
 				<div class="flex justify-end gap-2 pt-2">
-					<ButtonStyled variant="secondary" @click="closeAddLibraryModal">
+					<Button type="outlined" @click="closeAddLibraryModal">
 						取消
-					</ButtonStyled>
-					<ButtonStyled
+					</Button>
+					<Button
+						type="colored"
 						color="brand"
 						:disabled="!addLibraryPath.trim()"
 						@click="addLibrary"
 					>
 						添加
-					</ButtonStyled>
+					</Button>
 				</div>
 			</div>
 		</Modal>
@@ -279,12 +273,10 @@ function closeAddLibraryModal() {
 				<NewInstanceImage />
 			</div>
 			<h3>未找到实例</h3>
-			<ButtonStyled color="brand">
-				<button :disabled="offline" @click="showCreationModal?.()">
-					<PlusIcon />
-					添加新的版本
-				</button>
-			</ButtonStyled>
+			<Button type="colored" color="brand" :disabled="offline" @click="showCreationModal?.()">
+				<PlusIcon />
+				添加新的版本
+			</Button>
 		</div>
 	</div>
 </template>

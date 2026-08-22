@@ -1,0 +1,13 @@
+<script setup lang="ts">
+import GridDisplay from '@/components/GridDisplay.vue'
+
+defineProps({
+	instances: {
+		type: Array,
+		required: true,
+	},
+})
+</script>
+<template>
+	<GridDisplay v-if="instances && instances.length > 0" label="Instances" :instances="instances" />
+</template>

@@ -197,7 +197,7 @@ pub(crate) fn instance_metadata_from_instance(
     };
 
     // Read settings from instance.json if available
-    let (link, launch_overrides, groups, update_channel) =
+    let (link, launch_overrides, group_ids, update_channel) =
         if let Ok(Some(json)) = libraries::InstanceJson::read_from_dir(&dir) {
             let json_update_channel = json.update_channel();
             (
@@ -220,11 +220,12 @@ pub(crate) fn instance_metadata_from_instance(
             update_channel,
             ..instance.clone()
         },
+        icon_config: None,
         applied_content_set: content_set,
         link,
         shared_instance: None,
         quarantined: false,
-        groups,
+        group_ids,
         launch_overrides,
     }
 }

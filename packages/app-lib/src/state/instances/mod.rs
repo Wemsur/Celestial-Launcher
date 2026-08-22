@@ -15,7 +15,7 @@ pub(crate) use self::commands::{
     set_shared_instance_sync_status,
 };
 pub(crate) use self::commands::{
-    create_instance, edit_instance, get_instance, get_instances_metadata,
+    create_instance, edit_instance, get_instance,
     list_instances, refresh_all_instances, remove_instance,
 };
 pub(crate) use self::commands::{

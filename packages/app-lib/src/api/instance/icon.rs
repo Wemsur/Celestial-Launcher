@@ -86,7 +86,7 @@ pub async fn edit_generated_icon_if_empty(
     let icon_path =
         cache_generated_icon_with_state(config.clone(), symbol_bytes, &state)
             .await?;
-    let instance =
+    let _instance =
         instance_rows::get_instance_display_info(instance_id, &state.pool)
             .await?
             .ok_or_else(|| {
@@ -118,7 +118,7 @@ pub async fn edit_generated_icon_if_empty(
         );
     }
 
-    emit_instance(&instance.id, InstancePayloadType::Edited).await?;
+    emit_instance(instance_id, InstancePayloadType::Edited).await?;
 
     Ok(Some(icon_path))
 }
@@ -272,7 +272,7 @@ async fn apply_instance_icon(
     icon_config: Option<InstanceIconConfig>,
     state: &State,
 ) -> crate::Result<()> {
-    let instance =
+    let _instance =
         instance_rows::get_instance_display_info(instance_id, &state.pool)
             .await?
             .ok_or_else(|| {

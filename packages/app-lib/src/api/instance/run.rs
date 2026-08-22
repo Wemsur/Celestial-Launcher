@@ -86,7 +86,7 @@ async fn run_credentials(
         .as_ref()
         .or(settings.hooks.pre_launch.as_ref())
         .filter(|hook_command| !hook_command.is_empty());
-    if let Some(hook) = pre_launch_hooks {
+    if let Some(hook) = pre_launch_hook {
         let mut cmd = shlex::split(hook)
             .ok_or_else(|| {
                 crate::ErrorKind::LauncherError(format!(

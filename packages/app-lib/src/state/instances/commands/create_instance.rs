@@ -55,7 +55,7 @@ pub(crate) async fn create_instance(
         };
 
         let icon_path =
-            resolve_icon_path(input.icon_path.as_deref(), state).await?;
+            resolve_icon_path(input.icon_path.as_deref(), false, state).await?;
         let now = Utc::now();
         let abs_path_str = full_path.to_string_lossy().to_string();
         let instance_id = libraries::instance_id_from_path(&abs_path_str);

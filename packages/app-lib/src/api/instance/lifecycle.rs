@@ -134,8 +134,8 @@ pub async fn edit(
                     if let Some(update_channel) = patch.update_channel {
                         instance_json.update_channel = update_channel;
                     }
-                    if let Some(groups) = &patch.groups {
-                        instance_json.groups = groups.clone();
+                    if let Some(group_ids) = &patch.group_ids {
+                        instance_json.groups = group_ids.clone();
                     }
                     if let Some(cs_patch) = &patch.content_set_patch {
                         if let Some(ref gv) = cs_patch.game_version {
@@ -208,8 +208,8 @@ pub async fn edit(
                     if let Some(update_channel) = patch.update_channel {
                         celestial.update_channel = update_channel;
                     }
-                    if let Some(groups) = &patch.groups {
-                        celestial.groups = groups.clone();
+                    if let Some(group_ids) = &patch.group_ids {
+                        celestial.groups = group_ids.clone();
                     }
                     celestial.write_to_dir(&dir)?;
                     saved = true;

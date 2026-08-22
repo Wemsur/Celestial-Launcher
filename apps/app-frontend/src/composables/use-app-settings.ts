@@ -1,4 +1,4 @@
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 
 export const DEFAULT_FEATURE_FLAGS = {
 	project_background: false,
@@ -38,6 +38,14 @@ function getFeatureFlag(key: FeatureFlag): boolean {
 	return featureFlags[key] ?? DEFAULT_FEATURE_FLAGS[key]
 }
 
+// Subscription system — mimics Pinia store $subscribe
+type SubCallback = () => void
+const subscribers = new Set<SubCallback>()
+
+function notifySubscribers() {
+	subscribers.forEach(fn => fn())
+}
+
 const appSettings = reactive({
 	syncBehaviorAcrossDevices,
 	hideNametagSkinsPage: false,
@@ -46,7 +54,23 @@ const appSettings = reactive({
 	featureFlags,
 	setBehaviorSyncAcrossDevices,
 	getFeatureFlag,
+	$subscribe(callback: SubCallback) {
+		subscribers.add(callback)
+		return () => subscribers.delete(callback)
+	},
 })
+
+// Watch any change on appSettings and notify subscribers
+watch(
+	() => ({
+		toggleSidebar: appSettings.toggleSidebar,
+		hideNametagSkinsPage: appSettings.hideNametagSkinsPage,
+		devMode: appSettings.devMode,
+		syncBehaviorAcrossDevices: appSettings.syncBehaviorAcrossDevices,
+	}),
+	() => notifySubscribers(),
+	{ deep: true },
+)
 
 export function useAppSettings() {
 	return appSettings

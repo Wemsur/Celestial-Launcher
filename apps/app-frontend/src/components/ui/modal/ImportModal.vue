@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ButtonStyled, Checkbox,NewModal as Modal } from '@modrinth/ui'
+import { Button, Checkbox,NewModal as Modal } from '@modrinth/ui'
 import { invoke } from '@tauri-apps/api/core'
 import { ref } from 'vue'
 
@@ -101,17 +101,11 @@ defineExpose({
             <!-- 按钮区 -->
             <div class="flex gap-2 justify-end">
                 <!-- 阶段 1: 取消 + 导入 -->
-                <ButtonStyled v-if="!importing && !showRestartMessage" @click="handleCancel">
-                    <button class="!shadow-none">取消</button>
-                </ButtonStyled>
-                <ButtonStyled v-if="!importing && !showRestartMessage" color="brand">
-                    <button @click="doImport">导入</button>
-                </ButtonStyled>
-
-                <!-- 阶段 3: 取消 + 重启 -->
-                <ButtonStyled v-if="showRestartMessage" color="brand">
-                    <button @click="doRestart">关闭应用</button>
-                </ButtonStyled>
+                <Button v-if="!importing && !showRestartMessage" @click="handleCancel">
+                    取消
+                </Button>
+                <Button v-if="!importing && !showRestartMessage" @click="doImport">导入</Button>
+                <Button v-if="showRestartMessage" color="brand" @click="doRestart">关闭应用</Button>
             </div>
         </div>
     </Modal>

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tokio::fs as tokio_fs;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, info};
 
 /// Retry a closure on `std::io::Error`, with 200ms delay between attempts.
 /// Modeled after PCL2's Retrier: handles Windows file locks that clear quickly.
@@ -556,7 +556,7 @@ pub(crate) async fn migrate_instances_from_db(
             );
             instance_json.library_format = format.clone();
             instance_json.update_channel = instance.update_channel;
-            instance_json.groups = record.groups.clone();
+            instance_json.groups = record.group_ids.clone();
             instance_json.launch_overrides =
                 Some(InstanceLaunchOverridesData::from(&record.launch_overrides));
             if let Err(e) = instance_json.write_to_dir(&fallback_path) {
@@ -592,7 +592,7 @@ pub(crate) async fn migrate_instances_from_db(
                     json.link = Some(record.link.clone());
                 }
                 json.update_channel = record.instance.update_channel;
-                json.groups = record.groups.clone();
+                json.groups = record.group_ids.clone();
                 json.launch_overrides =
                     Some(InstanceLaunchOverridesData::from(&record.launch_overrides));
                 if let Err(e) = json.write_to_dir(&dir) {
@@ -1235,7 +1235,7 @@ pub(crate) fn rename_minecraft_instance(
 
     // Rename only the version-specific files and natives directory.
     // Do NOT rename other files like content_cache.json, usercache.json, etc.
-    let mut had_jar = false;
+    let mut _had_jar = false;
     let mut had_json = false;
     for entry in entries {
         let file_name = entry.file_name().to_string_lossy().to_string();
@@ -1262,7 +1262,7 @@ pub(crate) fn rename_minecraft_instance(
             Ok(()) => {
                 tracing::info!("rename_minecraft_instance: file rename succeeded: {}", file_name);
                 if file_name.ends_with(".jar") {
-                    had_jar = true;
+                    _had_jar = true;
                 } else if file_name.ends_with(".json") {
                     had_json = true;
                 }

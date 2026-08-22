@@ -11,7 +11,7 @@ pub use self::edit_instance::{
 mod get_instance;
 pub use self::get_instance::InstanceMetadata;
 pub(crate) use self::get_instance::{
-    get_instance, get_instance_metadata, get_instances_metadata, list_instances,
+    get_instance, get_instance_metadata, list_instances,
 };
 
 mod list_content;
