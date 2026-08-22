@@ -150,7 +150,7 @@
     "message": "Your privacy and how ads support Modrinth"
   },
   "app.appearance-settings.compact-mode.description": {
-    "message": "Display library instances in a compact row layout.",
+    "message": "Display library instances in a compact row layout."
   },
   "app.appearance-settings.advanced-rendering.description": {
     "message": "Enables advanced rendering such as blur effects that may cause performance issues without hardware-accelerated rendering."

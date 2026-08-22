@@ -4,7 +4,7 @@
 		"beforeDevCommand": "pnpm -w i18n:coverage && pnpm turbo run dev --filter=@modrinth/app-frontend",
 		"beforeBuildCommand": "pnpm turbo run build --filter=@modrinth/app-frontend",
 		"frontendDist": "../app-frontend/dist",
-		"devUrl": "http://localhost:1420"
+		"devUrl": "http://localhost:5173"
 	},
 	"bundle": {
 		"active": true,
