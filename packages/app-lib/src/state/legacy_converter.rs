@@ -52,6 +52,10 @@ where
             LegacyTheme::Dark => Theme::Dark,
             LegacyTheme::Light => Theme::Light,
             LegacyTheme::Oled => Theme::Oled,
+            LegacyTheme::Elegant => Theme::Elegant,
+            LegacyTheme::Antiquedark => Theme::AntiqueDark,
+            LegacyTheme::Customdark => Theme::Customdark,
+            LegacyTheme::Customlight => Theme::Customlight,
         };
         settings.default_page = match legacy_settings.default_page {
             LegacyDefaultPage::Home => DefaultPage::Home,
@@ -702,7 +706,11 @@ fn default_settings_dir() -> Option<PathBuf> {
 pub enum LegacyTheme {
     Dark,
     Light,
+    Customdark,
+    Customlight,
     Oled,
+    Elegant,
+    Antiquedark,
 }
 
 #[derive(Deserialize, Default, Debug, Clone, Copy)]

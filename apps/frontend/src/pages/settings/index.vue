@@ -347,7 +347,7 @@ const { saved, current, changes, saving, reset, save } = useSavable(
 )
 
 const themeOptions = computed(() => {
-	const options: ('system' | Theme)[] = ['system', 'light', 'dark', 'oled']
+	const options: ('system' | Theme)[] = ['system', 'light', 'dark', 'customdark', 'customlight', 'oled', 'elegant', 'antiquedark']
 	if (flags.value.developerMode || current.value.theme === 'retro') {
 		options.push('retro')
 	}

@@ -1710,7 +1710,7 @@ export namespace Labrinth {
 			export type Role = Common.Role
 			export type AuthProvider = Common.AuthProvider
 			export type UserPayoutData = Common.UserPayoutData
-			export type Theme = 'light' | 'dark' | 'oled' | 'retro'
+			export type Theme = 'light' | 'dark' | 'oled' | 'retro' | 'elegant' | 'antiquedark' | 'customdark' | 'customlight'
 			export type LayoutOption = 'grid' | 'rows'
 			export type FriendPrivacy = 'none' | 'mutual' | 'everyone'
 			export type InvitePrivacy = 'none' | 'friends' | 'everyone'

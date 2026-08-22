@@ -1,7 +1,7 @@
 import type { CookieOptions } from '#app'
 
 export type ProjectDisplayMode = 'list' | 'grid' | 'gallery'
-export type DarkColorTheme = 'dark' | 'oled' | 'retro'
+export type DarkColorTheme = 'dark' | 'oled' | 'retro' | 'customdark' | 'antiquedark' | 'elegant'
 
 export interface NumberFlag {
 	min: number

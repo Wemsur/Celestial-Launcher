@@ -179,8 +179,8 @@ export async function get_optimal_jre_key(instanceId: string): Promise<JavaVersi
 }
 
 export async function list(libraryPath?: string): Promise<GameInstance[]> {
-	// Pass null when no filter is desired (empty string would match all paths)
-	const pathToSend = libraryPath && libraryPath.trim() ? libraryPath : null
+	const pathToSend =
+		typeof libraryPath === 'string' && libraryPath.trim() ? libraryPath : null
 	return await invoke('plugin:instance|instance_list', { libraryPath: pathToSend })
 }
 

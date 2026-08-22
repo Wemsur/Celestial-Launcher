@@ -73,6 +73,10 @@ pub enum Theme {
     Dark,
     Oled,
     Retro,
+    Elegant,
+    Antiquedark,
+    Customdark,
+    Customlight,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Component)]
