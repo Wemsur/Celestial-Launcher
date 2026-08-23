@@ -48,31 +48,6 @@ const sidebarPreferenceValues = sidebarPreferences?.value
 				:system-theme-color="systemTheme"
 				@update:model-value="theme.update"
 			/>
-
-			<AppearanceSettingRow
-				class="mt-6"
-				control-id="sync-theme-across-devices"
-				:heading-level="3"
-				:title="formatMessage(messages.syncAcrossDevicesTitle)"
-				:description="formatMessage(messages.syncAcrossDevicesDescription)"
-			>
-				<template #default="{ labelledBy }">
-					<span
-						v-tooltip="
-							syncDisabled ? formatMessage(messages.syncAcrossDevicesSignedOutTooltip) : undefined
-						"
-						class="inline-flex"
-					>
-						<Toggle
-							id="sync-theme-across-devices"
-							:model-value="syncDisabled ? false : syncAcrossDevices"
-							:disabled="syncDisabled"
-							:aria-labelledby="labelledBy"
-							@update:model-value="theme.syncAcrossDevices.update"
-						/>
-					</span>
-				</template>
-			</AppearanceSettingRow>
 		</section>
 
 		<section v-if="projectLayouts" class="mt-8 border-0 border-t border-solid border-divider pt-6">
