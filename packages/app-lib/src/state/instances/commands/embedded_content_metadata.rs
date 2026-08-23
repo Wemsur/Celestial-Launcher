@@ -1,6 +1,7 @@
 use crate::state::{
     CacheValue, CachedEmbeddedContentMetadata, CachedEntry, ContentFile,
     EmbeddedContentMetadata, Instance, ModLoader, ProjectType, State,
+    libraries,
 };
 use bytes::Bytes;
 use futures::stream::{self, StreamExt};
@@ -492,11 +493,11 @@ pub(crate) async fn resolve_embedded_content_metadata(
         .map(|(relative_path, file)| {
             (
                 file.hash.clone(),
-                state
-                    .directories
-                    .instances_dir()
-                    .join(&instance.path)
-                    .join(relative_path),
+                libraries::resolve_instance_dir(
+                    state,
+                    &instance.path,
+                )
+                .join(relative_path),
             )
         })
         .collect::<HashMap<_, _>>();
