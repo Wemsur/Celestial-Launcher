@@ -84,8 +84,8 @@ if (hasCreatedInstance.value) {
 	await fetchInstances()
 }
 
-useAppEvent('instance', fetchInstances)
-useAppEvent('instance_groups_changed', fetchInstances)
+useAppEvent('instance', () => fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value))
+useAppEvent('instance_groups_changed', () => fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value))
 
 // ── Library tabs ─────────────────────────────────────────────────────────────
 
@@ -286,7 +286,7 @@ function handlePageOption({ option }: { option: string }) {
 		/>
 
 		<!-- Library Section -->
-		<LibrarySection :instances="instances" />
+		<LibrarySection :instances="instances" :library-path="activeTab === 'all' ? undefined : activeTab" />
 
 		<ContextMenu ref="pageOptions" @option-clicked="handlePageOption">
 			<template #new_instance> <PlusIcon /> {{ formatMessage(messages.newInstance) }} </template>

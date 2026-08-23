@@ -762,14 +762,6 @@ async function setupApp() {
 		i18n.global.locale.value = locale
 	}
 
-	if (default_page === 'Library') {
-		await router.push('/library')
-	}
-
-    if (default_page === 'Worlds') {
-        await router.push('/Worlds')
-    }
-
 	os.value = await getOS()
 	const dev = await isDev()
 	isDevEnvironment.value = dev

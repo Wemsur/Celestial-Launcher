@@ -45,7 +45,11 @@ const consoleHydrationQuery = useQuery({
 	refetchOnMount: 'always',
 })
 
-await consoleHydrationQuery.suspense()
+// Hydrate asynchronously — don't block rendering.
+// Use refetch() (not fetch()) which is the correct vue-query 5 API.
+if (instanceId.value) {
+	void consoleHydrationQuery.refetch()
+}
 
 function buildLogList(rawLogs) {
 	return [

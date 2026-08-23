@@ -67,7 +67,7 @@ const loadLibraries = async () => {
 }
 loadLibraries()
 
-const activeTab = ref('all')
+const activeTab = ref(localStorage.getItem('celestial-library-active-tab') || 'all')
 
 const tabLinks = shallowRef([
 	{ label: '全部实例', href: `/library` },
@@ -106,25 +106,41 @@ const updateTabs = () => {
 
 watchEffect(() => {
 	updateTabs()
-	// Sync active tab
+	// Sync active tab from route
 	const currentPath = route.path
 	if (currentPath.startsWith('/library/lib/')) {
 		const libPath = decodeURIComponent(currentPath.replace('/library/lib/', ''))
 		if (libraries.value.some((l) => l.path === libPath)) {
+			// Library confirmed — set tab and persist
 			activeTab.value = libPath
+			localStorage.setItem('celestial-library-active-tab', libPath)
 			return
 		}
-		// Don't reset to 'all' while libraries are still loading;
-		// let the watcher fire once they're populated.
-		if (libraries.value.length > 0) {
-			activeTab.value = 'all'
+		// Library path is in the route but not yet in libraries list —
+		// wait for libraries to load before changing activeTab, so that
+		// the instance_listener uses the correct filter.
+		if (libraries.value.length === 0) {
+			return
 		}
-	} else if (libraries.value.length > 0) {
+		// Libraries loaded but path not found — fall back to 'all'
 		activeTab.value = 'all'
+		localStorage.removeItem('celestial-library-active-tab')
+	} else if (libraries.value.length > 0) {
+		// Reset to 'all' only after libraries have loaded
+		if (activeTab.value !== 'all') {
+			activeTab.value = 'all'
+			localStorage.removeItem('celestial-library-active-tab')
+		}
 	}
 })
 
 watch(activeTab, async (tab) => {
+	// Persist active tab
+	if (tab !== 'all') {
+		localStorage.setItem('celestial-library-active-tab', tab)
+	} else {
+		localStorage.removeItem('celestial-library-active-tab')
+	}
 	instances.value = await list(tab === 'all' ? undefined : tab).catch(handleError)
 })
 
@@ -266,6 +282,7 @@ function closeAddLibraryModal() {
 			<RouterView
 				v-if="route.path.startsWith('/library')"
 				:instances="instances"
+				:library-path="activeTab === 'all' ? undefined : activeTab"
 			/>
 		</template>
 		<div v-else class="no-instance">

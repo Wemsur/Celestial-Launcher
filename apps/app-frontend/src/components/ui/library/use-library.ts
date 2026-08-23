@@ -114,13 +114,13 @@ type ContextMenuSelection = {
 	item: InstanceCard
 }
 
-function createLibraryState(instances: Ref<GameInstance[]>) {
+function createLibraryState(instances: Ref<GameInstance[]>, libraryPath?: string) {
 	const { handleError } = injectNotificationManager()
 	const { formatMessage } = useVIntl()
 
 	const search = ref('')
 	const filters = useStorage<LibraryFilters>(
-		'Instances-grid-filters',
+		"Instances-grid-filters" + (libraryPath ? `:${libraryPath}` : ''),
 		{
 			instanceType: [],
 			gameVersion: [],
@@ -175,7 +175,7 @@ function createLibraryState(instances: Ref<GameInstance[]>) {
 		collapsedGroups: string[]
 		ungroupedGroupPosition: number
 	}>(
-		'Instances-grid-display-state',
+		"Instances-grid-display-state" + (libraryPath ? `:${libraryPath}` : ''),
 		{
 			group: 'Group',
 			sortBy: 'Last played',
@@ -1348,8 +1348,8 @@ export type LibraryState = ReturnType<typeof createLibraryState>
 
 const libraryKey: InjectionKey<LibraryState> = Symbol('library')
 
-export function provideLibrary(instances: Ref<GameInstance[]>) {
-	const library = createLibraryState(instances)
+export function provideLibrary(instances: Ref<GameInstance[]>, libraryPath?: string) {
+	const library = createLibraryState(instances, libraryPath)
 	provide(libraryKey, library)
 	return library
 }

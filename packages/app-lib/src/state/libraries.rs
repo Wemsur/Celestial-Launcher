@@ -791,6 +791,25 @@ pub(crate) fn instance_libraries_dir(
     }
 }
 
+/// Get the assets directory for a `.minecraft` format instance.
+/// For Minecraft format: returns `<library>/assets/` (shared across instances).
+/// For Modrinth format: returns empty path (uses launcher-managed cache).
+pub(crate) fn instance_assets_dir(
+    instance_dir: &Path,
+    library_format: &InstanceFormat,
+) -> PathBuf {
+    match library_format {
+        InstanceFormat::Minecraft => {
+            if let Some(root) = instance_library_root(instance_dir, library_format) {
+                root.join("assets")
+            } else {
+                instance_dir.join("assets")
+            }
+        }
+        InstanceFormat::Modrinth => PathBuf::new(),
+    }
+}
+
 /// Get the shared content directory for a library format.
 /// For Minecraft format: returns the library root shared dirs (mods/, config/, etc.)
 /// For Modrinth format: returns empty path (everything is instance-local)

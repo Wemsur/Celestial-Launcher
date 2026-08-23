@@ -40,11 +40,13 @@ const props = withDefaults(
 		hideHeader?: boolean
 		instanceGroup: InstanceGroupType
 		selectionAnchorInstanceId?: string | null
+		libraryPath?: string
 	}>(),
 	{
 		canDragReorder: false,
 		hideHeader: false,
 		selectionAnchorInstanceId: null,
+		libraryPath: undefined,
 	},
 )
 
@@ -499,6 +501,7 @@ onMounted(startInstanceGridResizeObserver)
 								:instance="instance"
 								:instance-group-id="instanceGroup.id"
 								:is-selection-anchor="selectionAnchorInstanceId === instance.id"
+								:library-path="props.libraryPath"
 								@toggle-selection="
 									(shiftKey: boolean) => emit('toggle-selection', instance.id, shiftKey)
 								"

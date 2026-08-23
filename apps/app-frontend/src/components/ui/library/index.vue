@@ -35,6 +35,7 @@ import type { GameInstance } from '@/helpers/types'
 
 const props = defineProps<{
 	instances: GameInstance[]
+	libraryPath?: string
 }>()
 
 const { formatMessage } = useVIntl()
@@ -116,7 +117,7 @@ const {
 	selectedLibraryInstances,
 	setSelectedLibraryInstances,
 	toggleLibraryInstanceSelection,
-} = provideLibrary(toRef(props, 'instances'))
+} = provideLibrary(toRef(props, 'instances'), props.libraryPath)
 
 const hasActiveFilters = computed(() =>
 	Object.values(filters.value).some((selectedValues) => selectedValues.length > 0),
@@ -335,6 +336,7 @@ watch(selectedLibraryInstances, (selectedInstances) => {
 							:selection-anchor-instance-id="
 								anchorInstance?.groupId === FAVORITES_GROUP_ID ? anchorInstance.instanceId : null
 							"
+							:library-path="props.libraryPath"
 							@toggle-selection="
 								(instanceId: string, shiftKey: boolean) =>
 									handleToggleInstance(FAVORITES_GROUP_ID, instanceId, shiftKey)
@@ -376,6 +378,7 @@ watch(selectedLibraryInstances, (selectedInstances) => {
 									:selection-anchor-instance-id="
 										anchorInstance?.groupId === instanceGroup.id ? anchorInstance?.instanceId : null
 									"
+									:library-path="props.libraryPath"
 									@toggle-selection="
 										(instanceId: string, shiftKey: boolean) =>
 											handleToggleInstance(instanceGroup.id, instanceId, shiftKey)
@@ -407,6 +410,7 @@ watch(selectedLibraryInstances, (selectedInstances) => {
 							:selection-anchor-instance-id="
 								anchorInstance?.groupId === instanceGroup.id ? anchorInstance.instanceId : null
 							"
+							:library-path="props.libraryPath"
 							@toggle-selection="
 								(instanceId: string, shiftKey: boolean) =>
 									handleToggleInstance(instanceGroup.id, instanceId, shiftKey)

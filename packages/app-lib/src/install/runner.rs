@@ -667,15 +667,35 @@ async fn prepare_initial_instance(
                         "Unknown instance".to_string(),
                     )
                 })?;
+            // Determine the target library from the source instance's path
+            let target_library_path = if metadata.instance.library_format
+                == crate::state::libraries::InstanceFormat::Minecraft
+            {
+                let lib_path = metadata.instance.path.split("/versions/")
+                    .next()
+                    .filter(|p| !p.is_empty())
+                    .map(|s| s.to_string());
+                lib_path
+            } else if metadata.instance.library_format
+                == crate::state::libraries::InstanceFormat::Modrinth
+            {
+                let lib_path = metadata.instance.path.split("/profiles/")
+                    .next()
+                    .filter(|p| !p.is_empty())
+                    .map(|s| s.to_string());
+                lib_path
+            } else {
+                None
+            };
             let created = crate::api::instance::create(
-                metadata.instance.name,
-                metadata.applied_content_set.game_version,
+                metadata.instance.name.clone(),
+                metadata.applied_content_set.game_version.clone(),
                 metadata.applied_content_set.loader,
-                metadata.applied_content_set.loader_version,
-                metadata.instance.icon_path,
+                metadata.applied_content_set.loader_version.clone(),
+                metadata.instance.icon_path.clone(),
                 None,
-                metadata.link,
-                None,
+                metadata.link.clone(),
+                target_library_path,
             )
             .await?;
             set_display(

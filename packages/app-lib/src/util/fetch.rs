@@ -333,7 +333,7 @@ fn duration_seconds_ceil(duration: Duration) -> u64 {
 fn reqwest_client_builder() -> reqwest::ClientBuilder {
     reqwest::Client::builder()
         .connect_timeout(time::Duration::from_secs(15))
-        .read_timeout(time::Duration::from_secs(30))
+        .read_timeout(time::Duration::from_secs(120))
         .tcp_keepalive(Some(time::Duration::from_secs(10)))
         .user_agent(crate::launcher_user_agent())
 }

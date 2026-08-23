@@ -590,7 +590,11 @@ pub async fn install_minecraft_with_reporter(
         client_path
     };
     if let Some(processors) = &version_info.processors {
-        let libraries_dir = state.directories.libraries_dir();
+        let libraries_dir = if instance.library_format == libraries::InstanceFormat::Minecraft {
+            libraries::instance_libraries_dir(&instance_path, &instance.library_format)
+        } else {
+            state.directories.libraries_dir()
+        };
 
         if let Some(ref mut data) = version_info.data {
             processor_rules! {
@@ -1189,6 +1193,12 @@ pub async fn launch_minecraft(
         command.arg("--add-opens=jdk.internal/jdk.internal.misc=ALL-UNNAMED");
     }
 
+    let assets_dir = if instance.library_format == libraries::InstanceFormat::Minecraft {
+        libraries::instance_assets_dir(&instance_path, &instance.library_format)
+    } else {
+        state.directories.assets_dir()
+    };
+
     command
         .arg("com.modrinth.theseus.MinecraftLaunch")
         .arg(version_info.main_class.clone())
@@ -1201,7 +1211,7 @@ pub async fn launch_minecraft(
                 &version.id,
                 &version_info.asset_index.id,
                 &instance_path,
-                &state.directories.assets_dir(),
+                &assets_dir,
                 &version.type_,
                 *resolution,
                 &java_version.architecture,

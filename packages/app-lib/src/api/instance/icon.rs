@@ -66,13 +66,28 @@ pub async fn edit_generated_icon(
         cache_generated_icon_with_state(config.clone(), symbol_bytes, &state)
             .await?;
 
-    apply_instance_icon(
-        instance_id,
-        Some(icon_path.clone()),
-        Some(config),
-        &state,
-    )
-    .await?;
+    let is_json_instance = libraries::find_json_instance(&state, instance_id)
+        .await?
+        .is_some();
+
+    if is_json_instance {
+        // JSON-backed instance: write directly to sidecar
+        if let Some(dir) = libraries::find_json_instance(&state, instance_id).await? {
+            if let Some(mut json) = libraries::InstanceJson::read_from_dir(&dir)? {
+                json.icon_path = Some(icon_path.clone());
+                json.write_to_dir(&dir)?;
+            }
+        }
+        emit_instance(instance_id, InstancePayloadType::Edited).await?;
+    } else {
+        apply_instance_icon(
+            instance_id,
+            Some(icon_path.clone()),
+            Some(config),
+            &state,
+        )
+        .await?;
+    }
 
     Ok(icon_path)
 }

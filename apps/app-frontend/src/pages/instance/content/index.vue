@@ -258,7 +258,7 @@ const contentQuery = useQuery(
 		enabled: !!instancePage.instanceId.value,
 	})),
 )
-const loading = ref(contentQuery.data.value === undefined)
+const loading = ref(false)
 const projects = ref<ContentItem[]>([])
 
 const installingBuffer = ref<ContentItem[]>([])
