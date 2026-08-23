@@ -486,7 +486,6 @@ onMounted(async () => {
     console.log('Calling applyBackground...')
     await applyBackground()
     console.log('applyBackground completed')
-    await appSettings.loadCustomSettings()
 
 // 检查是否应该显示导入弹窗
     try {
@@ -750,7 +749,6 @@ async function setupApp() {
         collapsed_navigation,
         hide_nametag_skins_page,
         advanced_rendering,
-        custom_bgblur,
         onboarded,
         default_page,
         toggle_sidebar,
@@ -781,8 +779,7 @@ async function setupApp() {
 
 	appTheme.preferred = theme
 	appTheme.advancedRendering = advanced_rendering
-	appTheme.customBgBlur = custom_bgblur
-appSettings.hideNametagSkinsPage = hide_nametag_skins_page
+	appSettings.hideNametagSkinsPage = hide_nametag_skins_page
 	appSettings.toggleSidebar = toggle_sidebar
 	appSettings.devMode = developer_mode
 	Object.assign(appSettings.featureFlags, feature_flags)
