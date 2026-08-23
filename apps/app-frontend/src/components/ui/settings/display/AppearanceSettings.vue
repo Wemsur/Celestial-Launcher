@@ -4,6 +4,7 @@ import {
     injectAuth,
     injectUserPreferences,
     provideAppearanceSettings,
+    Toggle,
     useSavable,
 } from '@modrinth/ui'
 
@@ -145,11 +146,6 @@ provideAppearanceSettings({
     updatePreferences,
 })
 
-const worldsInHomeFlag: FeatureFlag = 'worlds_in_home'
-const skipNonEssentialWarningsFlag: FeatureFlag = 'skip_non_essential_warnings'
-const skipUnknownPackWarningFlag: FeatureFlag = 'skip_unknown_pack_warning'
-const showPlayTimeFlag: FeatureFlag = 'show_instance_play_time'
-
 const delete_background = async() => {
     try {
         await invoke('delete_background');
@@ -170,49 +166,51 @@ const delete_background = async() => {
 </script>
 
 <template>
-    <AppearanceSettingsLayout />
+    <AppearanceSettingsLayout>
+        <!-- 色相条 -->
+        <template #before-advanced>
+            <section class="mt-8 border-0 border-t border-solid border-divider pt-6">
+                <div>
+                    <h2 class="m-0 text-lg font-semibold text-contrast">自定义颜色</h2>
+                    <p class="m-0 mt-1">在支持自定义颜色的主题下自定义主题色</p>
+                </div>
+                <div class="relative mt-2 h-4 w-full select-none" style="height:10px">
+                    <input
+                        type="range"
+                        min="0"
+                        max="360"
+                        :value="theme.hueValue"
+                        class="h-5 w-full appearance-none rounded-full bg-transparent cursor-pointer focus:shadow-[0_0_0_4px_hsl(var(--brand-hue,217),91%,60%)] [&::-webkit-slider-runnable-track]:rounded-full [&::-moz-range-track]:rounded-full"
+                        @input="theme.saveHueValue(Number(($event.target as HTMLInputElement).value))"
+                    />
+                </div>
+            </section>
 
-    <!-- 色相条 -->
-    <section class="mt-8 border-0 border-t border-solid border-divider pt-6">
-        <div>
-            <h2 class="m-0 text-lg font-semibold text-contrast">自定义颜色</h2>
-            <p class="m-0 mt-1">在支持自定义颜色的主题下自定义主题色</p>
-        </div>
-        <div class="relative mt-2 h-4 w-full select-none" style="height:10px">
-            <input
-                type="range"
-                min="0"
-                max="360"
-                :value="theme.hueValue"
-                class="h-5 w-full appearance-none rounded-full bg-transparent cursor-pointer focus:shadow-[0_0_0_4px_hsl(var(--brand-hue,217),91%,60%)] [&::-webkit-slider-runnable-track]:rounded-full [&::-moz-range-track]:rounded-full"
-                @input="theme.saveHueValue(Number(($event.target as HTMLInputElement).value))"
-            />
-        </div>
-    </section>
+            <!-- 背景图片设置 -->
+            <section class="mt-8 border-0 border-t border-solid border-divider pt-6">
+                <BackgroundImageSettings />
+                <button id="purge-cache" class="btn min-w-max m-2 mt-4" @click="delete_background">
+                    <TrashIcon/>
+                    清除已选择的背景
+                </button>
+            </section>
 
-    <!-- 背景图片设置 -->
-    <section class="mt-8 border-0 border-t border-solid border-divider pt-6">
-        <BackgroundImageSettings />
-        <button id="purge-cache" class="btn min-w-max m-2 mt-4" @click="delete_background">
-            <TrashIcon/>
-            清除已选择的背景
-        </button>
-    </section>
-
-    <!-- 背景模糊开关 -->
-    <section class="mt-8 border-0 border-t border-solid border-divider pt-6">
-        <div class="flex items-center justify-between gap-4">
-            <div>
-                <h2 class="m-0 text-lg font-semibold text-contrast">Background Blur</h2>
-                <p class="m-0 mt-1">启用背景模糊效果（仅在设置了自定义背景时生效）</p>
-            </div>
-            <input
-                type="checkbox"
-                :checked="theme.customBgBlur"
-                @change="(e) => theme.toggleBgBlur((e.target as HTMLInputElement).checked)"
-            />
-        </div>
-    </section>
+            <!-- 背景模糊开关 -->
+            <section class="mt-8 border-0 border-t border-solid border-divider pt-6">
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <h2 class="m-0 text-lg font-semibold text-contrast">Background Blur</h2>
+                        <p class="m-0 mt-1">启用背景模糊效果（仅在设置了自定义背景时生效）</p>
+                    </div>
+                    <Toggle
+                        id="custom-bg-blur"
+                        :model-value="theme.customBgBlur"
+                        @update:model-value="(v) => theme.toggleBgBlur(v)"
+                    />
+                </div>
+            </section>
+        </template>
+    </AppearanceSettingsLayout>
 </template>
 
 <style lang="scss" scoped>

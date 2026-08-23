@@ -70,6 +70,8 @@ const sidebarPreferenceValues = sidebarPreferences?.value
 			</div>
 		</section>
 
+		<slot name="before-advanced" />
+
 		<div class="mt-8 border-0 border-t border-solid border-divider pt-6">
 			<div class="flex flex-col gap-6">
 				<AppearanceSettingRow
