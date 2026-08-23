@@ -27,12 +27,8 @@ export const DEFAULT_FEATURE_FLAGS = {
 export type FeatureFlag = keyof typeof DEFAULT_FEATURE_FLAGS
 type FeatureFlags = Record<FeatureFlag, boolean>
 
-const syncBehaviorAcrossDevices = ref(false)
 const featureFlags = reactive<FeatureFlags>({ ...DEFAULT_FEATURE_FLAGS })
 
-function setBehaviorSyncAcrossDevices(enabled: boolean): void {
-	syncBehaviorAcrossDevices.value = enabled
-}
 
 function getFeatureFlag(key: FeatureFlag): boolean {
 	return featureFlags[key] ?? DEFAULT_FEATURE_FLAGS[key]
@@ -47,12 +43,12 @@ function notifySubscribers() {
 }
 
 const appSettings = reactive({
-	syncBehaviorAcrossDevices,
+
 	hideNametagSkinsPage: false,
 	toggleSidebar: false,
 	devMode: false,
 	featureFlags,
-	setBehaviorSyncAcrossDevices,
+
 	getFeatureFlag,
 	$subscribe(callback: SubCallback) {
 		subscribers.add(callback)
@@ -66,7 +62,6 @@ watch(
 		toggleSidebar: appSettings.toggleSidebar,
 		hideNametagSkinsPage: appSettings.hideNametagSkinsPage,
 		devMode: appSettings.devMode,
-		syncBehaviorAcrossDevices: appSettings.syncBehaviorAcrossDevices,
 	}),
 	() => notifySubscribers(),
 	{ deep: true },

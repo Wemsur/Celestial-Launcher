@@ -1,6 +1,6 @@
 import { computed, reactive, ref, watch } from 'vue'
 
-export const THEME_OPTIONS = ['dark', 'light', 'oled', 'retro', 'system'] as const
+export const THEME_OPTIONS = ['customdark', 'customlight', 'dark', 'light', 'oled', 'retro', 'elegant', 'antiquedark', 'system'] as const
 
 export type ColorTheme = (typeof THEME_OPTIONS)[number]
 type Theme = Exclude<ColorTheme, 'system'>

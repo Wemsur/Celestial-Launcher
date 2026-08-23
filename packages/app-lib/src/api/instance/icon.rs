@@ -86,12 +86,19 @@ pub async fn edit_generated_icon_if_empty(
     let icon_path =
         cache_generated_icon_with_state(config.clone(), symbol_bytes, &state)
             .await?;
-    let _instance =
+    let is_sqlite_instance =
         instance_rows::get_instance_display_info(instance_id, &state.pool)
             .await?
-            .ok_or_else(|| {
-                crate::ErrorKind::InputError("Unknown instance".to_string())
-            })?;
+            .is_some();
+    let is_json_instance = libraries::find_json_instance(&state, instance_id)
+        .await?
+        .is_some();
+    if !is_sqlite_instance && !is_json_instance {
+        return Err(
+            crate::ErrorKind::InputError("Unknown instance".to_string())
+                .into(),
+        );
+    }
 
     let applied = instance_rows::update_instance_icon_if_empty(
         instance_id,
@@ -272,12 +279,20 @@ async fn apply_instance_icon(
     icon_config: Option<InstanceIconConfig>,
     state: &State,
 ) -> crate::Result<()> {
-    let _instance =
+    // Verify instance exists (SQLite or JSON-backed)
+    let is_sqlite_instance =
         instance_rows::get_instance_display_info(instance_id, &state.pool)
             .await?
-            .ok_or_else(|| {
-                crate::ErrorKind::InputError("Unknown instance".to_string())
-            })?;
+            .is_some();
+    let is_json_instance = libraries::find_json_instance(state, instance_id)
+        .await?
+        .is_some();
+    if !is_sqlite_instance && !is_json_instance {
+        return Err(
+            crate::ErrorKind::InputError("Unknown instance".to_string())
+                .into(),
+        );
+    }
     crate::state::edit_instance(
         instance_id,
         EditInstance {

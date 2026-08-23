@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import {
 	defineMessages,
-	injectAuth,
-	injectUserPreferences,
 	Toggle,
 	useSavable,
 	useVIntl,
@@ -19,8 +17,6 @@ import { appSettingsModalContextKey } from '@/providers/app-settings-modal'
 
 const appSettings = useAppSettings()
 const { formatMessage } = useVIntl()
-const auth = injectAuth()
-const { updatePreferences } = injectUserPreferences()
 const settingsModal = inject(appSettingsModalContextKey, null)
 
 const worldsInHomeFlag: FeatureFlag = 'worlds_in_home'
@@ -30,19 +26,6 @@ const skipUnknownPackWarningFlag: FeatureFlag = 'skip_unknown_pack_warning'
 const showPlayTimeFlag: FeatureFlag = 'show_instance_play_time'
 
 const messages = defineMessages({
-	syncAcrossDevicesTitle: {
-		id: 'app.behavior-settings.sync-across-devices.title',
-		defaultMessage: 'Sync behavior across devices',
-	},
-	syncAcrossDevicesDescription: {
-		id: 'app.behavior-settings.sync-across-devices.description',
-		defaultMessage:
-			"Use these behavior settings everywhere you're signed in. Turn this off to keep separate settings on this device.",
-	},
-	syncAcrossDevicesSignedOutTooltip: {
-		id: 'app.behavior-settings.sync-across-devices.signed-out-tooltip',
-		defaultMessage: 'Sign into a Modrinth account to sync settings.',
-	},
 	startupAndNavigationTitle: {
 		id: 'app.behavior-settings.startup-and-navigation.title',
 		defaultMessage: 'Startup and navigation',
@@ -62,18 +45,6 @@ const messages = defineMessages({
 	minimizeLauncherDescription: {
 		id: 'app.appearance-settings.minimize-launcher.description',
 		defaultMessage: 'Minimize Modrinth App when Minecraft starts.',
-	},
-	defaultLandingPageHome: {
-		id: 'app.appearance-settings.default-landing-page.home',
-		defaultMessage: 'Home',
-	},
-    defaultLandingPageWorlds: {
-        id: 'app.appearance-settings.default-landing-page.worlds',
-        defaultMessage: 'Worlds',
-    },
-	defaultLandingPageLibrary: {
-		id: 'app.appearance-settings.default-landing-page.library',
-		defaultMessage: 'Library',
 	},
 	toggleSidebarTitle: {
 		id: 'app.appearance-settings.toggle-sidebar.title',
@@ -137,7 +108,6 @@ const messages = defineMessages({
 })
 
 type BehaviorSettingsState = {
-	syncBehaviorAcrossDevices: boolean
 	minimizeApp: boolean
 	hideRightSidebar: boolean
 	showJumpIn: boolean
@@ -152,7 +122,6 @@ const persistedSettings = ref(await get())
 
 function getBehaviorSettingsState(settings: AppSettings): BehaviorSettingsState {
 	return {
-		syncBehaviorAcrossDevices: settings.sync_behavior_across_devices,
 		minimizeApp: settings.hide_on_process_start,
 		hideRightSidebar: settings.toggle_sidebar,
 		showJumpIn: settings.feature_flags[worldsInHomeFlag] ?? DEFAULT_FEATURE_FLAGS[worldsInHomeFlag],
@@ -177,24 +146,8 @@ const { saved, current, changes, saving, hasChanges, reset, save } = useSavable(
 	async () => {
 		const value = current.value
 
-		if (value.syncBehaviorAcrossDevices && auth.user.value) {
-			await updatePreferences({
-				behavior: {
-					minimize_app: value.minimizeApp,
-					hide_right_sidebar: value.hideRightSidebar,
-					show_jump_in: value.showJumpIn,
-					compact_instance_cards: value.compactInstanceCards,
-					show_play_time: value.showPlayTime,
-					hide_nametag: value.hideNametag,
-					warn_on_unknown_modpacks: value.warnOnUnknownModpacks,
-					skip_non_essential_warnings: value.skipNonEssentialWarnings,
-				},
-			})
-		}
-
 		const nextSettings: AppSettings = {
 			...persistedSettings.value,
-			sync_behavior_across_devices: value.syncBehaviorAcrossDevices,
 			hide_on_process_start: value.minimizeApp,
 			toggle_sidebar: value.hideRightSidebar,
 			hide_nametag_skins_page: value.hideNametag,
@@ -210,7 +163,6 @@ const { saved, current, changes, saving, hasChanges, reset, save } = useSavable(
 
 		await set(nextSettings)
 		persistedSettings.value = nextSettings
-		appSettings.setBehaviorSyncAcrossDevices(value.syncBehaviorAcrossDevices)
 		appSettings.toggleSidebar = value.hideRightSidebar
 		appSettings.hideNametagSkinsPage = value.hideNametag
 		appSettings.featureFlags[worldsInHomeFlag] = value.showJumpIn
@@ -245,33 +197,6 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-	<section class="border-0 border-b border-solid border-divider pb-6">
-		<div class="flex items-center justify-between gap-4">
-			<div>
-				<h2 id="sync-behavior-across-devices-label" class="m-0 text-lg font-semibold text-contrast">
-					{{ formatMessage(messages.syncAcrossDevicesTitle) }}
-				</h2>
-				<p class="m-0 mt-1 text-secondary">
-					{{ formatMessage(messages.syncAcrossDevicesDescription) }}
-				</p>
-			</div>
-			<span
-				v-tooltip="
-					!auth.user.value ? formatMessage(messages.syncAcrossDevicesSignedOutTooltip) : undefined
-				"
-				class="inline-flex shrink-0"
-			>
-				<Toggle
-					id="sync-behavior-across-devices"
-					:model-value="Boolean(auth.user.value) && current.syncBehaviorAcrossDevices"
-					:disabled="!auth.user.value"
-					aria-labelledby="sync-behavior-across-devices-label"
-					@update:model-value="current.syncBehaviorAcrossDevices = $event"
-				/>
-			</span>
-		</div>
-	</section>
-
 	<section class="mt-6">
 		<h2 class="m-0 text-xl font-semibold text-contrast">
 			{{ formatMessage(messages.startupAndNavigationTitle) }}

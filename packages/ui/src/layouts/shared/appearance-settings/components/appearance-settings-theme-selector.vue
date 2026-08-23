@@ -71,6 +71,10 @@ function formatTheme(theme: T): string {
 	return message ? formatMessage(message) : theme
 }
 
+function formatTooltip(key: keyof typeof themeTooltips): string {
+	return formatMessage(themeTooltips[key])
+}
+
 function getPreviewClass(option: T): string {
 	const base = option === 'system' ? systemThemeColor : option
 	return base.endsWith('-mode') ? base : `${base}-mode`
@@ -106,13 +110,13 @@ function getPreviewClass(option: T): string {
 				{{ formatTheme(option) }}
 				<SunIcon
 					v-if="'customlight' === option"
-					v-tooltip="formatMessage(colorTheme.preferredLight)"
+					v-tooltip="formatTooltip('preferredLight')"
 					class="theme-icon shrink-0"
 					aria-hidden="true"
 				/>
 				<MoonIcon
 					v-else-if="'customdark' === option"
-					v-tooltip="formatMessage(colorTheme.preferredDark)"
+					v-tooltip="formatTooltip('preferredDark')"
 					class="theme-icon shrink-0"
 					aria-hidden="true"
 				/>

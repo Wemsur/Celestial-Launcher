@@ -756,9 +756,7 @@ async function setupApp() {
         toggle_sidebar,
         developer_mode,
         feature_flags,
-        pending_update_toast_for_version,
-        sync_theme_across_devices,
-        sync_behavior_across_devices,
+        pending_update_toast_for_version
     } = allSettings
 
 	// Initialize locale from saved settings
@@ -783,10 +781,8 @@ async function setupApp() {
 
 	appTheme.preferred = theme
 	appTheme.advancedRendering = advanced_rendering
-	appTheme.syncAcrossDevices = sync_theme_across_devices
-    appTheme.customBgBlur = custom_bgblur
-	appSettings.syncBehaviorAcrossDevices = sync_behavior_across_devices
-	appSettings.hideNametagSkinsPage = hide_nametag_skins_page
+	appTheme.customBgBlur = custom_bgblur
+appSettings.hideNametagSkinsPage = hide_nametag_skins_page
 	appSettings.toggleSidebar = toggle_sidebar
 	appSettings.devMode = developer_mode
 	Object.assign(appSettings.featureFlags, feature_flags)
@@ -1108,58 +1104,16 @@ watch(
 		userPreferencesSync = userPreferencesSync
 			.then(async () => {
 				const settings = await getSettings()
-				const selectedTheme = preferences.appearance.auto ? 'system' : preferences.appearance.theme
 				const locale = preferences.localization.locale
-				const behavior = preferences.behavior
 				let settingsChanged = false
 
-				if (appTheme.syncAcrossDevices && appTheme.preferred !== selectedTheme) {
-					appTheme.preferred = selectedTheme
-				}
 				if (i18n.global.locale.value !== locale) {
 					i18n.global.locale.value = locale
 				}
 
-				if (appTheme.syncAcrossDevices && settings.theme !== selectedTheme) {
-					settings.theme = selectedTheme
-					settingsChanged = true
-				}
 				if (settings.locale !== locale) {
 					settings.locale = locale
 					settingsChanged = true
-				}
-
-				if (behavior && appSettings.syncBehaviorAcrossDevices) {
-					const behaviorFeatureFlags = {
-						worlds_in_home: behavior.show_jump_in,
-						compact_instance_cards: behavior.compact_instance_cards,
-						show_instance_play_time: behavior.show_play_time,
-						skip_unknown_pack_warning: !behavior.warn_on_unknown_modpacks,
-						skip_non_essential_warnings: behavior.skip_non_essential_warnings,
-					}
-
-					appSettings.toggleSidebar = behavior.hide_right_sidebar
-					appSettings.hideNametagSkinsPage = behavior.hide_nametag
-					Object.assign(appSettings.featureFlags, behaviorFeatureFlags)
-
-					if (settings.hide_on_process_start !== behavior.minimize_app) {
-						settings.hide_on_process_start = behavior.minimize_app
-						settingsChanged = true
-					}
-					if (settings.toggle_sidebar !== behavior.hide_right_sidebar) {
-						settings.toggle_sidebar = behavior.hide_right_sidebar
-						settingsChanged = true
-					}
-					if (settings.hide_nametag_skins_page !== behavior.hide_nametag) {
-						settings.hide_nametag_skins_page = behavior.hide_nametag
-						settingsChanged = true
-					}
-					for (const [flag, value] of Object.entries(behaviorFeatureFlags)) {
-						if (settings.feature_flags[flag] !== value) {
-							settings.feature_flags[flag] = value
-							settingsChanged = true
-						}
-					}
 				}
 
 				if (settingsChanged) {

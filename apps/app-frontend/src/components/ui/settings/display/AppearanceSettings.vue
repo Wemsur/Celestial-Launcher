@@ -48,15 +48,6 @@ const { saved, current, changes, saving, hasChanges, reset, save } = useSavable(
     () => getAppearanceSettingsState(settings.value),
     async (appearanceChanges) => {
         const value = current.value
-        if (
-            value.syncAcrossDevices &&
-            auth.user.value &&
-            (appearanceChanges.theme !== undefined || appearanceChanges.syncAcrossDevices !== undefined)
-        ) {
-            await updatePreferences({
-                appearance: value.theme === 'system' ? { auto: true } : { auto: false, theme: value.theme },
-            })
-        }
 
         const nextSettings: AppSettings = {
             ...settings.value,
