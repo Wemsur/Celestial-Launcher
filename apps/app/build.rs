@@ -260,6 +260,7 @@ fn main() {
                         "library_list",
                         "library_add",
                         "library_remove",
+                        "library_set_active",
                         "library_default_path",
                     ])
                     .default_permission(

@@ -288,7 +288,7 @@ async function populateJumpBackIn() {
 }
 
 function markInstancePlayed(item: InstanceJumpBackInItem) {
-	const lastPlayed = dayjs()
+	const lastPlayed = dayjs(item.instance.created)
 	locallyPlayedInstances.value = {
 		...locallyPlayedInstances.value,
 		[item.instance.id]: lastPlayed,

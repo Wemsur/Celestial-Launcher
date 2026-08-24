@@ -80,6 +80,7 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             library_list,
             library_add,
             library_remove,
+            library_set_active,
             library_default_path,
         ])
         .build()
@@ -1096,6 +1097,23 @@ pub async fn library_remove(path: String) -> Result<()> {
     let state = theseus::State::get().await?;
     let mut config = theseus::libraries::get_libraries_config(&state).await?;
     config.libraries.retain(|l| l.path != path);
+    if config.active_library_path.as_deref() == Some(path.as_str()) {
+        config.active_library_path = None;
+    }
+    theseus::libraries::save_libraries_config(&state, &config).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn library_set_active(path: String) -> Result<()> {
+    let state = theseus::State::get().await?;
+    let mut config = theseus::libraries::get_libraries_config(&state).await?;
+    // Only save if the path is one of the registered libraries
+    if config.libraries.iter().any(|l| l.path == path) {
+        config.active_library_path = Some(path);
+    } else {
+        config.active_library_path = None;
+    }
     theseus::libraries::save_libraries_config(&state, &config).await?;
     Ok(())
 }

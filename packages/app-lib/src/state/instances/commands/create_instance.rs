@@ -85,6 +85,7 @@ pub(crate) async fn create_instance(
         let instance_json = libraries::InstanceJson {
             name: Some(instance.name.clone()),
             icon_path: instance.icon_path.clone(),
+            created: Some(instance.created),
             last_played: instance.last_played,
             game_version: Some(input.game_version.clone()),
             loader: Some(input.loader.as_str().to_string()),
@@ -213,6 +214,7 @@ pub(crate) async fn create_instance(
         let instance_json = libraries::InstanceJson {
             name: Some(instance.name.clone()),
             icon_path: instance.icon_path.clone(),
+            created: Some(instance.created),
             last_played: instance.last_played,
             game_version: Some(content_set.game_version.clone()),
             loader: Some(input.loader.as_str().to_string()),

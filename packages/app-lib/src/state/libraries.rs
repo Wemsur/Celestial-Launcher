@@ -90,6 +90,9 @@ pub struct LibrariesConfig {
     pub libraries: Vec<LibraryInfo>,
     #[serde(default)]
     pub migrated: bool,
+    /// Path of the library that was last active on the home page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_library_path: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -100,9 +103,11 @@ pub(crate) struct InstanceJson {
     pub icon_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_played: Option<DateTime<Utc>>,
+    /// When the instance was first created (stored in instance.json).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub game_version: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub loader: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub loader_version: Option<String>,
@@ -160,6 +165,7 @@ impl InstanceJson {
         Self {
             name: Some(instance.name.clone()),
             icon_path: instance.icon_path.clone(),
+            created: Some(instance.created),
             last_played: instance.last_played,
             game_version: Some(content_set.game_version.clone()),
             loader: Some(content_set.loader.as_str().to_string()),
@@ -180,6 +186,7 @@ impl InstanceJson {
         Self {
             name: Some(instance.name.clone()),
             icon_path: instance.icon_path.clone(),
+            created: Some(instance.created),
             last_played: instance.last_played,
             submitted_time_played: instance.submitted_time_played,
             recent_time_played: instance.recent_time_played,
@@ -218,7 +225,7 @@ impl InstanceJson {
             update_channel: self.update_channel,
             name: name.unwrap_or_default(),
             icon_path: self.icon_path.clone(),
-            created: Utc::now(),
+            created: self.created.unwrap_or_else(Utc::now),
             modified: Utc::now(),
             last_played: self.last_played,
             submitted_time_played: self.submitted_time_played,
@@ -350,6 +357,7 @@ pub async fn get_libraries_config(state: &State) -> crate::Result<LibrariesConfi
         return Ok(LibrariesConfig {
             libraries: vec![],
             migrated: false,
+            active_library_path: None,
         });
     }
     let content = fs::read_to_string(&path)?;
@@ -574,6 +582,7 @@ pub(crate) async fn migrate_instances_from_db(
     let config = LibrariesConfig {
         libraries: libraries_vec,
         migrated: true,
+        active_library_path: None,
     };
 
     save_libraries_config(state, &config).await?;
@@ -590,6 +599,9 @@ pub(crate) async fn migrate_instances_from_db(
             Ok(Some(mut json)) => {
                 if json.link.is_none() {
                     json.link = Some(record.link.clone());
+                }
+                if json.created.is_none() {
+                    json.created = Some(record.instance.created);
                 }
                 json.update_channel = record.instance.update_channel;
                 json.groups = record.group_ids.clone();
@@ -616,9 +628,18 @@ pub(crate) async fn migrate_instances_from_db(
 }
 
 pub(crate) async fn ensure_migration_done(state: &State) -> crate::Result<()> {
-    let config = get_libraries_config(state).await?;
+    let mut config = get_libraries_config(state).await?;
+    let saved_active = config.active_library_path.clone();
     if !config.migrated {
         migrate_instances_from_db(state).await?;
+        config = get_libraries_config(state).await?;
+    }
+    // Restore saved active tab after migration
+    if let Some(active) = saved_active {
+        if config.libraries.iter().any(|l| l.path == active) {
+            config.active_library_path = Some(active);
+            save_libraries_config(state, &config).await?;
+        }
     }
     Ok(())
 }

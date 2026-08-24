@@ -18,7 +18,7 @@ import RecentWorldsList from '@/components/ui/world/RecentWorldsList.vue'
 import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
 import type { InstanceFormat, LibraryInfo } from '@/helpers/library'
-import { library_add, library_list, library_default_path } from '@/helpers/library'
+import { library_add, library_list, library_default_path, library_set_active } from '@/helpers/library'
 import { list } from '@/helpers/instance'
 import type { GameInstance } from '@/helpers/types'
 import { useRootBreadcrumb } from '@/providers/breadcrumbs'
@@ -100,6 +100,11 @@ const loadLibraries = async () => {
 		])
 		libraries.value = config.libraries
 		defaultLibraryPath = defaultPath ?? null
+		// Restore active library tab (skip if 'all' or path no longer exists)
+		const saved = config.active_library_path
+		if (saved && libraries.value.some((l) => l.path === saved)) {
+			activeTab.value = saved
+		}
 	} catch (e) {
 		handleError(e instanceof Error ? e : new Error(String(e)))
 	}
@@ -135,6 +140,11 @@ const activeTabIndex = computed(() => {
 
 const handleTabClick = (index: number, tab: { href: string }) => {
 	activeTab.value = tab.href
+	if (tab.href !== 'all') {
+		library_set_active(tab.href).catch(() => {})
+	} else {
+		library_set_active('').catch(() => {})
+	}
 }
 
 // Switching tab fetches instances for that library
