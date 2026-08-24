@@ -3,7 +3,7 @@ import { BoxIcon, FolderSearchIcon, PlayIcon, PlusIcon } from '@modrinth/assets'
 import {
 	Button, defineMessages, injectNotificationManager,
 	NavTabs, NewModal as Modal,
-	StyledInput,
+	StyledInput, DropdownSelect,
 	useVIntl,
 } from '@modrinth/ui'
 import { invoke } from '@tauri-apps/api/core'
