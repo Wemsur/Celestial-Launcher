@@ -62,6 +62,7 @@ const props = defineProps<{
 	instance: GameInstance
 	instanceGroupId: string
 	isSelectionAnchor?: boolean
+	libraryPath?: string
 }>()
 
 const emit = defineEmits<{
@@ -123,7 +124,8 @@ const { isDragging } = useDraggable({
 const router = useRouter()
 
 const seeInstance = async () => {
-	await router.push(`/instance/${encodeURIComponent(props.instance.id)}`)
+	const query = props.libraryPath ? { library: props.libraryPath } : undefined
+	await router.push({ path: `/instance/${encodeURIComponent(props.instance.id)}`, query })
 }
 
 const toggleSelection = (event?: MouseEvent) => {

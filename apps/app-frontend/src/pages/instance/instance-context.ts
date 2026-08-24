@@ -14,6 +14,7 @@ export interface InstancePageContext {
 	readonly playing: ComputedRef<boolean>
 	readonly loading: Readonly<Ref<boolean>>
 	readonly stopping: Readonly<Ref<boolean>>
+	readonly libraryPath: ComputedRef<string | undefined>
 	refreshInstance: () => Promise<void>
 	refreshPlayState: () => Promise<void>
 	play: (source: string) => Promise<void>

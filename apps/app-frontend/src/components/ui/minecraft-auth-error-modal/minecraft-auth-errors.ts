@@ -77,9 +77,10 @@ export const minecraftAuthErrors: MinecraftAuthError[] = [
 				'xbox.com',
 				'xboxlive.com',
 				'live.com',
+				'launcher-meta.modrinth.com',
 			].some((domain) => message.includes(domain)),
 		whatHappened:
-			'Modrinth App could not connect to a Microsoft, Xbox, or Minecraft service needed for sign-in. This is usually caused by a local network, DNS, proxy, firewall, hosts file, VPN, or antivirus issue.',
+			'Modrinth App could not connect to a required service. This is usually caused by a local network, DNS, proxy, firewall, hosts file, VPN, or antivirus issue.',
 		stepsToFix: [
 			'Restart Modrinth App and try signing in again',
 			'Check that your internet connection is working',

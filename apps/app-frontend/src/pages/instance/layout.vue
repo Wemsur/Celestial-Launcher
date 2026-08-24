@@ -834,6 +834,7 @@ provideInstancePage({
 	playing,
 	loading,
 	stopping,
+	libraryPath: computed(() => route.query.library as string | undefined),
 	refreshInstance,
 	refreshPlayState,
 	play: startInstance,
