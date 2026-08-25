@@ -27,7 +27,7 @@ use futures::prelude::*;
 use reqwest::Method;
 use std::{
     future::Future,
-    path::PathBuf,
+    path::{Path, PathBuf},
     pin::Pin,
     sync::{
         Arc,
@@ -245,11 +245,15 @@ fn missing_assets_index_bytes(
     st: &State,
     version: &GameVersionInfo,
     force: bool,
+    instance_assets_dir: Option<&Path>,
 ) -> u64 {
-    let path = st
-        .directories
-        .assets_index_dir()
-        .join(format!("{}.json", &version.asset_index.id));
+    let path = if let Some(dir) = instance_assets_dir {
+        dir.join("indexes").join(format!("{}.json", &version.asset_index.id))
+    } else {
+        st.directories
+            .assets_index_dir()
+            .join(format!("{}.json", &version.asset_index.id))
+    };
 
     if should_download(path.exists(), force) {
         version.asset_index.size as u64
@@ -287,16 +291,27 @@ fn missing_asset_bytes(
     with_legacy: bool,
     index: &AssetsIndex,
     force: bool,
+    instance_assets_dir: Option<&Path>,
 ) -> u64 {
     index
         .objects
         .iter()
         .filter_map(|(name, asset)| {
             let hash = &asset.hash;
-            let object_path = st.directories.object_dir(hash);
-            let legacy_path = st.directories.legacy_assets_dir().join(
-                name.replace('/', &String::from(std::path::MAIN_SEPARATOR)),
-            );
+            let object_path = if let Some(dir) = instance_assets_dir {
+                dir.join("objects").join(&hash[..2]).join(hash)
+            } else {
+                st.directories.object_dir(hash)
+            };
+            let legacy_path = if let Some(dir) = instance_assets_dir {
+                dir.join("virtual")
+                    .join("legacy")
+                    .join(name.replace('/', &String::from(std::path::MAIN_SEPARATOR)))
+            } else {
+                st.directories.legacy_assets_dir().join(
+                    name.replace('/', &String::from(std::path::MAIN_SEPARATOR))
+                )
+            };
             let should_fetch_object =
                 should_download(object_path.exists(), force);
             let should_fetch_legacy =
@@ -370,9 +385,10 @@ fn missing_initial_minecraft_bytes(
     java_arch: &str,
     force: bool,
     minecraft_updated: bool,
+    instance_assets_dir: Option<&Path>,
 ) -> crate::Result<u64> {
     Ok(missing_client_bytes(st, version, force)?
-        + missing_assets_index_bytes(st, version, force)
+        + missing_assets_index_bytes(st, version, force, instance_assets_dir)
         + missing_log_config_bytes(st, version, force)
         + missing_library_bytes(
             st,
@@ -396,6 +412,7 @@ pub async fn download_minecraft(
     instance_dir: Option<&PathBuf>,
     instance_version_id: Option<&str>,
     libraries_dir: Option<PathBuf>,
+    instance_assets_dir: Option<PathBuf>,
 ) -> crate::Result<()> {
     tracing::info!("Downloading Minecraft version {}", version.id);
     let progress = if let Some(reporter) = reporter {
@@ -409,6 +426,7 @@ pub async fn download_minecraft(
                     java_arch,
                     force,
                     minecraft_updated,
+                    instance_assets_dir.as_deref(),
                 )?,
             )
             .await?,
@@ -424,6 +442,7 @@ pub async fn download_minecraft(
         loading_bar,
         force,
         progress.clone(),
+        instance_assets_dir.as_deref(),
     )
     .await?;
     if let Some(progress) = &progress {
@@ -433,6 +452,7 @@ pub async fn download_minecraft(
                 version.assets == "legacy",
                 &assets_index,
                 force,
+                instance_assets_dir.as_deref(),
             ))
             .await?;
     }
@@ -447,7 +467,7 @@ pub async fn download_minecraft(
         // Total loading sums to 90/60
         download_client(st, version, loading_bar, force, progress.clone(), instance_dir, instance_version_id), // 9
         download_log_config(st, version, loading_bar, force, progress.clone()),
-        download_assets(st, version.assets == "legacy", &assets_index, loading_bar, amount, force, progress.clone()), // 40
+        download_assets(st, version.assets == "legacy", &assets_index, loading_bar, amount, force, progress.clone(), instance_assets_dir.as_deref()), // 40
         download_libraries(st, version.libraries.as_slice(), &version.id, loading_bar, amount, java_arch, force, minecraft_updated, progress.clone(), libraries_dir) // 40
     }?;
 
@@ -653,12 +673,16 @@ pub async fn download_assets_index(
     loading_bar: Option<&LoadingBarId>,
     force: bool,
     progress: Option<MinecraftDownloadProgress>,
+    instance_assets_dir: Option<&Path>,
 ) -> crate::Result<AssetsIndex> {
     tracing::debug!("Loading assets index");
-    let path = st
-        .directories
-        .assets_index_dir()
-        .join(format!("{}.json", &version.asset_index.id));
+    let path = if let Some(dir) = instance_assets_dir {
+        dir.join("indexes").join(format!("{}.json", &version.asset_index.id))
+    } else {
+        st.directories
+            .assets_index_dir()
+            .join(format!("{}.json", &version.asset_index.id))
+    };
 
     let res = if path.exists() && !force {
         io::read(path)
@@ -702,6 +726,7 @@ pub async fn download_assets(
     loading_amount: f64,
     force: bool,
     progress: Option<MinecraftDownloadProgress>,
+    instance_assets_dir: Option<&Path>,
 ) -> crate::Result<()> {
     tracing::debug!("Loading assets");
     let num_futs = index.objects.len();
@@ -718,10 +743,20 @@ pub async fn download_assets(
                 let progress = progress.clone();
                 async move {
                 let hash = &asset.hash;
-                let resource_path = st.directories.object_dir(hash);
-                let legacy_resource_path = st.directories.legacy_assets_dir().join(
-                    name.replace('/', &String::from(std::path::MAIN_SEPARATOR))
-                );
+                let resource_path = if let Some(dir) = instance_assets_dir {
+                    dir.join("objects").join(&hash[..2]).join(hash)
+                } else {
+                    st.directories.object_dir(hash)
+                };
+                let legacy_resource_path = if let Some(dir) = instance_assets_dir {
+                    dir.join("virtual")
+                        .join("legacy")
+                        .join(name.replace('/', &String::from(std::path::MAIN_SEPARATOR)))
+                } else {
+                    st.directories.legacy_assets_dir().join(
+                        name.replace('/', &String::from(std::path::MAIN_SEPARATOR))
+                    )
+                };
                 let should_fetch_object = !resource_path.exists() || force;
                 let should_fetch_legacy =
                     (with_legacy && !legacy_resource_path.exists()) || force;

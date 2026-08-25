@@ -562,6 +562,14 @@ pub async fn install_minecraft_with_reporter(
             } else {
                 None
             },
+            if instance.library_format == libraries::InstanceFormat::Minecraft {
+                Some(libraries::instance_assets_dir(
+                    &instance_path,
+                    &instance.library_format,
+                ))
+            } else {
+                None
+            },
         )
         .await?;
     }
