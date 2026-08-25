@@ -261,6 +261,7 @@ fn main() {
                         "library_add",
                         "library_remove",
                         "library_set_active",
+                        "library_update_name",
                         "library_default_path",
                     ])
                     .default_permission(
