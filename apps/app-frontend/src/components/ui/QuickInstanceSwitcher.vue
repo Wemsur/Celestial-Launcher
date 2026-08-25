@@ -120,7 +120,7 @@ const onDividerPointerUp = (event) => {
 }
 
 const getInstances = async () => {
-	const instances = await list().catch(handleError)
+	const instances = (await list().catch(handleError)) ?? []
 
 	for (const instance of instances) {
 		queryClient.setQueryData(instanceKeys.detail(instance.id), instance)

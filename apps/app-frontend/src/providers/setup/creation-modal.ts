@@ -93,7 +93,7 @@ export function setupCreationModal(
 	}
 
 	async function fetchExistingInstanceNames(): Promise<string[]> {
-		const instances = await list().catch(handleError)
+		const instances = (await list().catch(handleError)) ?? []
 		return instances?.map((i) => i.name) ?? []
 	}
 
@@ -139,7 +139,7 @@ export function setupCreationModal(
 			if (config.modpackSelection.value) {
 				const { projectId, versionId, name, iconUrl } = config.modpackSelection.value
 
-				const instances = await list().catch(handleError)
+				const instances = (await list().catch(handleError)) ?? []
 				const existingInstance = instances?.find((i) => i.link?.project_id === projectId)
 
 				if (existingInstance && !appSettings.getFeatureFlag('skip_non_essential_warnings')) {

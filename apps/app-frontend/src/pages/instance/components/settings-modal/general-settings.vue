@@ -171,10 +171,6 @@ const isMinecraftFormat = computed(() =>
     instance.value.path.includes('.minecraft'),
 )
 
-const editInstanceObject = computed(() => ({
-	name: title.value.trim().substring(0, 80) ?? 'Instance',
-}))
-
 const hasNameChanges = computed(() => {
 	if (!isMinecraftFormat.value) return false
 	return title.value.trim().substring(0, 32) !== originalName.value
@@ -209,15 +205,6 @@ if (registerUnsavedChangesController) {
 		save: renameInstance,
 	})
 }
-
-watch(
-	title,
-	async () => {
-		if (removing.value) return
-		await edit(instance.value.id, editInstanceObject.value).catch(handleError)
-	},
-	{ deep: true },
-)
 
 watch(
     () => instance.value.name,

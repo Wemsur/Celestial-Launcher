@@ -41,7 +41,7 @@ window.addEventListener('online', () => {
 })
 
 async function fetchInstances() {
-    instances.value = await list().catch(handleError)
+    instances.value = (await list().catch(handleError)) ?? []
 
     const filters = []
     for (const instance of instances.value) {
@@ -156,7 +156,7 @@ window.addEventListener('online', () => {
 })
 
 async function fetchInstances() {
-    instances.value = await list().catch(handleError)
+    instances.value = (await list().catch(handleError)) ?? []
 
     const filters = []
     for (const instance of instances.value) {

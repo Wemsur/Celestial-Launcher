@@ -56,7 +56,7 @@ defineExpose({
 		serverAddress.value = address
 		searchFilter.value = ''
 
-		const instanceValues = await list().catch(handleError)
+		const instanceValues = (await list().catch(handleError)) ?? []
 		await Promise.allSettled(
 			instanceValues.map(async (instance) => {
 				instance.adding = false

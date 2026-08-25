@@ -33,7 +33,7 @@ useRootBreadcrumb({
 	visual: { type: 'icon', component: LibraryIcon },
 })
 
-const instances = shallowRef(await list().catch(handleError))
+const instances = shallowRef(await list().catch(handleError) ?? [])
 const offline = ref(!navigator.onLine)
 window.addEventListener('offline', () => {
 	offline.value = true
@@ -43,7 +43,7 @@ window.addEventListener('online', () => {
 })
 
 const unlistenInstance = await instance_listener(async () => {
-	instances.value = await list(activeTab.value === 'all' ? undefined : activeTab.value).catch(handleError)
+	instances.value = (await list(activeTab.value === 'all' ? undefined : activeTab.value).catch(handleError)) ?? []
 })
 onUnmounted(() => {
 	unlistenInstance()

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tokio::fs as tokio_fs;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 /// Retry a closure on `std::io::Error`, with 200ms delay between attempts.
 /// Modeled after PCL2's Retrier: handles Windows file locks that clear quickly.
@@ -421,9 +421,17 @@ pub async fn list_instances_from_json(
             // derive a minimal instance from the directory even without one.
             match library.format {
                 InstanceFormat::Modrinth => {
-                    let Some(instance_json) =
-                        InstanceJson::read_from_dir(&dir)?
-                    else {
+                    let Some(instance_json) = (match InstanceJson::read_from_dir(&dir) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            warn!(
+                                dir = ?dir,
+                                error = %e,
+                                "Failed to parse instance.json, skipping"
+                            );
+                            continue;
+                        }
+                    }) else {
                         continue;
                     };
                     let instance = instance_json.to_instance_with_format(
@@ -433,9 +441,18 @@ pub async fn list_instances_from_json(
                     instances.push(instance);
                 }
                 InstanceFormat::Minecraft => {
-                    if let Some(instance_json) =
-                        InstanceJson::read_from_dir(&dir)?
-                    {
+                    let instance_json = match InstanceJson::read_from_dir(&dir) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            tracing::warn!(
+                                dir = ?dir,
+                                error = %e,
+                                "Failed to parse instance.json, skipping"
+                            );
+                            continue;
+                        }
+                    };
+                    if let Some(instance_json) = instance_json {
                         let instance = instance_json.to_instance_with_format(
                             dir.to_string_lossy().as_ref(),
                             library.format.clone(),
@@ -444,8 +461,17 @@ pub async fn list_instances_from_json(
                     } else {
                         // No sidecar — try celestial.json first, then fall back to dir name.
                         let id = instance_id_from_path(dir.to_string_lossy().as_ref());
-                        let celestial =
-                            CelestialJson::read_from_dir(&dir)?;
+                        let celestial = match CelestialJson::read_from_dir(&dir) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                tracing::warn!(
+                                    dir = ?dir,
+                                    error = %e,
+                                    "Failed to parse celestial.json, falling back to dir name"
+                                );
+                                None
+                            }
+                        };
                         let name = celestial
                             .as_ref()
                             .and_then(|c| c.name.clone())
