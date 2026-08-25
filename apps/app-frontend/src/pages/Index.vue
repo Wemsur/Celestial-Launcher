@@ -345,15 +345,15 @@ function handlePageOption({ option }: { option: string }) {
 						:value="librarySettingsPath"
 						type="text"
 						wrapper-class="w-full"
-						disabled
+						readonly
 					/>
 				</div>
-				<div class="flex justify-end gap-2 pt-2">
-					<Button type="outlined" @click="closeLibrarySettingsModal">取消</Button>
-					<Button type="colored" color="brand" :disabled="!librarySettingsName.trim()" @click="saveLibraryName">保存</Button>
-				</div>
-				<div class="pt-4 border-t border-border">
+				<div class="flex justify-between gap-2 pt-2">
 					<Button color="danger" @click="removeLibrary">删除库</Button>
+					<div class="flex gap-2">
+						<Button type="outlined" @click="closeLibrarySettingsModal">取消</Button>
+						<Button type="colored" color="brand" :disabled="!librarySettingsName.trim()" @click="saveLibraryName">保存</Button>
+					</div>
 				</div>
 			</div>
 		</Modal>
