@@ -9,6 +9,7 @@ export type GameInstance = {
 	name: string
 	icon_path?: string
 	icon_config?: InstanceIconConfig | null
+	library_format?: 'modrinth' | 'minecraft'
 
 	game_version: string
 	protocol_version?: number

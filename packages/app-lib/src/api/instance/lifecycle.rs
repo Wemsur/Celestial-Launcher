@@ -6,6 +6,7 @@ use crate::state::{
     ModLoader, State,
     InstanceIconConfig,
 };
+use crate::state::libraries::InstanceJson;
 
 #[tracing::instrument]
 #[allow(clippy::too_many_arguments)]
@@ -303,45 +304,31 @@ pub async fn rename(
         crate::state::libraries::resolve_instance_dir(&state, &inst.path);
     tracing::info!("rename: resolved dir={:?}", dir);
 
-    if inst.library_format != crate::state::libraries::InstanceFormat::Minecraft {
-        return Err(
-            crate::ErrorKind::InputError(
-                "Rename is only supported for .minecraft format instances".to_string(),
-            )
-            .into(),
-        );
-    }
+    if inst.library_format == crate::state::libraries::InstanceFormat::Minecraft {
+        // .minecraft format: rename the instance directory and version files
+        tracing::info!("rename: calling rename_minecraft_instance");
+        let new_dir =
+            crate::state::libraries::rename_minecraft_instance(&dir, &new_name)?;
+        tracing::info!("rename: rename_minecraft_instance returned {:?}", new_dir);
 
-    tracing::info!("rename: calling rename_minecraft_instance");
-    let new_dir =
-        crate::state::libraries::rename_minecraft_instance(&dir, &new_name)?;
-    tracing::info!("rename: rename_minecraft_instance returned {:?}", new_dir);
+        // Update the celestial.json (or create one if missing) name field
+        tracing::info!("rename: reading celestial.json from {:?}", new_dir);
+        let celestial =
+            crate::state::libraries::CelestialJson::read_from_dir(&new_dir)?
+                .unwrap_or_default();
+        let mut updated_celestial = celestial.clone();
+        updated_celestial.name = Some(new_name.clone());
+        tracing::info!("rename: writing updated celestial.json");
+        updated_celestial.write_to_dir(&new_dir)?;
+        tracing::info!("rename: celestial.json written successfully");
 
-    // Update the celestial.json (or create one if missing) name field
-    tracing::info!("rename: reading celestial.json from {:?}", new_dir);
-    let celestial =
-        crate::state::libraries::CelestialJson::read_from_dir(&new_dir)?
-            .unwrap_or_default();
-    let mut updated_celestial = celestial.clone();
-    updated_celestial.name = Some(new_name.clone());
-    tracing::info!("rename: writing updated celestial.json");
-    updated_celestial.write_to_dir(&new_dir)?;
-    tracing::info!("rename: celestial.json written successfully");
-
-    // Emit event so the frontend knows the instance moved
-    tracing::info!("rename: emitting Edited event");
-    emit_instance(instance_id, InstancePayloadType::Edited).await?;
-    tracing::info!("rename: event emitted");
-
-    // Return fresh metadata — the scan will pick up the new path from
-    // the sidecar name, and the path itself must be refreshed. We rebuild
-    // from the new directory name directly.
-    let id =
-        crate::state::libraries::instance_id_from_path(
-            new_dir.to_string_lossy().as_ref(),
-        );
-    Ok(crate::api::instance::get::instance_metadata_from_instance(
-        &Instance {
+        // Return fresh metadata — the scan will pick up the new path from
+        // the sidecar name, and the path itself must be refreshed.
+        let id =
+            crate::state::libraries::instance_id_from_path(
+                new_dir.to_string_lossy().as_ref(),
+            );
+        let updated_inst = Instance {
             id,
             path: new_dir.to_string_lossy().to_string(),
             applied_content_set_id: None,
@@ -357,6 +344,24 @@ pub async fn rename(
             submitted_time_played: updated_celestial.submitted_time_played,
             recent_time_played: updated_celestial.recent_time_played,
             library_format: crate::state::libraries::InstanceFormat::Minecraft,
-        },
-    ))
+        };
+        emit_instance(instance_id, InstancePayloadType::Edited).await?;
+        return Ok(crate::api::instance::get::instance_metadata_from_instance(
+            &updated_inst,
+        ));
+    }
+
+    // Modrinth format: only update the name field in instance.json
+    tracing::info!(
+        "rename: Modrinth format — updating instance.json name in {:?}",
+        dir
+    );
+    let mut instance_json =
+        crate::state::libraries::InstanceJson::read_from_dir(&dir)?.unwrap_or_default();
+    instance_json.name = Some(new_name.clone());
+    instance_json.write_to_dir(&dir)?;
+    tracing::info!("rename: instance.json written successfully");
+
+    emit_instance(instance_id, InstancePayloadType::Edited).await?;
+    Ok(crate::api::instance::get::instance_metadata_from_instance(&inst))
 }

@@ -168,11 +168,10 @@ function onGeneratedIconSaved(iconPath: string, config: InstanceIconConfig) {
 }
 
 const isMinecraftFormat = computed(() =>
-    instance.value.path.includes('.minecraft'),
+    instance.value.library_format === 'minecraft',
 )
 
 const hasNameChanges = computed(() => {
-	if (!isMinecraftFormat.value) return false
 	return title.value.trim().substring(0, 32) !== originalName.value
 })
 
