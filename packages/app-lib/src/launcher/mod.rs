@@ -946,11 +946,14 @@ pub async fn launch_minecraft(
     .await?;
 
     if content_set.loader != ModLoader::Vanilla && loader_version.is_none() {
-        return Err(crate::ErrorKind::LauncherError(format!(
-            "No loader version selected for {}",
-            content_set.loader.as_str()
-        ))
-        .into());
+        // .minecraft format instances are self-contained; skip loader validation
+        if instance.library_format != libraries::InstanceFormat::Minecraft {
+            return Err(crate::ErrorKind::LauncherError(format!(
+                "No loader version selected for {}",
+                content_set.loader.as_str()
+            ))
+            .into());
+        }
     }
 
     let version_jar =
