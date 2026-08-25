@@ -339,15 +339,6 @@ function handlePageOption({ option }: { option: string }) {
 					/>
 					<span v-if="librarySettingsRenameError" class="text-sm text-danger">{{ librarySettingsRenameError }}</span>
 				</div>
-				<div class="flex flex-col gap-1">
-					<span class="text-sm font-medium text-primary">库路径</span>
-					<StyledInput
-						:value="librarySettingsPath"
-						type="text"
-						wrapper-class="w-full"
-						readonly
-					/>
-				</div>
 				<div class="flex justify-between gap-2 pt-2">
 					<Button color="danger" @click="removeLibrary">删除库</Button>
 					<div class="flex gap-2">
