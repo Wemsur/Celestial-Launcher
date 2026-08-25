@@ -3,7 +3,7 @@ import type {
 	CreationFlowContextValue,
 	CreationFlowModal,
 } from '@modrinth/ui'
-import { provide, ref, useTemplateRef, watch } from 'vue'
+import { provide, ref, useTemplateRef } from 'vue'
 import type { ComponentExposed } from 'vue-component-type-helpers'
 import { useRouter } from 'vue-router'
 
@@ -45,8 +45,6 @@ export function setupCreationModal(
 	// Load available libraries for the creation modal
 	const availableLibraries = ref<Array<{ path: string; name: string }>>([])
 	const defaultLibraryPath = ref<string | null>(null)
-	const preselectedLibraryPath = ref<string | null>(null)
-	const lastSelectedLibraryPath = ref<string | null>(null)
 
 	async function refreshLibraries() {
 		try {
@@ -60,16 +58,25 @@ export function setupCreationModal(
 	refreshLibraries().catch(() => {})
 	useAppEvent('library_changed', refreshLibraries, appEvents)
 
-	// Track the preselected library set by App.vue based on active tab
-	watch(preselectedLibraryPath, (value) => {
-		lastSelectedLibraryPath.value = value
-	})
-
 	// ── showCreationModal with preselection ────────────────────────────────
-	const preselectionKey = ref(0)
+	// Read the currently active library from localStorage so the modal
+	// always pre-selects the right library regardless of which page opens it.
+	const persistedTab =
+		typeof window !== 'undefined'
+			? localStorage.getItem('celestial-library-active-tab') ?? null
+			: null
+	const preselectedLibraryPath = ref<string | null>(persistedTab)
+	const lastSelectedLibraryPath = ref<string | null>(persistedTab)
+
 	provide('showCreationModal', () => {
-		preselectionKey.value++
-		installationModal.value?.show(lastSelectedLibraryPath.value)
+		// Re-read persisted tab each time so it stays in sync
+		const currentTab =
+			typeof window !== 'undefined'
+				? localStorage.getItem('celestial-library-active-tab') ?? null
+				: null
+		lastSelectedLibraryPath.value = currentTab
+		preselectedLibraryPath.value = currentTab
+		installationModal.value?.show(currentTab)
 	})
 
 	function setModpackAlreadyInstalledModal(
@@ -83,9 +90,6 @@ export function setupCreationModal(
 		return instances?.map((i) => i.name) ?? []
 	}
 
-	provide('showCreationModal', () => {
-		installationModal.value?.show()
-	})
 	provide('showImportModal', async () => {
 		await installationModal.value?.show()
 		installationModal.value?.ctx.setImportMode()

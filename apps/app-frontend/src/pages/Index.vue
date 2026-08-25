@@ -23,6 +23,7 @@ import { list } from '@/helpers/instance'
 import type { GameInstance } from '@/helpers/types'
 import { useRootBreadcrumb } from '@/providers/breadcrumbs'
 import { injectOnboardingChecklist } from '@/providers/onboarding-checklist'
+import NavButton from "@/components/ui/NavButton.vue";
 
 defineOptions({
 	name: 'LibraryPage',
@@ -214,24 +215,6 @@ function handlePageOption({ option }: { option: string }) {
 		class="flex flex-col gap-3 p-6"
 		@contextmenu="openPageContextMenu"
 	>
-		<!-- Multi-library tabs + Add library button -->
-		<div class="flex items-center gap-4">
-			<NavTabs
-				mode="local"
-				:links="tabLinks"
-				:active-index="activeTabIndex"
-				@tab-click="handleTabClick"
-			/>
-			<button
-				v-tooltip.right="'添加库'"
-				:aria-label="'添加库'"
-				class="btn btn-brand rounded-full w-8 h-8 p-0 flex items-center justify-center transition-all hover:scale-105"
-				@click="addLibraryModalRef?.show()"
-			>
-				<PlusIcon class="size-4" />
-			</button>
-		</div>
-
 		<!-- Add Library Modal -->
 		<Modal
 			ref="addLibraryModalRef"
@@ -294,6 +277,21 @@ function handlePageOption({ option }: { option: string }) {
 			v-if="recentInstances?.length > 0 && appSettings.getFeatureFlag('worlds_in_home')"
 			:recent-instances="recentInstances"
 		/>
+
+        <!-- 库navtabs -->
+        <div class="flex items-center gap-4">
+            <NavTabs
+                mode="local"
+                :links="tabLinks"
+                :active-index="activeTabIndex"
+                @tab-click="handleTabClick"
+            />
+            <NavButton
+                :to="() => addLibraryModalRef?.show()"
+            >
+                <PlusIcon />
+            </NavButton>
+        </div>
 
 		<!-- Library Section -->
 		<LibrarySection :instances="instances" :library-path="activeTab === 'all' ? undefined : activeTab" />

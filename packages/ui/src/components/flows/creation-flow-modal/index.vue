@@ -114,6 +114,16 @@ watch(() => props.preselectedLibraryPath, (value) => {
 })
 
 async function show() {
+	// Sync the freshest props into ctx BEFORE reset so both the library list
+	// and preselected path are always up-to-date on each open.
+	ctx.availableLibraries.value = props.availableLibraries ?? []
+	// Fall back to localStorage when the caller didn't pass preselectedLibraryPath
+	const preselected =
+		props.preselectedLibraryPath ??
+		(typeof window !== 'undefined'
+			? localStorage.getItem('celestial-library-active-tab') ?? null
+			: null)
+	ctx.selectedLibraryPath.value = preselected
 	await ctx.reset()
 	void ctx.prefetchLoaderMetadata()
 	modal.value?.setStage(0)

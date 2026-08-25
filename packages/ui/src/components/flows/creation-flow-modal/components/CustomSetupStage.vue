@@ -90,7 +90,7 @@
 		</div>
 
 		<!-- Library selector (instance flow only) -->
-		<div v-if="ctx.flowType === 'instance' && ctx.availableLibraries.length > 0" class="flex flex-col gap-2">
+		<div v-if="ctx.flowType === 'instance' && ctx.availableLibraries.value.length > 0" class="flex flex-col gap-2">
 			<span class="font-semibold text-contrast">{{ formatMessage(messages.libraryLabel) }}</span>
 			<Combobox
 				v-model="selectedLibraryPath"
@@ -396,7 +396,7 @@ onMounted(() => {
 const tags = injectTags()
 
 const libraryOptions = computed(() =>
-	ctx.availableLibraries.map((lib) => {
+	ctx.availableLibraries.value.map((lib) => {
 		const fallbackLabel = lib.name || lib.path.split(/[\\/]/).pop() || lib.path
 		if (ctx.defaultLibraryPath) {
 			const normDefault = ctx.defaultLibraryPath

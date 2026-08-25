@@ -160,7 +160,7 @@ export interface CreationFlowContextValue {
 	// Initial values
 	initialLoader: string | null
 	initialGameVersion: string | null
-	availableLibraries: Array<{ path: string; name: string }>
+	availableLibraries: Ref<Array<{ path: string; name: string }>>
 	defaultLibraryPath: string | null
 
 	// State
@@ -301,7 +301,7 @@ export function createCreationFlowContext(
 	const isInitialSetup = options.isInitialSetup ?? false
 	const initialLoader = options.initialLoader ?? null
 	const initialGameVersion = options.initialGameVersion ?? null
-	const availableLibraries = options.availableLibraries ?? []
+	const availableLibraries = ref(options.availableLibraries ?? [])
 	const defaultLibraryPath = options.defaultLibraryPath ?? null
 	const preselectedLibraryPath = options.preselectedLibraryPath ?? null
 	const onBack = options.onBack ?? null
