@@ -34,6 +34,10 @@ export async function library_set_active(path: string): Promise<void> {
 	return await invoke('plugin:instance|library_set_active', { path })
 }
 
+export async function library_update_name(path: string, name: string): Promise<void> {
+	return await invoke('plugin:instance|library_update_name', { path, name })
+}
+
 export async function library_default_path(): Promise<string> {
 	return await invoke('plugin:instance|library_default_path')
 }

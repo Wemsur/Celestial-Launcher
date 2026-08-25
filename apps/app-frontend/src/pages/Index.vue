@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BoxIcon, FolderSearchIcon, PlayIcon, PlusIcon } from '@modrinth/assets'
+import { BoxIcon, CogIcon, FolderSearchIcon, PlayIcon, PlusIcon } from '@modrinth/assets'
 import {
 	Button, defineMessages, injectNotificationManager,
 	NavTabs, NewModal as Modal,
@@ -18,7 +18,7 @@ import RecentWorldsList from '@/components/ui/world/RecentWorldsList.vue'
 import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
 import type { InstanceFormat, LibraryInfo } from '@/helpers/library'
-import { library_add, library_list, library_default_path, library_set_active } from '@/helpers/library'
+import { library_add, library_list, library_default_path, library_set_active, library_update_name, library_remove } from '@/helpers/library'
 import { list } from '@/helpers/instance'
 import type { GameInstance } from '@/helpers/types'
 import { useRootBreadcrumb } from '@/providers/breadcrumbs'
@@ -186,6 +186,55 @@ function closeAddLibraryModal() {
 	addLibraryModalRef.value?.hide()
 }
 
+// ── Library settings modal ─────────────────────────────────────────────────
+
+const librarySettingsModalRef = ref<InstanceType<typeof Modal> | null>(null)
+const librarySettingsName = ref('')
+const librarySettingsPath = ref('')
+const librarySettingsRenameError = ref('')
+
+function openLibrarySettings(path: string) {
+	const lib = libraries.value.find((l) => l.path === path)
+	if (!lib) return
+	librarySettingsPath.value = path
+	librarySettingsName.value = lib.name
+	librarySettingsRenameError.value = ''
+	librarySettingsModalRef.value?.show()
+}
+
+function closeLibrarySettingsModal() {
+	librarySettingsModalRef.value?.hide()
+}
+
+async function saveLibraryName() {
+	if (!librarySettingsPath.value.trim() || !librarySettingsName.value.trim()) return
+	try {
+		await library_update_name(librarySettingsPath.value, librarySettingsName.value)
+		closeLibrarySettingsModal()
+		await loadLibraries()
+	} catch (e) {
+		librarySettingsRenameError.value = e instanceof Error ? e.message : String(e)
+	}
+}
+
+async function removeLibrary() {
+	const path = librarySettingsPath.value
+	if (!path) return
+	// Switch to "all" before removing so activeTab doesn't point to a deleted library
+	if (activeTab.value === path) {
+		activeTab.value = 'all'
+		library_set_active('').catch(() => {})
+	}
+	try {
+		await library_remove(path)
+		closeLibrarySettingsModal()
+		await loadLibraries()
+		fetchInstances('all')
+	} catch (e) {
+		handleError(e instanceof Error ? e : new Error(String(e)))
+	}
+}
+
 // ── Context menu ─────────────────────────────────────────────────────────────
 
 function openPageContextMenu(event: MouseEvent) {
@@ -272,7 +321,42 @@ function handlePageOption({ option }: { option: string }) {
 			</div>
 		</Modal>
 
-		<!-- World list (top of page, above library) -->
+		<!-- Library settings modal -->
+		<Modal
+			ref="librarySettingsModalRef"
+			header="库设置"
+			:closable="false"
+			noblur
+		>
+			<div class="flex flex-col gap-4 w-[480px]">
+				<div class="flex flex-col gap-1">
+					<span class="text-sm font-medium text-primary">库名称</span>
+					<StyledInput
+						v-model="librarySettingsName"
+						type="text"
+						wrapper-class="w-full"
+						placeholder="留空则使用文件夹名"
+					/>
+					<span v-if="librarySettingsRenameError" class="text-sm text-danger">{{ librarySettingsRenameError }}</span>
+				</div>
+				<div class="flex flex-col gap-1">
+					<span class="text-sm font-medium text-primary">库路径</span>
+					<StyledInput
+						:value="librarySettingsPath"
+						type="text"
+						wrapper-class="w-full"
+						disabled
+					/>
+				</div>
+				<div class="flex justify-end gap-2 pt-2">
+					<Button type="outlined" @click="closeLibrarySettingsModal">取消</Button>
+					<Button type="colored" color="brand" :disabled="!librarySettingsName.trim()" @click="saveLibraryName">保存</Button>
+				</div>
+				<div class="pt-4 border-t border-border">
+					<Button color="danger" @click="removeLibrary">删除库</Button>
+				</div>
+			</div>
+		</Modal>
 		<RecentWorldsList
 			v-if="recentInstances?.length > 0 && appSettings.getFeatureFlag('worlds_in_home')"
 			:recent-instances="recentInstances"
@@ -290,6 +374,12 @@ function handlePageOption({ option }: { option: string }) {
                 :to="() => addLibraryModalRef?.show()"
             >
                 <PlusIcon />
+            </NavButton>
+            <NavButton
+                v-if="activeTab !== 'all'"
+                :to="() => openLibrarySettings(activeTab)"
+            >
+                <CogIcon />
             </NavButton>
         </div>
 
