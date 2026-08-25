@@ -289,7 +289,7 @@ body.custom-bg-active:not(.custom-bgblur) .custom-user-bg-img {
 	transition-duration: 0.1s;
 }
 
-body.custom-bg-active.custom-bgblur .grid.card-shadow.rounded-xl {
+/*body.custom-bg-active.custom-bgblur .grid.card-shadow.rounded-xl {
 	background-color: color-mix(in srgb, var(--surface-3) 30%, transparent);
 	backdrop-filter: blur(10px) !important;
 	border: 1px solid color-mix(in srgb, var(--color-text-primary) 4%, transparent);
@@ -420,10 +420,34 @@ body.custom-bg-active:not(.custom-bgblur) .notification-toast {
 	border: 1px solid color-mix(in srgb, var(--color-text-primary) 20%, transparent);
 }
 
-/*body.custom-bg-active .v-popper--has-tooltip {
+!*body.custom-bg-active .v-popper--has-tooltip {
 	opacity: 0.8 !important;
-}*/
+}*!
 
 .router-link-active.router-link-exact-active.shrink-0.whitespace-nowrap.text-primary {
 	background: none;
+}*/
+
+body.custom-bg-active .bg-surface-2 {
+	background-color: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+body.custom-bg-active .bg-bg-raised {
+	background-color: color-mix(in srgb, var(--surface-3) 70%, transparent);
+}
+
+body.custom-bg-active .bg-surface-3 {
+	background-color: color-mix(in srgb, var(--surface-3) 70%, transparent);
+}
+
+body.custom-bg-active .bg-surface-4 {
+	background-color: color-mix(in srgb, var(--surface-4) 70%, transparent);
+}
+
+body.custom-bg-active .bg-surface-5 {
+	background-color: color-mix(in srgb, var(--surface-5) 70%, transparent);
+}
+
+body.custom-bg-active .combobox-options-scrollbar {
+	opacity: 0.6 !important;
 }
