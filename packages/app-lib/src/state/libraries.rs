@@ -441,6 +441,10 @@ pub async fn list_instances_from_json(
                     instances.push(instance);
                 }
                 InstanceFormat::Minecraft => {
+                    let dir_name = dir
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .map(|s| s.to_string());
                     let instance_json = match InstanceJson::read_from_dir(&dir) {
                         Ok(v) => v,
                         Err(e) => {
@@ -453,13 +457,16 @@ pub async fn list_instances_from_json(
                         }
                     };
                     if let Some(instance_json) = instance_json {
-                        let instance = instance_json.to_instance_with_format(
+                        let mut instance = instance_json.to_instance_with_format(
                             dir.to_string_lossy().as_ref(),
                             library.format.clone(),
                         );
+                        // .minecraft: name is always the directory name
+                        instance.name = dir_name.clone().unwrap_or_default();
                         instances.push(instance);
                     } else {
-                        // No sidecar — try celestial.json first, then fall back to dir name.
+                        // No sidecar — read other settings from celestial.json,
+                        // but name always comes from the directory.
                         let id = instance_id_from_path(dir.to_string_lossy().as_ref());
                         let celestial = match CelestialJson::read_from_dir(&dir) {
                             Ok(v) => v,
@@ -472,15 +479,6 @@ pub async fn list_instances_from_json(
                                 None
                             }
                         };
-                        let name = celestial
-                            .as_ref()
-                            .and_then(|c| c.name.clone())
-                            .or_else(|| {
-                                dir.file_name()
-                                    .and_then(|n| n.to_str())
-                                    .map(|s| s.to_string())
-                            })
-                            .unwrap_or_default();
                         instances.push(Instance {
                             id,
                             path: dir.to_string_lossy().to_string(),
@@ -492,7 +490,7 @@ pub async fn list_instances_from_json(
                                 .as_ref()
                                 .map(|c| c.update_channel.clone())
                                 .unwrap_or_default(),
-                            name,
+                            name: dir_name.clone().unwrap_or_default(),
                             icon_path: celestial.as_ref().and_then(|c| c.icon_path.clone()),
                             created: Utc::now(),
                             modified: Utc::now(),

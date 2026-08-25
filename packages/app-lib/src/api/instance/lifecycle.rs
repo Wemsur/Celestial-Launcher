@@ -311,19 +311,11 @@ pub async fn rename(
             crate::state::libraries::rename_minecraft_instance(&dir, &new_name)?;
         tracing::info!("rename: rename_minecraft_instance returned {:?}", new_dir);
 
-        // Update the celestial.json (or create one if missing) name field
-        tracing::info!("rename: reading celestial.json from {:?}", new_dir);
+        // Read celestial.json only for settings (icon, last_played, etc.);
+        // name is never stored there — it comes from the directory name.
         let celestial =
             crate::state::libraries::CelestialJson::read_from_dir(&new_dir)?
                 .unwrap_or_default();
-        let mut updated_celestial = celestial.clone();
-        updated_celestial.name = Some(new_name.clone());
-        tracing::info!("rename: writing updated celestial.json");
-        updated_celestial.write_to_dir(&new_dir)?;
-        tracing::info!("rename: celestial.json written successfully");
-
-        // Return fresh metadata — the scan will pick up the new path from
-        // the sidecar name, and the path itself must be refreshed.
         let id =
             crate::state::libraries::instance_id_from_path(
                 new_dir.to_string_lossy().as_ref(),
@@ -335,14 +327,18 @@ pub async fn rename(
             install_stage: crate::state::InstanceInstallStage::Installed,
             launcher_feature_version:
                 crate::state::LauncherFeatureVersion::MOST_RECENT,
-            update_channel: updated_celestial.update_channel,
-            name: new_name,
-            icon_path: updated_celestial.icon_path.clone(),
+            update_channel: celestial.update_channel,
+            name: new_dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.to_string())
+                .unwrap_or(new_name.clone()),
+            icon_path: celestial.icon_path.clone(),
             created: inst.created,
             modified: chrono::Utc::now(),
-            last_played: updated_celestial.last_played,
-            submitted_time_played: updated_celestial.submitted_time_played,
-            recent_time_played: updated_celestial.recent_time_played,
+            last_played: celestial.last_played,
+            submitted_time_played: celestial.submitted_time_played,
+            recent_time_played: celestial.recent_time_played,
             library_format: crate::state::libraries::InstanceFormat::Minecraft,
         };
         emit_instance(instance_id, InstancePayloadType::Edited).await?;
