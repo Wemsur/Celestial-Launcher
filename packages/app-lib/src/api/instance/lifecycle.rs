@@ -18,6 +18,7 @@ pub(crate) async fn create(
     icon_config: Option<InstanceIconConfig>,
     link: InstanceLink,
     library_path: Option<String>,
+    instance_format: Option<String>,
 ) -> crate::Result<InstanceMetadata> {
     let state = State::get().await?;
     if let Some(icon_config) = &icon_config {
@@ -34,6 +35,7 @@ pub(crate) async fn create(
             icon_config,
             link,
             library_path,
+            instance_format,
         },
         &state,
     )

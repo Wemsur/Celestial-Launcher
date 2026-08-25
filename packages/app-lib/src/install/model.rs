@@ -167,6 +167,9 @@ pub enum InstallRequest {
         link: InstanceLink,
         #[serde(default)]
         library_path: Option<String>,
+        /// Explicit library format ('modrinth' | 'minecraft'), overrides path-based detection.
+        #[serde(default)]
+        instance_format: Option<String>,
     },
     CreateModpackInstance {
         location: CreatePackLocation,

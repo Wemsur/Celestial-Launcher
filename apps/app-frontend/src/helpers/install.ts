@@ -59,6 +59,7 @@ export interface InstallCreateInstanceRequest {
 	iconConfig?: InstanceIconConfig | null
 	link?: InstanceLink | null
 	libraryPath?: string | null
+	instanceFormat?: 'modrinth' | 'minecraft' | null
 }
 
 export interface InstallPostInstallEdit {

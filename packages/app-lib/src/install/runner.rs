@@ -41,6 +41,7 @@ pub async fn create_instance(
     icon_config: Option<InstanceIconConfig>,
     link: InstanceLink,
     library_path: Option<String>,
+    instance_format: Option<String>,
 ) -> crate::Result<InstallJobSnapshot> {
     start(InstallRequest::CreateInstance {
         name,
@@ -51,6 +52,7 @@ pub async fn create_instance(
         icon_config,
         link,
         library_path,
+        instance_format,
     })
     .await
 }
@@ -521,6 +523,7 @@ async fn prepare_initial_instance(
             icon_config,
             link,
             library_path,
+            instance_format,
         } => {
             let metadata = crate::api::instance::create(
                 name,
@@ -531,6 +534,7 @@ async fn prepare_initial_instance(
                 icon_config,
                 link,
                 library_path,
+                instance_format,
             )
             .await?;
             set_display(
@@ -579,6 +583,7 @@ async fn prepare_initial_instance(
                 None,
                 link,
                 None,
+                None,
             )
             .await?;
             set_display(
@@ -626,6 +631,7 @@ async fn prepare_initial_instance(
                 None,
                 shared_link,
                 None,
+                None,
             )
             .await?;
             set_display(
@@ -649,6 +655,7 @@ async fn prepare_initial_instance(
                 None,
                 None,
                 InstanceLink::Unmanaged,
+                None,
                 None,
             )
             .await?;
@@ -696,6 +703,7 @@ async fn prepare_initial_instance(
                 None,
                 metadata.link.clone(),
                 target_library_path,
+                None,
             )
             .await?;
             set_display(
@@ -945,6 +953,7 @@ async fn run_request(
             icon_config: _,
             link: _,
             library_path: _,
+            instance_format: _,
         } => {
             let Some(instance_id) = current_instance_id(job_state) else {
                 return Err(crate::ErrorKind::InputError(

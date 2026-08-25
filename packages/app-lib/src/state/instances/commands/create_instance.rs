@@ -27,6 +27,10 @@ pub struct CreateInstance {
     pub icon_config: Option<InstanceIconConfig>,
     pub link: InstanceLink,
     pub library_path: Option<String>,
+    /// Explicit format from the frontend (overrides path-based detection).
+    /// Accepts "modrinth", "minecraft", or null/missing (falls back to from_path).
+    #[serde(default)]
+    pub instance_format: Option<String>,
 }
 
 pub(crate) async fn create_instance(
@@ -36,7 +40,7 @@ pub(crate) async fn create_instance(
     trace!("Creating new instance. {}", input.name);
 
     let (path, full_path) =
-        resolve_instance_path(&input.name, input.path.as_deref(), input.library_path.as_deref())
+        resolve_instance_path(&input.name, input.path.as_deref(), input.library_path.as_deref(), input.instance_format.as_deref())
             .await?;
     io::create_dir_all(&full_path).await?;
 
@@ -59,10 +63,15 @@ pub(crate) async fn create_instance(
         let now = Utc::now();
         let abs_path_str = full_path.to_string_lossy().to_string();
         let instance_id = libraries::instance_id_from_path(&abs_path_str);
-        let library_format =
-            libraries::InstanceFormat::from_path(
-                input.library_path.as_deref().unwrap_or(""),
-            );
+        let library_format = input
+            .instance_format
+            .as_ref()
+            .map(|s| libraries::InstanceFormat::from(s.as_str()))
+            .unwrap_or_else(|| {
+                libraries::InstanceFormat::from_path(
+                    input.library_path.as_deref().unwrap_or(""),
+                )
+            });
 
         let instance = Instance {
             id: instance_id.clone(),
@@ -251,6 +260,7 @@ async fn resolve_instance_path(
     name: &str,
     path: Option<&str>,
     library_path: Option<&str>,
+    instance_format: Option<&str>,
 ) -> crate::Result<(String, std::path::PathBuf)> {
     let base_path = path
         .map(ToOwned::to_owned)
@@ -258,7 +268,9 @@ async fn resolve_instance_path(
     let mut path = base_path.clone();
     let state = State::get().await?;
     let library_format = if let Some(lib) = library_path {
-        libraries::InstanceFormat::from_path(lib)
+        instance_format
+            .map(libraries::InstanceFormat::from)
+            .unwrap_or_else(|| libraries::InstanceFormat::from_path(lib))
     } else {
         libraries::InstanceFormat::default()
     };

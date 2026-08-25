@@ -45,12 +45,19 @@ export function setupCreationModal(
 	// Load available libraries for the creation modal
 	const availableLibraries = ref<Array<{ path: string; name: string }>>([])
 	const defaultLibraryPath = ref<string | null>(null)
+	// Map of library path → format string ('modrinth' | 'minecraft')
+	const libraryFormatMap = ref<Map<string, string>>(new Map())
 
 	async function refreshLibraries() {
 		try {
 			const config = await library_list()
 			availableLibraries.value = config.libraries
 			defaultLibraryPath.value = await library_default_path().catch(() => null)
+			const fmtMap = new Map<string, string>()
+			for (const lib of config.libraries) {
+				fmtMap.set(lib.path, lib.type.toLowerCase())
+			}
+			libraryFormatMap.value = fmtMap
 		} catch {
 			// ignore
 		}
@@ -219,6 +226,9 @@ export function setupCreationModal(
 				iconPath,
 				iconConfig: iconPath ? getGeneratedIconConfig?.(iconPath) : null,
                 libraryPath: config.selectedLibraryPath.value,
+                instanceFormat: config.selectedLibraryPath.value
+					? libraryFormatMap.value.get(config.selectedLibraryPath.value) ?? null
+					: null,
 			})
 			await navigateToCreatedInstance(job)
 
