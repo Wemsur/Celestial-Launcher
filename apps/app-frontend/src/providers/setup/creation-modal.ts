@@ -3,13 +3,15 @@ import type {
 	CreationFlowContextValue,
 	CreationFlowModal,
 } from '@modrinth/ui'
-import { provide, ref, useTemplateRef, watchEffect } from 'vue'
+import { provide, ref, useTemplateRef, watch } from 'vue'
 import type { ComponentExposed } from 'vue-component-type-helpers'
 import { useRouter } from 'vue-router'
 
 import type UnknownPackWarningModal from '@/components/ui/install_flow/UnknownPackWarningModal.vue'
 import type ModpackAlreadyInstalledModal from '@/components/ui/modal/ModpackAlreadyInstalledModal.vue'
+import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
+import type { AppEvents } from '../app-events'
 import { trackEvent } from '@/helpers/analytics'
 import { get_search_results } from '@/helpers/cache.js'
 import { import_instance } from '@/helpers/import.js'
@@ -28,6 +30,7 @@ import type { InstanceIconConfig, InstanceLoader } from '@/helpers/types'
 export function setupCreationModal(
 	notificationManager: AbstractWebNotificationManager,
 	getGeneratedIconConfig?: (iconPath: string) => InstanceIconConfig | null,
+	appEvents?: AppEvents,
 ) {
 	const { handleError } = notificationManager
 	const router = useRouter()
@@ -42,20 +45,31 @@ export function setupCreationModal(
 	// Load available libraries for the creation modal
 	const availableLibraries = ref<Array<{ path: string; name: string }>>([])
 	const defaultLibraryPath = ref<string | null>(null)
-	watchEffect(async () => {
+	const preselectedLibraryPath = ref<string | null>(null)
+	const lastSelectedLibraryPath = ref<string | null>(null)
+
+	async function refreshLibraries() {
 		try {
 			const config = await library_list()
 			availableLibraries.value = config.libraries
+			defaultLibraryPath.value = await library_default_path().catch(() => null)
 		} catch {
 			// ignore
 		}
+	}
+	refreshLibraries().catch(() => {})
+	useAppEvent('library_changed', refreshLibraries, appEvents)
+
+	// Track the preselected library set by App.vue based on active tab
+	watch(preselectedLibraryPath, (value) => {
+		lastSelectedLibraryPath.value = value
 	})
-	watchEffect(async () => {
-		try {
-			defaultLibraryPath.value = await library_default_path()
-		} catch {
-			// ignore
-		}
+
+	// ── showCreationModal with preselection ────────────────────────────────
+	const preselectionKey = ref(0)
+	provide('showCreationModal', () => {
+		preselectionKey.value++
+		installationModal.value?.show(lastSelectedLibraryPath.value)
 	})
 
 	function setModpackAlreadyInstalledModal(
@@ -265,5 +279,6 @@ export function setupCreationModal(
 		handleModpackDuplicateGoToInstance,
 		availableLibraries,
 		defaultLibraryPath,
+		preselectedLibraryPath,
 	}
 }

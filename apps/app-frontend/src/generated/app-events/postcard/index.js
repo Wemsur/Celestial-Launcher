@@ -90,6 +90,10 @@ function deserialize_APP_EVENT(d) {
             tag: "ads_consent_required",
             value: d.deserialize_bool()
         };
+    case 13:
+        return {
+            tag: "library_changed"
+        };
     default:
         throw "variant not implemented"
     }

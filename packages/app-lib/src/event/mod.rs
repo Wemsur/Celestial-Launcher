@@ -126,6 +126,7 @@ pub enum AppEvent {
     ),
     Log(LogPayload),
     AdsConsentRequired(bool),
+    LibraryChanged,
 }
 
 #[cfg(feature = "export-ts")]

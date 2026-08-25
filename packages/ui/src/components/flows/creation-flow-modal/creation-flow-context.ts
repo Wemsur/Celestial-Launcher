@@ -264,6 +264,7 @@ export interface CreationFlowOptions {
 	initialGameVersion?: string
 	availableLibraries?: Array<{ path: string; name: string }>
 	defaultLibraryPath?: string | null
+	preselectedLibraryPath?: string | null
 	fetchExistingInstanceNames?: () => Promise<string[]>
 	onBack?: () => void
 	searchProjects?: (query: string, limit?: number) => Promise<ProjectSearchResult>
@@ -302,6 +303,7 @@ export function createCreationFlowContext(
 	const initialGameVersion = options.initialGameVersion ?? null
 	const availableLibraries = options.availableLibraries ?? []
 	const defaultLibraryPath = options.defaultLibraryPath ?? null
+	const preselectedLibraryPath = options.preselectedLibraryPath ?? null
 	const onBack = options.onBack ?? null
 	const randomizeInstanceIcon = options.randomizeInstanceIcon ?? null
 	const customizeInstanceIcon = options.customizeInstanceIcon ?? null
@@ -499,7 +501,7 @@ export function createCreationFlowContext(
 
 		selectedLoader.value = null
 		selectedGameVersion.value = null
-		selectedLibraryPath.value = null
+		selectedLibraryPath.value = preselectedLibraryPath
 		loaderVersionType.value = 'stable'
 		selectedLoaderVersion.value = null
 		showSnapshots.value = false

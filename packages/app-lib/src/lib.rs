@@ -23,9 +23,11 @@ pub use error::*;
 #[cfg(feature = "export-ts")]
 pub use event::export_app_event_bindings;
 pub use event::{
-    AppEvent, EventState, LoadingBar, LoadingBarType, emit::emit_loading,
-    emit::init_loading,
+    AppEvent, EventState, LoadingBar, LoadingBarType,
+    emit::{emit_loading, init_loading},
 };
+#[cfg(feature = "tauri")]
+pub use event::emit::emit_library_changed;
 pub use logger::start_logger;
 pub use state::State;
 pub use state::libraries;

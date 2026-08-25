@@ -1089,6 +1089,7 @@ pub async fn library_add(
         });
     }
     theseus::libraries::save_libraries_config(&state, &config).await?;
+    theseus::emit_library_changed().await?;
     Ok(())
 }
 
@@ -1101,6 +1102,7 @@ pub async fn library_remove(path: String) -> Result<()> {
         config.active_library_path = None;
     }
     theseus::libraries::save_libraries_config(&state, &config).await?;
+    theseus::emit_library_changed().await?;
     Ok(())
 }
 
@@ -1115,6 +1117,7 @@ pub async fn library_set_active(path: String) -> Result<()> {
         config.active_library_path = None;
     }
     theseus::libraries::save_libraries_config(&state, &config).await?;
+    theseus::emit_library_changed().await?;
     Ok(())
 }
 

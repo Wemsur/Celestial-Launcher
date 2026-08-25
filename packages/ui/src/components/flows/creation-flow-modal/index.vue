@@ -10,7 +10,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, useTemplateRef } from 'vue'
+import { computed, useTemplateRef, watch } from 'vue'
 import type { ComponentExposed } from 'vue-component-type-helpers'
 
 import MultiStageModal from '../../base/MultiStageModal.vue'
@@ -51,6 +51,7 @@ const props = withDefaults(
 		finishDisabledTooltip?: string
 		availableLibraries?: Array<{ path: string; name: string }>
 		defaultLibraryPath?: string | null
+		preselectedLibraryPath?: string | null
 	}>(),
 	{
 		type: 'world',
@@ -101,9 +102,16 @@ const ctx = createCreationFlowContext(
 		finishDisabledTooltip: computed(() => props.finishDisabledTooltip),
 		availableLibraries: props.availableLibraries ?? [],
 		defaultLibraryPath: props.defaultLibraryPath,
+		preselectedLibraryPath: props.preselectedLibraryPath ?? null,
 	},
 )
 provideCreationFlowContext(ctx)
+
+// When preselectedLibraryPath changes, update selectedLibraryPath immediately
+// so it's correct both while the modal is open and on next show()
+watch(() => props.preselectedLibraryPath, (value) => {
+	ctx.selectedLibraryPath.value = value ?? null
+})
 
 async function show() {
 	await ctx.reset()

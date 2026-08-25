@@ -374,3 +374,10 @@ where
         })
         .await
 }
+
+#[cfg(feature = "tauri")]
+pub async fn emit_library_changed() -> crate::Result<()> {
+    let event_state = crate::EventState::get();
+    event_state.send(AppEvent::LibraryChanged)?;
+    Ok(())
+}
