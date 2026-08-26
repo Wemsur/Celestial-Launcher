@@ -403,12 +403,32 @@ pub(crate) fn instance_id_from_path(path: &str) -> String {
 }
 
 /// Returns the default Modrinth library path (`<home>/Minecraft/Modrinth/profiles`).
+///
+/// This mirrors the default app data directory shown in settings
+/// (`<home>/Minecraft/Modrinth`) with the `profiles` subfolder appended.
 pub fn default_library_path() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_default()
         .join("Minecraft")
         .join("Modrinth")
         .join("profiles")
+}
+
+/// Build the initial `libraries.json` contents for a fresh install: a single
+/// "默认库" Modrinth library rooted at [`default_library_path`], marked as
+/// migrated and at the current schema version so no further backfills run.
+fn default_libraries_config() -> LibrariesConfig {
+    let path = default_library_path().to_string_lossy().to_string();
+    LibrariesConfig {
+        libraries: vec![LibraryInfo {
+            name: "默认库".to_string(),
+            path: path.clone(),
+            format: InstanceFormat::Modrinth,
+        }],
+        migrated: true,
+        schema_version: LIBRARIES_SCHEMA_VERSION,
+        active_library_path: Some(path),
+    }
 }
 
 pub async fn get_libraries_config(state: &State) -> crate::Result<LibrariesConfig> {
@@ -726,6 +746,12 @@ pub(crate) async fn ensure_migration_done(state: &State) -> crate::Result<()> {
     if !config.migrated {
         migrate_instances_from_db(state).await?;
         config = get_libraries_config(state).await?;
+    }
+    // Fresh install (or an emptied config): seed a single default Modrinth
+    // library so the app always has a usable library to work with.
+    if config.libraries.is_empty() {
+        config = default_libraries_config();
+        save_libraries_config(state, &config).await?;
     }
     // Restore saved active tab after migration
     if let Some(active) = saved_active {

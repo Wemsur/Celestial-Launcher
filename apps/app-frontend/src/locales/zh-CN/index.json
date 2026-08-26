@@ -1812,10 +1812,10 @@
     "message": "登录 Minecraft"
   },
   "minecraft-required.description": {
-    "message": "你需要先登录拥有 Minecraft 的 Microsoft 账户，然后才能启动游戏。"
+    "message": "你需要先登录或创建minecraft账户，然后才能启动游戏。"
   },
   "minecraft-required.description-header": {
-    "message": "请登录 Microsoft 账户"
+    "message": "请登录minecraft账户"
   },
   "minecraft-required.dont-have-account": {
     "message": "没有账户？"
@@ -1827,10 +1827,10 @@
     "message": "获取支持"
   },
   "minecraft-required.header": {
-    "message": "需要 Minecraft"
+    "message": "需要 Minecraft 账户"
   },
   "minecraft-required.sign-in": {
-    "message": "登录 Microsoft 账户"
+    "message": "微软登录"
   },
   "modal.modrinth-account-required.browser-description": {
     "message": "一个新的标签页已打开，你需要在那里完成登录，然后回到 Celetial Launcher。"
