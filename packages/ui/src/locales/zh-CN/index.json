@@ -6269,34 +6269,781 @@
   "": {
     "defaultMessage": ""
   },
-  "": {
-    "defaultMessage": ""
-  },
-  "": {
-    "defaultMessage": ""
-  },
-  "": {
-    "defaultMessage": ""
-  },
-  "": {
-    "defaultMessage": ""
-  },
-  "": {
-    "defaultMessage": ""
-  },
-  "": {
-    "defaultMessage": ""
-  },
-  "": {
-    "defaultMessage": ""
-  },
-  "": {
-    "defaultMessage": ""
-  },
-  "": {
-    "defaultMessage": ""
-  },
   "settings.display.sidebar.advanced-rendering.title": {
     "defaultMessage": "高级渲染"
+  },
+  "app.library.context-menu.create-instance": {
+    "defaultMessage": "新建实例"
+  },
+  "app.library.instance.action.play": {
+    "defaultMessage": "启动"
+  },
+  "app.library.instance.action.stop": {
+    "defaultMessage": "停止"
+  },
+  "app.library.instance.action.add-content": {
+    "defaultMessage": "添加内容"
+  },
+  "app.library.instance.action.view-instance": {
+    "defaultMessage": "查看实例"
+  },
+  "app.library.instance.action.duplicate": {
+    "defaultMessage": "复制实例"
+  },
+  "app.library.instance.action.open-folder": {
+    "defaultMessage": "打开文件夹"
+  },
+  "app.library.instance.action.copy-path": {
+    "defaultMessage": "复制路径"
+  },
+  "app.library.instance.action.add-to-favorites": {
+    "defaultMessage": "添加到收藏"
+  },
+  "app.library.instance.action.remove-from-favorites": {
+    "defaultMessage": "从收藏中移除"
+  },
+  "app.library.instance.action.remove-from-group": {
+    "defaultMessage": "从分组中移除"
+  },
+  "app.library.instance.action.delete": {
+    "defaultMessage": "删除"
+  },
+  "app.library.instance.play": {
+    "defaultMessage": "启动"
+  },
+  "app.library.instance.stop": {
+    "defaultMessage": "停止"
+  },
+  "app.library.instance.repair": {
+    "defaultMessage": "修复"
+  },
+  "app.library.instance.installing": {
+    "defaultMessage": "正在安装…"
+  },
+  "app.library.instance.loading": {
+    "defaultMessage": "实例正在加载…"
+  },
+  "app.library.instance.select": {
+    "defaultMessage": "选择实例"
+  },
+  "app.library.instance.deselect": {
+    "defaultMessage": "取消选择实例"
+  },
+  "app.library.instance.select-with-name": {
+    "defaultMessage": "选择 {name}"
+  },
+  "app.library.instance.deselect-with-name": {
+    "defaultMessage": "取消选择 {name}"
+  },
+  "app.library.instance.open-with-name": {
+    "defaultMessage": "打开 {name}"
+  },
+  "app.library.search.no-results.title": {
+    "defaultMessage": "没有实例符合你的搜索。"
+  },
+  "app.library.selection.aria-label": {
+    "defaultMessage": "已选择的实例"
+  },
+  "app.library.selection.selected-count": {
+    "defaultMessage": "已选择 {count} 个"
+  },
+  "app.library.selection.new-group": {
+    "defaultMessage": "新建分组"
+  },
+  "app.library.selection.remove-from-group": {
+    "defaultMessage": "从分组中移除"
+  },
+  "app.library.selection.deleting": {
+    "defaultMessage": "正在删除所选实例"
+  },
+  "app.library.group.context-menu.add-to-group": {
+    "defaultMessage": "添加到分组"
+  },
+  "app.library.group.create": {
+    "defaultMessage": "创建分组"
+  },
+  "app.library.group.create.cancel": {
+    "defaultMessage": "取消"
+  },
+  "app.library.group.delete": {
+    "defaultMessage": "删除分组"
+  },
+  "app.library.group.delete-description": {
+    "defaultMessage": "该分组中的实例将变为未分组。"
+  },
+  "app.library.group.edit-name": {
+    "defaultMessage": "编辑分组名称"
+  },
+  "app.library.group.move-up": {
+    "defaultMessage": "上移分组"
+  },
+  "app.library.group.move-down": {
+    "defaultMessage": "下移分组"
+  },
+  "app.library.group.name": {
+    "defaultMessage": "分组名称"
+  },
+  "app.library.group.name-placeholder": {
+    "defaultMessage": "输入分组名称"
+  },
+  "app.library.group.name-empty": {
+    "defaultMessage": "分组名称不能为空。"
+  },
+  "app.library.group.name-reserved": {
+    "defaultMessage": "“None”是保留名称，不能用作分组名称。"
+  },
+  "app.library.group.name-too-long": {
+    "defaultMessage": "分组名称不能超过 {maxLength} 个字符。"
+  },
+  "app.library.group.rename-failed": {
+    "defaultMessage": "无法重命名分组"
+  },
+  "app.library.group.search-instance": {
+    "defaultMessage": "搜索实例"
+  },
+  "app.library.group.no-instances-found": {
+    "defaultMessage": "未找到实例"
+  },
+  "app.library.group.instance.add": {
+    "defaultMessage": "添加"
+  },
+  "app.library.group.instance.added": {
+    "defaultMessage": "已添加"
+  },
+  "app.library.group.instances-modal.title": {
+    "defaultMessage": "将实例添加到“{groupName}”"
+  },
+  "app.library.group.instances-modal.search-placeholder": {
+    "defaultMessage": "搜索实例"
+  },
+  "app.library.group.instances-modal.no-instances-found": {
+    "defaultMessage": "未找到实例"
+  },
+  "app.library.group.instances-modal.add": {
+    "defaultMessage": "添加"
+  },
+  "app.library.group.instances-modal.added": {
+    "defaultMessage": "已添加"
+  },
+  "app.settings.tabs.appearance": {
+    "defaultMessage": "外观"
+  },
+  "app.settings.tabs.behavior": {
+    "defaultMessage": "行为"
+  },
+  "app.settings.tabs.default-instance-options": {
+    "defaultMessage": "默认游戏选项"
+  },
+  "app.settings.tabs.java-installations": {
+    "defaultMessage": "Java 安装"
+  },
+  "app.settings.tabs.language": {
+    "defaultMessage": "语言"
+  },
+  "app.settings.tabs.privacy": {
+    "defaultMessage": "隐私"
+  },
+  "app.settings.tabs.resource-management": {
+    "defaultMessage": "资源管理"
+  },
+  "app.settings.sidebar.label.instances": {
+    "defaultMessage": "实例"
+  },
+  "settings.sidebar.label.account": {
+    "defaultMessage": "账户"
+  },
+  "settings.sidebar.label.display": {
+    "defaultMessage": "显示"
+  },
+  "app.settings.app-version": {
+    "defaultMessage": "Celetial Launcher {version}"
+  },
+  "app.settings.downloading": {
+    "defaultMessage": "正在下载 v{version}"
+  },
+  "app.settings.developer-mode-button.label": {
+    "defaultMessage": "切换开发者模式"
+  },
+  "app.settings.developer-mode-enabled": {
+    "defaultMessage": "已启用开发者模式。"
+  },
+  "app.settings.operating-system.macos": {
+    "defaultMessage": "macOS"
+  },
+  "app.settings.java-installations.location.title": {
+    "defaultMessage": "Java {version, number} 路径"
+  },
+  "settings.form.group.optional": {
+    "defaultMessage": "（可选）"
+  },
+  "app.appearance-settings.background-image.title": {
+    "defaultMessage": "背景图片"
+  },
+  "app.appearance-settings.background-image.description": {
+    "defaultMessage": "自定义启动器的整体背景"
+  },
+  "app.appearance-settings.background-image.hint": {
+    "defaultMessage": "拖放图片或点击以自定义启动器背景。"
+  },
+  "app.appearance-settings.background-image.drop-active": {
+    "defaultMessage": "将图片拖放到此处…"
+  },
+  "app.appearance-settings.compact-mode.title": {
+    "defaultMessage": "紧凑模式"
+  },
+  "app.appearance-settings.compact-mode.description": {
+    "defaultMessage": "以紧凑的行布局显示版本库中的实例。"
+  },
+  "app.appearance-settings.show-play-time.title": {
+    "defaultMessage": "显示游玩时长"
+  },
+  "app.appearance-settings.show-play-time.description": {
+    "defaultMessage": "显示每个实例的游玩时长。"
+  },
+  "app.appearance-settings.hide-nametag.title": {
+    "defaultMessage": "隐藏名牌"
+  },
+  "app.appearance-settings.hide-nametag.description": {
+    "defaultMessage": "在皮肤选择页面隐藏角色预览上方的用户名。"
+  },
+  "app.appearance-settings.jump-back-into-worlds.title": {
+    "defaultMessage": "快速返回世界或实例"
+  },
+  "app.appearance-settings.jump-back-into-worlds.description": {
+    "defaultMessage": "在首页的“快速返回”区域显示最近游玩的世界或实例。"
+  },
+  "app.appearance-settings.minimize-launcher.title": {
+    "defaultMessage": "最小化启动器"
+  },
+  "app.appearance-settings.minimize-launcher.description": {
+    "defaultMessage": "Minecraft 启动时最小化启动器。"
+  },
+  "app.appearance-settings.native-decorations.title": {
+    "defaultMessage": "系统窗口边框"
+  },
+  "app.appearance-settings.native-decorations.description": {
+    "defaultMessage": "使用操作系统自带的标题栏和窗口控件。需要重启应用。"
+  },
+  "app.appearance-settings.toggle-sidebar.title": {
+    "defaultMessage": "隐藏右侧边栏"
+  },
+  "app.appearance-settings.toggle-sidebar.description": {
+    "defaultMessage": "默认隐藏右侧边栏，并添加一个显示或隐藏它的按钮。"
+  },
+  "app.appearance-settings.skip-non-essential-warnings.title": {
+    "defaultMessage": "跳过非必要警告"
+  },
+  "app.appearance-settings.skip-non-essential-warnings.description": {
+    "defaultMessage": "跳过低风险操作的确认，例如重复安装、常规内容删除、批量更新、取消关联和修复。危险操作的警告始终会显示。"
+  },
+  "app.appearance-settings.unknown-pack-warning.title": {
+    "defaultMessage": "安装未知整合包前提醒我"
+  },
+  "app.appearance-settings.unknown-pack-warning.description": {
+    "defaultMessage": "在安装并非托管于 Modrinth 的 Modrinth 整合包（.mrpack）前显示安全警告。"
+  },
+  "app.behavior-settings.confirmations.title": {
+    "defaultMessage": "确认提示"
+  },
+  "app.behavior-settings.content.title": {
+    "defaultMessage": "首页与内容"
+  },
+  "app.behavior-settings.startup-and-navigation.title": {
+    "defaultMessage": "启动与导航"
+  },
+  "app.settings.default-instance-options.memory-allocation.title": {
+    "defaultMessage": "内存分配"
+  },
+  "app.settings.default-instance-options.memory-allocation.description": {
+    "defaultMessage": "每个实例可用的最大内存。"
+  },
+  "app.settings.default-instance-options.java-arguments.title": {
+    "defaultMessage": "Java 参数"
+  },
+  "app.settings.default-instance-options.java-arguments.description": {
+    "defaultMessage": "启动实例时传递给 Java 的参数。"
+  },
+  "app.settings.default-instance-options.java-arguments.placeholder": {
+    "defaultMessage": "输入 Java 参数…"
+  },
+  "app.settings.default-instance-options.environment-variables.title": {
+    "defaultMessage": "环境变量"
+  },
+  "app.settings.default-instance-options.environment-variables.description": {
+    "defaultMessage": "启动实例时设置的环境变量。"
+  },
+  "app.settings.default-instance-options.environment-variables.placeholder": {
+    "defaultMessage": "输入环境变量…"
+  },
+  "app.settings.default-instance-options.width.title": {
+    "defaultMessage": "宽度"
+  },
+  "app.settings.default-instance-options.width.description": {
+    "defaultMessage": "启动时游戏窗口的宽度。"
+  },
+  "app.settings.default-instance-options.width.placeholder": {
+    "defaultMessage": "输入宽度…"
+  },
+  "app.settings.default-instance-options.height.title": {
+    "defaultMessage": "高度"
+  },
+  "app.settings.default-instance-options.height.description": {
+    "defaultMessage": "启动时游戏窗口的高度。"
+  },
+  "app.settings.default-instance-options.height.placeholder": {
+    "defaultMessage": "输入高度…"
+  },
+  "app.settings.default-instance-options.fullscreen.title": {
+    "defaultMessage": "全屏"
+  },
+  "app.settings.default-instance-options.fullscreen.description": {
+    "defaultMessage": "通过修改实例的 options.txt 文件，使实例以全屏启动。"
+  },
+  "app.settings.default-instance-options.pre-launch-hook.title": {
+    "defaultMessage": "启动前钩子"
+  },
+  "app.settings.default-instance-options.pre-launch-hook.description": {
+    "defaultMessage": "在实例启动前运行。"
+  },
+  "app.settings.default-instance-options.pre-launch-hook.placeholder": {
+    "defaultMessage": "输入启动前命令…"
+  },
+  "app.settings.default-instance-options.wrapper-hook.title": {
+    "defaultMessage": "包装钩子"
+  },
+  "app.settings.default-instance-options.wrapper-hook.description": {
+    "defaultMessage": "用于包装 Minecraft 启动过程的命令。"
+  },
+  "app.settings.default-instance-options.wrapper-hook.placeholder": {
+    "defaultMessage": "输入包装命令…"
+  },
+  "app.settings.default-instance-options.post-exit-hook.title": {
+    "defaultMessage": "退出后钩子"
+  },
+  "app.settings.default-instance-options.post-exit-hook.description": {
+    "defaultMessage": "在游戏关闭后运行。"
+  },
+  "app.settings.default-instance-options.post-exit-hook.placeholder": {
+    "defaultMessage": "输入退出后命令…"
+  },
+  "app.settings.resource-management.app-directory.title": {
+    "defaultMessage": "应用目录"
+  },
+  "app.settings.resource-management.app-directory.description": {
+    "defaultMessage": "启动器存储实例和其他文件的位置。更改在重启应用后生效。"
+  },
+  "app.settings.resource-management.app-directory.browse": {
+    "defaultMessage": "浏览应用目录"
+  },
+  "app.settings.resource-management.app-directory.select": {
+    "defaultMessage": "选择新的应用目录"
+  },
+  "app.settings.resource-management.app-cache.title": {
+    "defaultMessage": "应用缓存"
+  },
+  "app.settings.resource-management.app-cache.description": {
+    "defaultMessage": "清除已缓存的数据并从 Modrinth 重新下载。在缓存重建完成前，应用的加载速度可能会变慢。"
+  },
+  "app.settings.resource-management.app-cache.purge": {
+    "defaultMessage": "清除缓存"
+  },
+  "app.settings.resource-management.app-cache.confirm.title": {
+    "defaultMessage": "要清除应用缓存吗？"
+  },
+  "app.settings.resource-management.app-cache.confirm.description": {
+    "defaultMessage": "在缓存重建完成前，应用的加载速度可能会变慢。"
+  },
+  "app.settings.resource-management.app-database-backups.title": {
+    "defaultMessage": "应用数据库备份"
+  },
+  "app.settings.resource-management.app-database-backups.description": {
+    "defaultMessage": "重要应用数据的备份保存在此处，以便日后需要时恢复。"
+  },
+  "app.settings.resource-management.app-database-backups.open-folder": {
+    "defaultMessage": "打开备份文件夹"
+  },
+  "app.settings.resource-management.maximum-concurrent-downloads.title": {
+    "defaultMessage": "最大并发下载数"
+  },
+  "app.settings.resource-management.maximum-concurrent-downloads.description": {
+    "defaultMessage": "应用同时下载的文件数量。如果你的网络下载不稳定，可以降低此值。需要重启应用。"
+  },
+  "app.settings.resource-management.maximum-concurrent-writes.title": {
+    "defaultMessage": "最大并发写入数"
+  },
+  "app.settings.resource-management.maximum-concurrent-writes.description": {
+    "defaultMessage": "应用同时写入磁盘的文件数量。如果经常遇到 I/O 错误，可以降低此值。需要重启应用。"
+  },
+  "app.settings.resource-management.always-show-copy-details.title": {
+    "defaultMessage": "始终显示复制详情"
+  },
+  "app.settings.resource-management.always-show-copy-details.description": {
+    "defaultMessage": "在安装排队或进行中时显示“复制详情”操作。对于失败或中断的安装，该操作始终可用。"
+  },
+  "app.settings.privacy.telemetry.title": {
+    "defaultMessage": "遥测"
+  },
+  "app.settings.privacy.telemetry.description": {
+    "defaultMessage": "Modrinth 会收集匿名的分析和使用数据，以改进并定制你的使用体验。关闭此选项即表示你选择退出，你的数据将不再被收集。"
+  },
+  "app.settings.privacy.discord-rich-presence.title": {
+    "defaultMessage": "Discord Rich Presence"
+  },
+  "app.settings.privacy.discord-rich-presence.description": {
+    "defaultMessage": "在 Discord 上将启动器显示为你当前的活动。此设置不影响由模组添加到实例中的 Rich Presence。需要重启应用。"
+  },
+  "app.settings.privacy.ads-consent.intro": {
+    "defaultMessage": "广告让 Modrinth 得以运营，并为创作者提供收益。我们的合作伙伴可能会在应用中存储或读取 Cookie，用于个性化广告和衡量效果。你可以在下方选择退出或管理你的偏好。"
+  },
+  "settings.language.coverage.label": {
+    "defaultMessage": "支持 {percentage}%"
+  },
+  "settings.language.coverage.app-tooltip": {
+    "defaultMessage": "本启动器约有 {percentage}% 的内容支持该语言。"
+  },
+  "settings.language.coverage.website-tooltip": {
+    "defaultMessage": "网站约有 {percentage}% 的内容支持该语言。"
+  },
+  "settings.display.theme.sync-across-devices": {
+    "defaultMessage": "跨设备同步主题"
+  },
+  "settings.display.theme.sync-across-devices.description": {
+    "defaultMessage": "在所有已登录的设备上使用此主题。关闭后可在本设备保留单独的主题。"
+  },
+  "settings.display.theme.sync-across-devices.sign-in-tooltip": {
+    "defaultMessage": "登录 Modrinth 以同步主题"
+  },
+  "settings.display.sidebar.advanced-rendering.description": {
+    "defaultMessage": "启用模糊等高级渲染效果；在没有硬件加速渲染的情况下可能导致性能问题。"
+  },
+  "settings.display.sidebar.external-links-new-tab.title": {
+    "defaultMessage": "在新标签页打开外部链接"
+  },
+  "settings.display.sidebar.external-links-new-tab.description": {
+    "defaultMessage": "让指向 Modrinth 之外的链接在新标签页中打开。无论此设置如何，同域名链接和 Markdown 描述中的链接都会在当前标签页打开，广告和编辑页面上的链接则始终在新标签页打开。"
+  },
+  "settings.display.sidebar.left-aligned-content-sidebar.title": {
+    "defaultMessage": "内容页面侧边栏左对齐"
+  },
+  "settings.display.sidebar.left-aligned-content-sidebar.description": {
+    "defaultMessage": "将侧边栏对齐到页面内容的左侧。"
+  },
+  "settings.display.sidebar.right-aligned-filters-sidebar.title": {
+    "defaultMessage": "搜索页面筛选栏右对齐"
+  },
+  "settings.display.sidebar.right-aligned-filters-sidebar.description": {
+    "defaultMessage": "将筛选侧边栏对齐到搜索结果的右侧。"
+  },
+  "settings.display.project-list-layouts.title": {
+    "defaultMessage": "项目列表布局"
+  },
+  "settings.display.project-list-layouts.description": {
+    "defaultMessage": "为每个显示项目列表的页面选择你偏好的布局。"
+  },
+  "settings.display.project-list-layouts.mode.grid": {
+    "defaultMessage": "网格"
+  },
+  "settings.display.project-list-layouts.mode.rows": {
+    "defaultMessage": "列表"
+  },
+  "settings.display.project-list-layouts.mod": {
+    "defaultMessage": "模组页面"
+  },
+  "settings.display.project-list-layouts.modpack": {
+    "defaultMessage": "整合包页面"
+  },
+  "settings.display.project-list-layouts.plugin": {
+    "defaultMessage": "插件页面"
+  },
+  "settings.display.project-list-layouts.resourcepack": {
+    "defaultMessage": "资源包页面"
+  },
+  "settings.display.project-list-layouts.datapack": {
+    "defaultMessage": "数据包页面"
+  },
+  "settings.display.project-list-layouts.shader": {
+    "defaultMessage": "光影页面"
+  },
+  "settings.display.project-list-layouts.server": {
+    "defaultMessage": "服务器页面"
+  },
+  "settings.display.project-list-layouts.user": {
+    "defaultMessage": "用户主页"
+  },
+  "settings.social.hosting-access.title": {
+    "defaultMessage": "主机管理邀请"
+  },
+  "settings.social.hosting-access.description": {
+    "defaultMessage": "控制谁可以邀请你管理 Modrinth Hosting 服务器。"
+  },
+  "settings.social.interaction-source.loading": {
+    "defaultMessage": "正在加载你的偏好设置…"
+  },
+  "settings.social.interaction-source.saving": {
+    "defaultMessage": "正在保存你的偏好设置…"
+  },
+  "settings.social.interaction-source.unavailable": {
+    "defaultMessage": "你的偏好设置当前不可用。"
+  },
+  "settings.preferences.update-failed.title": {
+    "defaultMessage": "设置同步失败"
+  },
+  "settings.preferences.update-failed.description": {
+    "defaultMessage": "你的设置未能保存到 Modrinth 账户，请重试。"
+  },
+  "instance.settings.tabs.general": {
+    "defaultMessage": "常规"
+  },
+  "instance.settings.tabs.installation": {
+    "defaultMessage": "安装"
+  },
+  "instance.settings.tabs.window": {
+    "defaultMessage": "窗口"
+  },
+  "instance.settings.tabs.java": {
+    "defaultMessage": "Java 与内存"
+  },
+  "instance.settings.tabs.hooks": {
+    "defaultMessage": "启动钩子"
+  },
+  "instance.settings.tabs.sharing": {
+    "defaultMessage": "共享"
+  },
+  "instance.settings.tabs.general.icon": {
+    "defaultMessage": "图标"
+  },
+  "instance.settings.tabs.general.name": {
+    "defaultMessage": "名称"
+  },
+  "instance.settings.tabs.general.edit-icon": {
+    "defaultMessage": "编辑图标"
+  },
+  "instance.settings.tabs.general.edit-icon.select": {
+    "defaultMessage": "选择图标"
+  },
+  "instance.settings.tabs.general.edit-icon.replace": {
+    "defaultMessage": "替换图标"
+  },
+  "instance.settings.tabs.general.edit-icon.create": {
+    "defaultMessage": "创建图标"
+  },
+  "instance.settings.tabs.general.edit-icon.edit-created": {
+    "defaultMessage": "编辑图标"
+  },
+  "instance.settings.tabs.general.edit-icon.remove": {
+    "defaultMessage": "移除图标"
+  },
+  "instance.settings.tabs.general.update-channel": {
+    "defaultMessage": "更新通道"
+  },
+  "instance.settings.tabs.general.update-channel.select": {
+    "defaultMessage": "选择更新通道"
+  },
+  "instance.settings.tabs.general.update-channel.release": {
+    "defaultMessage": "正式版"
+  },
+  "instance.settings.tabs.general.update-channel.release.description": {
+    "defaultMessage": "仅正式版本会显示为可用更新。"
+  },
+  "instance.settings.tabs.general.update-channel.beta": {
+    "defaultMessage": "Beta"
+  },
+  "instance.settings.tabs.general.update-channel.beta.description": {
+    "defaultMessage": "正式版和 Beta 版本会显示为可用更新。"
+  },
+  "instance.settings.tabs.general.update-channel.alpha": {
+    "defaultMessage": "Alpha"
+  },
+  "instance.settings.tabs.general.update-channel.alpha.description": {
+    "defaultMessage": "正式版、Beta 和 Alpha 版本都会显示为可用更新。"
+  },
+  "instance.settings.tabs.general.duplicate-instance": {
+    "defaultMessage": "复制实例"
+  },
+  "instance.settings.tabs.general.duplicate-instance.description": {
+    "defaultMessage": "创建此实例的副本，包括世界、配置、模组等。"
+  },
+  "instance.settings.tabs.general.duplicate-button": {
+    "defaultMessage": "复制"
+  },
+  "instance.settings.tabs.general.duplicate-button.tooltip.installing": {
+    "defaultMessage": "安装过程中无法复制。"
+  },
+  "instance.settings.tabs.general.delete": {
+    "defaultMessage": "删除实例"
+  },
+  "instance.settings.tabs.general.delete.button": {
+    "defaultMessage": "删除实例"
+  },
+  "instance.settings.tabs.general.delete.description": {
+    "defaultMessage": "从你的设备上永久删除实例，包括世界、配置和所有已安装的内容。请谨慎操作，实例一旦删除便无法恢复。"
+  },
+  "instance.settings.tabs.general.deleting.button": {
+    "defaultMessage": "正在删除…"
+  },
+  "instance.settings.tabs.installation.loader-version": {
+    "defaultMessage": "{loader} 版本"
+  },
+  "instance.settings.tabs.installation.locked": {
+    "defaultMessage": "此实例处于锁定状态，安装设置不可用。"
+  },
+  "instance.settings.tabs.window.custom-window-settings": {
+    "defaultMessage": "自定义窗口设置"
+  },
+  "instance.settings.tabs.window.width": {
+    "defaultMessage": "宽度"
+  },
+  "instance.settings.tabs.window.width.description": {
+    "defaultMessage": "启动时游戏窗口的宽度。"
+  },
+  "instance.settings.tabs.window.width.enter": {
+    "defaultMessage": "输入宽度…"
+  },
+  "instance.settings.tabs.window.height": {
+    "defaultMessage": "高度"
+  },
+  "instance.settings.tabs.window.height.description": {
+    "defaultMessage": "启动时游戏窗口的高度。"
+  },
+  "instance.settings.tabs.window.height.enter": {
+    "defaultMessage": "输入高度…"
+  },
+  "instance.settings.tabs.window.fullscreen": {
+    "defaultMessage": "全屏"
+  },
+  "instance.settings.tabs.window.fullscreen.description": {
+    "defaultMessage": "使游戏启动时进入全屏（通过 options.txt）。"
+  },
+  "instance.settings.tabs.java.java-installation": {
+    "defaultMessage": "Java 安装"
+  },
+  "instance.settings.tabs.java.custom-java-installation": {
+    "defaultMessage": "自定义 Java 安装"
+  },
+  "instance.settings.tabs.java.java-path-placeholder": {
+    "defaultMessage": "/path/to/java"
+  },
+  "instance.settings.tabs.java.java-memory": {
+    "defaultMessage": "已分配内存"
+  },
+  "instance.settings.tabs.java.custom-memory-allocation": {
+    "defaultMessage": "自定义内存分配"
+  },
+  "instance.settings.tabs.java.java-arguments": {
+    "defaultMessage": "Java 参数"
+  },
+  "instance.settings.tabs.java.custom-java-arguments": {
+    "defaultMessage": "自定义 Java 参数"
+  },
+  "instance.settings.tabs.java.enter-java-arguments": {
+    "defaultMessage": "输入 Java 参数…"
+  },
+  "instance.settings.tabs.java.environment-variables": {
+    "defaultMessage": "环境变量"
+  },
+  "instance.settings.tabs.java.custom-environment-variables": {
+    "defaultMessage": "自定义环境变量"
+  },
+  "instance.settings.tabs.java.enter-environment-variables": {
+    "defaultMessage": "输入环境变量…"
+  },
+  "instance.settings.tabs.java.hooks": {
+    "defaultMessage": "钩子"
+  },
+  "instance.settings.tabs.hooks.title": {
+    "defaultMessage": "游戏启动钩子"
+  },
+  "instance.settings.tabs.hooks.description": {
+    "defaultMessage": "钩子允许高级用户在启动游戏前后运行特定的系统命令。"
+  },
+  "instance.settings.tabs.hooks.custom-hooks": {
+    "defaultMessage": "自定义启动钩子"
+  },
+  "instance.settings.tabs.hooks.pre-launch": {
+    "defaultMessage": "启动前"
+  },
+  "instance.settings.tabs.hooks.pre-launch.description": {
+    "defaultMessage": "在实例启动前运行。"
+  },
+  "instance.settings.tabs.hooks.pre-launch.enter": {
+    "defaultMessage": "输入启动前命令…"
+  },
+  "instance.settings.tabs.hooks.wrapper": {
+    "defaultMessage": "包装器"
+  },
+  "instance.settings.tabs.hooks.wrapper.description": {
+    "defaultMessage": "用于启动 Minecraft 的包装命令。"
+  },
+  "instance.settings.tabs.hooks.wrapper.enter": {
+    "defaultMessage": "输入包装命令…"
+  },
+  "instance.settings.tabs.hooks.post-exit": {
+    "defaultMessage": "退出后"
+  },
+  "instance.settings.tabs.hooks.post-exit.description": {
+    "defaultMessage": "在游戏关闭后运行。"
+  },
+  "instance.settings.tabs.hooks.post-exit.enter": {
+    "defaultMessage": "输入退出后命令…"
+  },
+  "instance.settings.tabs.hooks.variables.description": {
+    "defaultMessage": "钩子在实例的工作目录中运行，可使用以下变量："
+  },
+  "instance.settings.tabs.hooks.variables.inst-name.description": {
+    "defaultMessage": "$INST_NAME：实例的名称"
+  },
+  "instance.settings.tabs.hooks.variables.inst-id.description": {
+    "defaultMessage": "$INST_ID：实例文件夹的名称"
+  },
+  "instance.settings.tabs.hooks.variables.inst-dir.description": {
+    "defaultMessage": "$INST_DIR：实例文件夹的绝对路径"
+  },
+  "instance.settings.tabs.hooks.variables.inst-mc-dir.description": {
+    "defaultMessage": "$INST_MC_DIR：$INST_DIR 的别名"
+  },
+  "instance.settings.tabs.hooks.variables.inst-java.description": {
+    "defaultMessage": "$INST_JAVA：java 可执行文件的绝对路径"
+  },
+  "instance.settings.tabs.hooks.variables.inst-java-args.description": {
+    "defaultMessage": "$INST_JAVA_ARGS：传递给游戏的 JVM 参数"
+  },
+  "instance.settings.sharing.active-invites.title": {
+    "defaultMessage": "有效邀请"
+  },
+  "instance.settings.sharing.active-invites.description": {
+    "defaultMessage": "任何拥有这些邀请链接的人都可以在链接有效期内加入。"
+  },
+  "instance.settings.sharing.active-invites.empty": {
+    "defaultMessage": "没有有效的邀请。"
+  },
+  "instance.settings.sharing.active-invites.code": {
+    "defaultMessage": "邀请链接"
+  },
+  "instance.settings.sharing.active-invites.uses": {
+    "defaultMessage": "使用次数"
+  },
+  "instance.settings.sharing.active-invites.expires": {
+    "defaultMessage": "过期时间"
+  },
+  "instance.settings.sharing.active-invites.actions": {
+    "defaultMessage": "操作"
+  },
+  "instance.settings.sharing.active-invites.revoke": {
+    "defaultMessage": "撤销邀请"
+  },
+  "instance.settings.sharing.active-invites.revoke-with-code": {
+    "defaultMessage": "撤销邀请 {code}"
+  },
+  "instance.settings.sharing.revoke-invite.header": {
+    "defaultMessage": "撤销邀请"
+  },
+  "instance.settings.sharing.revoke-invite.confirm": {
+    "defaultMessage": "撤销邀请"
+  },
+  "instance.settings.sharing.revoke-invite.admonition-header": {
+    "defaultMessage": "此操作无法撤销"
+  },
+  "instance.settings.sharing.revoke-invite.admonition-body": {
+    "defaultMessage": "邀请链接 <monospace>{code}</monospace> 将立即失效。已经加入的人仍会保留访问权限。"
   }
 }
