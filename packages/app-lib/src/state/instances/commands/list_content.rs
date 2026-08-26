@@ -1,5 +1,6 @@
 use super::sync_content_files::{
-    project_type_for_file, sync_instance_content_files,
+    ContentSyncFreshness, project_type_for_file,
+    sync_instance_content_files_with_freshness,
 };
 use crate::State;
 use crate::pack::install_from::{PackFileHash, PackFormat};
@@ -818,7 +819,12 @@ async fn content_projects_for_scope(
         resolved.instance.id,
         resolved.content_set.id
     );
-    let files = sync_instance_content_files(&resolved.instance, state).await?;
+    let files = sync_instance_content_files_with_freshness(
+        &resolved.instance,
+        ContentSyncFreshness::from_cache_behaviour(cache_behaviour),
+        state,
+    )
+    .await?;
     tracing::info!(
         "content_projects_for_scope: synced {} files for instance '{}'",
         files.len(),

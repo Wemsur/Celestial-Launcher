@@ -591,6 +591,11 @@ pub(crate) async fn add_project_bytes(
     )
     .await?;
 
+    // The file list on disk just changed; drop the cached view of it so the
+    // next read reflects this write instead of the pre-write state.
+    super::sync_content_files::invalidate_content_cache(&scope.instance, state)
+        .await;
+
     if scope.instance.is_json_backed() {
         // JSON-backed instances have no DB rows — skip content tracking.
         return Ok(relative_path);
@@ -710,6 +715,11 @@ pub(crate) async fn toggle_disable_project(
     if current_path != new_path {
         io::rename_or_move(&base.join(&current_path), &base.join(&new_path))
             .await?;
+        super::sync_content_files::invalidate_content_cache(
+            &scope.instance,
+            state,
+        )
+        .await;
     }
 
     if scope.instance.is_json_backed() {
@@ -805,6 +815,9 @@ pub(crate) async fn remove_project(
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => return Err(err.into()),
     }
+
+    super::sync_content_files::invalidate_content_cache(&scope.instance, state)
+        .await;
 
     if scope.instance.is_json_backed() {
         return Ok(());

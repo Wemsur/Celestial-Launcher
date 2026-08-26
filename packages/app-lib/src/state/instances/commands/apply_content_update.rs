@@ -3,7 +3,8 @@ use crate::state::instances::{
     adapters::sqlite::{content_rows, instance_rows},
 };
 use crate::state::{
-    CacheBehaviour, CachedEntry, Dependency, DependencyType, State, Version,
+    CacheBehaviour, CachedEntry, ContentItem, Dependency, DependencyType,
+    State, Version,
 };
 use crate::util::fetch::DownloadReason;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -298,12 +299,20 @@ async fn plan_bulk_update(
 ) -> crate::Result<BulkUpdatePlan> {
     let shared_instance_member =
         is_shared_instance_member(instance_id, state).await?;
-    let updateable_paths = bulk_updateable_project_paths(
+    // Listing content is a full filesystem scan plus metadata fetch, so the one
+    // listing feeds both the updateable-path filter and, for JSON-backed
+    // instances, the installed-project set below.
+    let content_items = super::list_content::list_content(
         instance_id,
-        shared_instance_member,
+        None,
+        Some(CacheBehaviour::MustRevalidate),
         state,
     )
     .await?;
+    let updateable_paths = bulk_updateable_project_paths(
+        &content_items,
+        shared_instance_member,
+    );
     if updateable_paths.is_empty() {
         return Ok(BulkUpdatePlan {
             project_updates: Vec::new(),
@@ -341,7 +350,8 @@ async fn plan_bulk_update(
         .await?,
     };
     let installed =
-        installed_projects(instance_id, &content_set, state).await?;
+        installed_projects(instance_id, &content_set, &content_items, state)
+            .await?;
     let updateable_paths = if shared_instance_member {
         let managed_paths = installed
             .iter()
@@ -450,21 +460,12 @@ async fn plan_bulk_update(
     })
 }
 
-async fn bulk_updateable_project_paths(
-    instance_id: &str,
+fn bulk_updateable_project_paths(
+    items: &[ContentItem],
     shared_instance_member: bool,
-    state: &State,
-) -> crate::Result<HashSet<String>> {
-    let items = super::list_content::list_content(
-        instance_id,
-        None,
-        Some(CacheBehaviour::MustRevalidate),
-        state,
-    )
-    .await?;
-
-    Ok(items
-        .into_iter()
+) -> HashSet<String> {
+    items
+        .iter()
         .filter(|item| {
             !item.locked
                 && (!shared_instance_member
@@ -472,20 +473,28 @@ async fn bulk_updateable_project_paths(
                         ContentSourceKind::is_shared_instance_managed,
                     ))
         })
-        .map(|item| item.file_path)
-        .collect())
+        .map(|item| item.file_path.clone())
+        .collect()
 }
 
 async fn installed_projects(
     instance_id: &str,
     content_set: &ContentSet,
+    content_items: &[ContentItem],
     state: &State,
 ) -> crate::Result<Vec<InstalledProject>> {
-    let instance = instance_rows::get_instance_by_id(instance_id, &state.pool)
-        .await?
-        .ok_or_else(|| {
-            crate::ErrorKind::InputError("Unknown instance".to_string())
-        })?;
+    let Some(instance) =
+        instance_rows::get_instance_by_id(instance_id, &state.pool).await?
+    else {
+        // JSON-backed instances have no `instances` row, and no
+        // `instance_files` / `instance_content_entries` rows either, so the DB
+        // read below would come back empty. The listed content carries the same
+        // project/version pairs, which is what the plan actually needs.
+        return Ok(content_items
+            .iter()
+            .filter_map(installed_project_from_content_item)
+            .collect());
+    };
     let entries =
         content_rows::get_content_entries(&content_set.id, &state.pool).await?;
     let entries_by_file_id = entries
@@ -504,6 +513,24 @@ async fn installed_projects(
             installed_project_from_row(&file, entry)
         })
         .collect())
+}
+
+fn installed_project_from_content_item(
+    item: &ContentItem,
+) -> Option<InstalledProject> {
+    let project_id = item.project.as_ref().map(|project| project.id.clone());
+    let version_id = item.version.as_ref().map(|version| version.id.clone());
+    if project_id.is_none() && version_id.is_none() {
+        return None;
+    }
+
+    Some(InstalledProject {
+        relative_path: item.file_path.clone(),
+        project_id,
+        version_id,
+        source_kind: item.source_kind.unwrap_or(ContentSourceKind::Local),
+        enabled: item.enabled,
+    })
 }
 
 fn installed_project_from_row(

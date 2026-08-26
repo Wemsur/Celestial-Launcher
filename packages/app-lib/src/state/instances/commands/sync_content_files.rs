@@ -30,6 +30,33 @@ struct ContentCacheEntry {
     sha1: String,
 }
 
+/// Whether a content sync may answer from the on-disk cache.
+///
+/// The cache lives next to the instance and is only consulted for JSON-backed
+/// instances. `Bypass` is required whenever the caller must observe writes that
+/// just happened — reading the cache would hand back the pre-write file list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ContentSyncFreshness {
+    UseCache,
+    Bypass,
+}
+
+impl ContentSyncFreshness {
+    /// `MustRevalidate` means "ignore every cache", including this one.
+    pub(crate) fn from_cache_behaviour(
+        cache_behaviour: Option<crate::state::CacheBehaviour>,
+    ) -> Self {
+        if matches!(
+            cache_behaviour,
+            Some(crate::state::CacheBehaviour::MustRevalidate)
+        ) {
+            Self::Bypass
+        } else {
+            Self::UseCache
+        }
+    }
+}
+
 pub(crate) async fn sync_content_files(
     instance_id: &str,
     state: &State,
@@ -73,28 +100,71 @@ pub(crate) async fn sync_instance_content_files(
     instance: &Instance,
     state: &State,
 ) -> crate::Result<Vec<InstanceFile>> {
+    sync_instance_content_files_with_freshness(
+        instance,
+        ContentSyncFreshness::UseCache,
+        state,
+    )
+    .await
+}
+
+pub(crate) async fn sync_instance_content_files_with_freshness(
+    instance: &Instance,
+    freshness: ContentSyncFreshness,
+    state: &State,
+) -> crate::Result<Vec<InstanceFile>> {
     if instance.is_json_backed() {
-        sync_json_instance_content_files(instance, state).await
+        sync_json_instance_content_files(instance, freshness, state).await
     } else {
         sync_db_instance_content_files(instance, state).await
+    }
+}
+
+/// Path of the JSON-backed content cache for an instance.
+fn content_cache_path(instance: &Instance, state: &State) -> PathBuf {
+    libraries::resolve_instance_dir(state, &instance.path)
+        .join(CONTENT_CACHE_FILE_NAME)
+}
+
+/// Drop the cached content list so the next sync rescans the filesystem.
+///
+/// Every code path that adds, removes, or renames a content file must call this,
+/// otherwise readers keep seeing the pre-write list until a background refresh
+/// happens to land. A missing cache file is the desired end state, not an error.
+pub(crate) async fn invalidate_content_cache(
+    instance: &Instance,
+    state: &State,
+) {
+    if !instance.is_json_backed() {
+        return;
+    }
+    let path = content_cache_path(instance, state);
+    match tokio::fs::remove_file(&path).await {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => tracing::warn!(
+            "Failed to invalidate content cache at '{}': {error}",
+            path.display(),
+        ),
     }
 }
 
 // ─── JSON-backed path: file-based cache ──────────────────────────────────────
 
 /// Loads content for a JSON-backed instance from its local JSON cache, falling
-/// back to a full filesystem scan if no cache exists or it is stale.
+/// back to a full filesystem scan if the cache is absent or bypassed.
 async fn sync_json_instance_content_files(
     instance: &Instance,
+    freshness: ContentSyncFreshness,
     state: &State,
 ) -> crate::Result<Vec<InstanceFile>> {
-    let instance_dir =
-        libraries::resolve_instance_dir(state, &instance.path);
-    let cache_path = instance_dir.join(CONTENT_CACHE_FILE_NAME);
+    let cache_path = content_cache_path(instance, state);
 
     // Try loading cached data first — this is near-instant.
-    if let Some(cache) = load_content_cache(&cache_path)? {
-        let cached_len = cache.files.len();
+    if freshness == ContentSyncFreshness::UseCache
+        && let Some(cache) = load_content_cache(&cache_path)?
+    {
+        let scanned_at = cache.scanned_at;
         let instance_files: Vec<InstanceFile> = cache
             .files
             .into_iter()
@@ -112,27 +182,31 @@ async fn sync_json_instance_content_files(
             })
             .collect();
 
-        if instance_files.len() == cached_len {
-            tracing::info!(
-                "sync_json_content_files: loaded {} files from cache for '{}'",
-                instance_files.len(),
-                instance.id,
-            );
-            // Fire-and-forget background refresh so subsequent calls get fresh
-            // data without blocking the UI.
-            spawn_content_refresh(instance.id.clone(), cache_path);
-            return Ok(instance_files);
-        }
-        // Stale cache — fall through to full rescan below.
+        tracing::info!(
+            "sync_json_content_files: loaded {} files from cache for '{}'",
+            instance_files.len(),
+            instance.id,
+        );
+        // Fire-and-forget background refresh so subsequent calls get fresh
+        // data without blocking the UI.
+        spawn_content_refresh(instance.id.clone(), cache_path, scanned_at);
+        return Ok(instance_files);
     }
 
     // Full filesystem scan (slow path, result is cached for next time).
-    sync_json_instance_content_files_internal(instance, state, cache_path)
+    sync_json_instance_content_files_internal(instance, state, cache_path, None)
         .await
 }
 
 /// Background task: re-scan the filesystem and overwrite the cache.
-fn spawn_content_refresh(instance_id: String, cache_path: PathBuf) {
+///
+/// `expected_scanned_at` is the stamp of the cache this refresh was started
+/// from; the rescan is only published if that cache is still the current one.
+fn spawn_content_refresh(
+    instance_id: String,
+    cache_path: PathBuf,
+    expected_scanned_at: u64,
+) {
     tokio::spawn(async move {
         let state = match State::get().await {
             Ok(s) => s,
@@ -145,8 +219,13 @@ fn spawn_content_refresh(instance_id: String, cache_path: PathBuf) {
                 return;
             }
         };
-        if let Err(e) =
-            sync_json_instance_content_files_internal_from_id(&instance_id, &state, cache_path).await
+        if let Err(e) = sync_json_instance_content_files_internal_from_id(
+            &instance_id,
+            &state,
+            cache_path,
+            Some(expected_scanned_at),
+        )
+        .await
         {
             tracing::warn!(
                 "Background content refresh failed for '{}': {}",
@@ -161,6 +240,7 @@ async fn sync_json_instance_content_files_internal_from_id(
     instance_id: &str,
     state: &State,
     cache_path: PathBuf,
+    expected_scanned_at: Option<u64>,
 ) -> crate::Result<Vec<InstanceFile>> {
     let json_instances = libraries::list_instances_from_json(state).await?;
     let instance = json_instances
@@ -172,13 +252,20 @@ async fn sync_json_instance_content_files_internal_from_id(
                 instance_id
             ))
         })?;
-    sync_json_instance_content_files_internal(&instance, state, cache_path).await
+    sync_json_instance_content_files_internal(
+        &instance,
+        state,
+        cache_path,
+        expected_scanned_at,
+    )
+    .await
 }
 
 async fn sync_json_instance_content_files_internal(
     instance: &Instance,
     state: &State,
     cache_path: PathBuf,
+    expected_scanned_at: Option<u64>,
 ) -> crate::Result<Vec<InstanceFile>> {
     let _content_lock = state.lock_instance_content(&instance.id).await;
     let instance_dir =
@@ -255,23 +342,39 @@ async fn sync_json_instance_content_files_internal(
         });
     }
 
-    // Persist cache so next open is instant.
-    let cache = ContentCacheFile {
-        version: CONTENT_CACHE_VERSION.to_string(),
-        scanned_at: now.timestamp_millis() as u64,
-        files: cache_entries.clone(),
+    // Persist cache so next open is instant. A background refresh must not
+    // resurrect a list that was invalidated (or already replaced) while it was
+    // scanning, so it only publishes when the cache it started from is intact.
+    let may_publish = match expected_scanned_at {
+        None => true,
+        Some(expected) => load_content_cache(&cache_path)
+            .ok()
+            .flatten()
+            .is_some_and(|cache| cache.scanned_at == expected),
     };
-    let cache_json =
-        serde_json::to_string_pretty(&cache).map_err(|e| {
-            crate::ErrorKind::OtherError(format!(
-                "Failed to serialize content cache: {e}"
-            ))
-        })?;
-    if let Err(e) = std::fs::write(&cache_path, cache_json) {
-        tracing::warn!(
-            "sync_json_content_files: failed to write cache at '{}': {}",
-            cache_path.display(),
-            e
+    if may_publish {
+        let cache = ContentCacheFile {
+            version: CONTENT_CACHE_VERSION.to_string(),
+            scanned_at: now.timestamp_millis() as u64,
+            files: cache_entries.clone(),
+        };
+        let cache_json =
+            serde_json::to_string_pretty(&cache).map_err(|e| {
+                crate::ErrorKind::OtherError(format!(
+                    "Failed to serialize content cache: {e}"
+                ))
+            })?;
+        if let Err(e) = std::fs::write(&cache_path, cache_json) {
+            tracing::warn!(
+                "sync_json_content_files: failed to write cache at '{}': {}",
+                cache_path.display(),
+                e
+            );
+        }
+    } else {
+        tracing::info!(
+            "sync_json_content_files: dropping stale background refresh for '{}'",
+            instance.id,
         );
     }
 

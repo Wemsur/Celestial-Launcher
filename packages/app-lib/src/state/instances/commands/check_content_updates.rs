@@ -9,7 +9,8 @@ use crate::state::{
 use std::collections::HashMap;
 
 use super::sync_content_files::{
-    project_type_for_file, sync_instance_content_files,
+    ContentSyncFreshness, project_type_for_file,
+    sync_instance_content_files_with_freshness,
 };
 
 #[derive(Clone, Debug)]
@@ -101,7 +102,12 @@ async fn check_content_updates_with_cache_behaviours(
             entry.file_id.as_deref().map(|file_id| (file_id, entry))
         })
         .collect::<HashMap<_, _>>();
-    let files = sync_instance_content_files(&instance, state).await?;
+    let files = sync_instance_content_files_with_freshness(
+        &instance,
+        ContentSyncFreshness::from_cache_behaviour(cache_behaviour),
+        state,
+    )
+    .await?;
     let hashes = files
         .iter()
         .map(|file| file.sha1.as_str())

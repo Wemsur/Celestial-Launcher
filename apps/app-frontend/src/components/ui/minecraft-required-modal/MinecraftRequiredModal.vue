@@ -21,10 +21,15 @@
 
 		<div class="flex flex-col gap-6 px-6 pb-6">
 			<div class="grid grid-cols-2 gap-2">
-				<ButtonLink href="https://support.modrinth.com" @click="modal?.hide()">
-					<MessagesSquareIcon />
-					{{ formatMessage(messages.getSupport) }}
-				</ButtonLink>
+				<Button
+					type="colored"
+					color="medal_promotion"
+					:disabled="loadingSignIn"
+					@click="offlineModalRef?.show()"
+				>
+					<LogInIcon />
+					{{ formatMessage(messages.offlineSignIn) }}
+				</Button>
 				<Button type="colored" color="brand" :disabled="loadingSignIn" @click="signIn">
 					<SpinnerIcon v-if="loadingSignIn" class="animate-spin" />
 					<svg
@@ -54,20 +59,63 @@
 			</p>
 		</div>
 	</NewModal>
+
+	<NewModal ref="offlineModalRef" header="添加离线账户" :max-width="'500px'">
+		<form class="space-y-6 min-w-[400px]" @submit.prevent="handleCreateOffline">
+			<label class="flex flex-col gap-2">
+				<span class="font-semibold text-contrast">用户名</span>
+				<StyledInput
+					ref="offlineInputRef"
+					v-model="offlineUsername"
+					wrapper-class="w-full"
+					placeholder="请输入玩家名..."
+				/>
+				<div v-if="offlineError" class="text-sm text-red">{{ offlineError }}</div>
+			</label>
+		</form>
+		<template #actions>
+			<div class="flex gap-2 justify-end">
+				<Button type="outlined">
+					<button @click="hideOfflineModal">
+						<XIcon class="h-5 w-5" />
+						取消
+					</button>
+				</Button>
+				<Button type="colored" color="brand">
+					<button :disabled="offlineSubmitting" @click="handleCreateOffline">
+						<EditIcon class="h-5 w-5" />
+						添加
+					</button>
+				</Button>
+			</div>
+		</template>
+	</NewModal>
 </template>
 
 <script setup lang="ts">
-import { MessagesSquareIcon, SpinnerIcon } from '@modrinth/assets'
-import { Button, ButtonLink, defineMessages, NewModal, useVIntl } from '@modrinth/ui'
+import { EditIcon, LogInIcon, SpinnerIcon, XIcon } from '@modrinth/assets'
+import {
+	Button,
+	defineMessages,
+	injectNotificationManager,
+	NewModal,
+	StyledInput,
+	useVIntl,
+} from '@modrinth/ui'
 import { inject, type Ref, ref } from 'vue'
 
 import steveImage from '@/assets/steve-look-up-left.webp'
 import type AccountsCard from '@/components/ui/AccountsCard.vue'
 import { handleSevereError } from '@/composables/use-error.js'
 import { trackEvent } from '@/helpers/analytics'
-import { login as loginFlow, set_default_user } from '@/helpers/auth.js'
+import {
+	create_offline_user,
+	login as loginFlow,
+	set_default_user,
+} from '@/helpers/auth.js'
 
 const { formatMessage } = useVIntl()
+const notificationManager = injectNotificationManager()
 const accountsCard = inject('accountsCard') as Ref<InstanceType<typeof AccountsCard> | null>
 
 const messages = defineMessages({
@@ -88,6 +136,10 @@ const messages = defineMessages({
 		id: 'minecraft-required.get-support',
 		defaultMessage: 'Get support',
 	},
+	offlineSignIn: {
+		id: 'minecraft-required.offline-sign-in',
+		defaultMessage: '离线登录',
+	},
 	signIn: {
 		id: 'minecraft-required.sign-in',
 		defaultMessage: 'Sign in to Microsoft',
@@ -104,6 +156,13 @@ const messages = defineMessages({
 
 const modal = ref<InstanceType<typeof NewModal>>()
 const loadingSignIn = ref(false)
+
+// 离线账户弹窗
+const offlineModalRef = ref<InstanceType<typeof NewModal>>()
+const offlineInputRef = ref<InstanceType<typeof StyledInput>>()
+const offlineUsername = ref('')
+const offlineSubmitting = ref(false)
+const offlineError = ref('')
 
 function show() {
 	modal.value?.show()
@@ -125,6 +184,56 @@ async function signIn() {
 	} finally {
 		loadingSignIn.value = false
 	}
+}
+
+/** 校验用户名 */
+function validateOfflineUsername(name: string): string {
+	const trimmed = name.trim()
+	if (!trimmed) return '用户名不能为空'
+	if (!/^[A-Za-z0-9_]{3,16}$/.test(trimmed)) {
+		return '用户名必须为3-16个字符（仅字母、数字和下划线）'
+	}
+	return ''
+}
+
+/** 创建离线账户 */
+async function handleCreateOffline() {
+	const error = validateOfflineUsername(offlineUsername.value)
+	if (error) {
+		offlineError.value = error
+		return
+	}
+
+	offlineSubmitting.value = true
+	offlineError.value = ''
+	try {
+		// 创建离线账户
+		const newCred = await create_offline_user(offlineUsername.value.trim())
+		// 设为默认激活账户
+		await set_default_user(newCred.profile.id)
+		// 刷新账户卡片
+		await accountsCard.value?.refreshValues()
+		await trackEvent('AccountLogIn', { source: 'MinecraftRequiredModal' })
+		// 关闭弹窗
+		hideOfflineModal()
+		modal.value?.hide()
+		notificationManager.addNotification({
+			title: '成功',
+			text: '离线账户创建成功',
+			type: 'success',
+		})
+	} catch (err) {
+		offlineError.value = err instanceof Error ? err.message : String(err)
+	} finally {
+		offlineSubmitting.value = false
+	}
+}
+
+/** 关闭离线弹窗 */
+function hideOfflineModal() {
+	offlineModalRef.value?.hide()
+	offlineUsername.value = ''
+	offlineError.value = ''
 }
 
 defineExpose({
