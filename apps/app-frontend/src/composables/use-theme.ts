@@ -5,7 +5,7 @@ export const THEME_OPTIONS = ['customdark', 'customlight', 'oled', 'retro', 'ele
 export type ColorTheme = (typeof THEME_OPTIONS)[number]
 type Theme = Exclude<ColorTheme, 'system'>
 
-const preferred = ref<ColorTheme>('dark')
+const preferred = ref<ColorTheme>('customdark')
 const preview = ref<ColorTheme | null>(null)
 const advancedRendering = ref(true)
 const syncAcrossDevices = ref(false)
@@ -13,15 +13,21 @@ const syncAcrossDevices = ref(false)
 const savedHue = localStorage.getItem('celestial_hue_value')
 const hueValue = ref<number>(savedHue ? Number(savedHue) : 38)
 
+/** Themes "system" resolves to, following the OS light/dark preference. */
+const SYSTEM_DARK_THEME: Theme = 'customdark'
+const SYSTEM_LIGHT_THEME: Theme = 'customlight'
+
 const nativeThemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
-const native = ref<Theme>(nativeThemeQuery.matches ? 'dark' : 'light')
+const native = ref<Theme>(
+	nativeThemeQuery.matches ? SYSTEM_DARK_THEME : SYSTEM_LIGHT_THEME,
+)
 const active = computed<Theme>(() => {
 	const selectedTheme = preview.value ?? preferred.value
 	return selectedTheme === 'system' ? native.value : selectedTheme
 })
 
 nativeThemeQuery.addEventListener('change', (event) => {
-	native.value = event.matches ? 'dark' : 'light'
+	native.value = event.matches ? SYSTEM_DARK_THEME : SYSTEM_LIGHT_THEME
 })
 
 watch(
