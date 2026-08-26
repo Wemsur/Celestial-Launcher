@@ -186,8 +186,9 @@ export function useBrowseSearch(options: UseBrowseSearchOptions): BrowseSearchSt
 		...loadersNotForThisType.value,
 	])
 
-	const loading = ref(true)
+const loading = ref(true)
 	const refreshing = ref(false)
+	const searchError = ref(false)
 	const projectHits = shallowRef<BrowseSearchResponse['projectHits']>([])
 	const serverHits = shallowRef<BrowseSearchResponse['serverHits']>([])
 	const totalHits = ref(0)
@@ -368,12 +369,14 @@ export function useBrowseSearch(options: UseBrowseSearchOptions): BrowseSearchSt
 			updateUrlParams()
 			loading.value = false
 			refreshing.value = false
+			searchError.value = false
 		} catch (err) {
 			debug('refreshSearch error', err)
 			console.error('Browse search error:', err)
 			if (version === searchVersion) {
 				loading.value = false
 				refreshing.value = false
+				searchError.value = true
 			}
 		}
 	}
@@ -448,6 +451,7 @@ export function useBrowseSearch(options: UseBrowseSearchOptions): BrowseSearchSt
 		effectiveCurrentSortType,
 		loading,
 		refreshing,
+		searchError,
 		projectHits,
 		serverHits,
 		totalHits,

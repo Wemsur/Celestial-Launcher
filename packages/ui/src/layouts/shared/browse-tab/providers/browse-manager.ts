@@ -94,6 +94,7 @@ export interface BrowseManagerContext {
 	onProjectHoverEnd?: () => void
 	onContextMenu?: (event: MouseEvent, result: Labrinth.Search.v3.ResultSearchProject) => void
 	offline?: Ref<boolean>
+	searchError?: Ref<boolean>
 
 	filtersMenuOpen?: Ref<boolean>
 

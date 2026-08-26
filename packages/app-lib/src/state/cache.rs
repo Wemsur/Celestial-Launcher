@@ -1997,13 +1997,16 @@ impl CachedEntry {
                     .collect::<Vec<_>>();
 
                 futures::future::try_join_all(fetch_urls.iter().map(
-                    |(_, url)| {
+                    |(key, url)| {
                         fetch_json(
                             Method::GET,
                             url,
                             None,
                             None,
-                            Some("/v3/search"),
+                            // Don't apply fence to search requests — each query is
+                            // independent and search results are cached for 10 min.
+                            // A single server error should not block all future searches.
+                            None,
                             fetch_semaphore,
                             pool,
                         )

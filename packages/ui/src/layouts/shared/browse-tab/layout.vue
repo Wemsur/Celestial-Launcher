@@ -67,6 +67,10 @@ const messages = defineMessages({
 		id: 'browse.no-results',
 		defaultMessage: 'No results found for your query!',
 	},
+	searchError: {
+		id: 'browse.search-error',
+		defaultMessage: 'Unable to load search results. Please try again later.',
+	},
 	linkOverridingPreferences: {
 		id: 'browse.advanced-filters.link-overriding-preferences',
 		defaultMessage: "This link's filters differ from your saved advanced exclusions",
@@ -270,7 +274,8 @@ function getProjectCardTags(result: Labrinth.Search.v3.ResultSearchProject, disp
 			"
 			class="offline"
 		>
-			<p>{{ formatMessage(messages.noResults) }}</p>
+			<p v-if="ctx.searchError?.value">{{ formatMessage(messages.searchError) }}</p>
+			<p v-else>{{ formatMessage(messages.noResults) }}</p>
 		</section>
 
 		<ProjectCardList v-else :layout="ctx.effectiveLayout.value">
