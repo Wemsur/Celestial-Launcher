@@ -363,6 +363,7 @@ function handlePageOption({ option }: { option: string }) {
                 :links="tabLinks"
                 :active-index="activeTabIndex"
                 @tab-click="handleTabClick"
+                class="light-sense"
             />
             <NavButton
                 class="bg-brand"

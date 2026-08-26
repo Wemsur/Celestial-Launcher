@@ -1,6 +1,6 @@
 <template>
 	<div
-		class="relative"
+		class="relative light-sense"
 		:class="[
 			wrapperClass,
 			multiline ? 'flex' : 'inline-flex',

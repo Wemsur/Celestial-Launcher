@@ -261,7 +261,7 @@ onMounted(() => {
 <template>
 	<InstanceCardView
 		ref="instanceCardElement"
-		class="group/card cursor-pointer -outline-offset-2 focus-visible:!outline-2 hover:brightness-110"
+		class="group/card cursor-pointer -outline-offset-2 focus-visible:!outline-2 hover:brightness-110 border border-opacity-10 border-l-brand-highlight"
 		:class="{
 			'!scale-100': isDragging,
 			'opacity-50': isPartOfActiveDrag,

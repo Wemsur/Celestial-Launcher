@@ -6,7 +6,7 @@
 	>
 		<nav
 			ref="scrollContainer"
-			class="relative flex w-fit rounded-full bg-bg-raised p-1 text-xs sm:text-sm font-bold"
+			class="relative flex w-fit rounded-full bg-bg-raised p-1 text-xs sm:text-sm font-bold light-sense"
 			:class="{
 				'card-shadow border border-solid border-surface-4': mode === 'navigation',
 				'tab-color-delayed': colorChangeDelayed,

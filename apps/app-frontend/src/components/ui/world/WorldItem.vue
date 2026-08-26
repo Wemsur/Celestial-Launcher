@@ -268,7 +268,7 @@ const messages = defineMessages({
 			/>
 		</template>
 		<div
-			class="clickable-card grid grid-cols-[auto_minmax(0,3fr)_minmax(0,4fr)_auto] items-center gap-2 p-3 bg-bg-raised border border-solid border-surface-4 smart-clickable:highlight-on-hover rounded-[20px] transition-[filter] ease-out [--hover-brightness:1.25] min-h-20"
+			class="clickable-card light-sense grid grid-cols-[auto_minmax(0,3fr)_minmax(0,4fr)_auto] items-center gap-2 p-3 bg-bg-raised border border-solid border-surface-4 smart-clickable:highlight-on-hover rounded-[20px] transition-[filter] ease-out [--hover-brightness:1.25] min-h-20"
 			:class="{
 				'world-item-highlighted': highlighted,
 			}"
