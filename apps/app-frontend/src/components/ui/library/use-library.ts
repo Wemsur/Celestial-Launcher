@@ -500,47 +500,55 @@ function createLibraryState(instances: Ref<GameInstance[]>, libraryPath?: string
 			}
 		}
 
-		const groups = Array.from(groupedInstances, ([id, group]) => ({
+		// `groupedInstances` is filled by walking the already-sorted instance list,
+		// so insertion order is exactly "best instance under the active sort first".
+		// That index becomes the primary group ordering, which is what makes e.g.
+		// the group holding the most recently played instance float to the top.
+		const groups = Array.from(groupedInstances, ([id, group], index) => ({
 			id,
 			key: group.name,
 			instances: group.instances,
+			representativeIndex: index,
 		}))
 
-		// Sorting by name also orders the group headers themselves, so they have
-		// to follow the same direction as the instances inside them.
-		if (displayState.value.sortBy === 'Name') {
-			groups.sort(
-				(a, b) => directionMultiplier * (a.key.localeCompare(b.key) || a.id.localeCompare(b.id)),
-			)
-		}
-
-		if (displayState.value.group === 'Loader') {
-			groups.sort((a, b) => {
+		// Groups with nothing in them have no representative instance, so they keep
+		// the grouping mode's own ordering and sink below the populated ones.
+		const compareEmptyGroups = (a: InstanceGroup, b: InstanceGroup) => {
+			if (displayState.value.group === 'Loader') {
 				const aPriority = libraryLoaderPriority[a.key.toLowerCase()] ?? Number.MAX_SAFE_INTEGER
 				const bPriority = libraryLoaderPriority[b.key.toLowerCase()] ?? Number.MAX_SAFE_INTEGER
 				return aPriority - bPriority || a.key.localeCompare(b.key) || a.id.localeCompare(b.id)
-			})
-		}
+			}
 
-		if (displayState.value.group === 'Instance type') {
-			groups.sort((a, b) => a.key.localeCompare(b.key) || a.id.localeCompare(b.id))
-		}
+			if (displayState.value.group === 'Game version') {
+				return b.key.localeCompare(a.key, undefined, { numeric: true })
+			}
 
-		if (displayState.value.group === 'Game version') {
-			groups.sort((a, b) => b.key.localeCompare(a.key, undefined, { numeric: true }))
-		}
-
-		if (displayState.value.group === 'Group') {
-			groups.sort((a, b) => {
-				if (a.id === b.id) return 0
-				if (a.id === FAVORITES_GROUP_ID) return -1
-				if (b.id === FAVORITES_GROUP_ID) return 1
-
+			if (displayState.value.group === 'Group') {
 				const aOrder = libraryGroupOrder.value.get(a.id) ?? Number.MAX_SAFE_INTEGER
 				const bOrder = libraryGroupOrder.value.get(b.id) ?? Number.MAX_SAFE_INTEGER
 				return aOrder - bOrder || a.key.localeCompare(b.key) || a.id.localeCompare(b.id)
-			})
+			}
+
+			return a.key.localeCompare(b.key) || a.id.localeCompare(b.id)
 		}
+
+		groups.sort((a, b) => {
+			if (a.id === b.id) return 0
+
+			// Favorites stays pinned to the top regardless of the active sort.
+			if (displayState.value.group === 'Group') {
+				if (a.id === FAVORITES_GROUP_ID) return -1
+				if (b.id === FAVORITES_GROUP_ID) return 1
+			}
+
+			const aIsEmpty = a.instances.length === 0
+			const bIsEmpty = b.instances.length === 0
+			if (aIsEmpty !== bIsEmpty) return aIsEmpty ? 1 : -1
+			if (aIsEmpty) return compareEmptyGroups(a, b)
+
+			return a.representativeIndex - b.representativeIndex
+		})
 
 		return groups
 	})
