@@ -1302,6 +1302,18 @@ pub async fn launch_minecraft(
         .await?;
     }
 
+    // Tell the UI that last_played moved, so views ordered by recency (the quick
+    // instance switcher, the home page) reorder without waiting for a restart.
+    // Non-fatal: a dropped event must not fail an otherwise successful launch.
+    if let Err(error) =
+        emit_instance(&instance.id, InstancePayloadType::Edited).await
+    {
+        tracing::warn!(
+            "Failed to emit last_played update for {}: {error}",
+            instance.id
+        );
+    }
+
     // If in tauri, and the 'minimize on launch' setting is enabled, minimize the window
     #[cfg(feature = "tauri")]
     {

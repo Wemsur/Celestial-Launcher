@@ -293,6 +293,27 @@ pub(crate) async fn set_instance_install_stage_json(
     Ok(())
 }
 
+/// Load `celestial.json`, or seed a fresh one when the instance has no sidecar.
+///
+/// Imported `.minecraft` version directories start out with neither sidecar, so
+/// without seeding one here every launcher-recorded value (last played,
+/// playtime) would be silently discarded. Only reached when `instance.json` is
+/// absent, which for Modrinth instances cannot happen — they are not listed at
+/// all without one.
+fn celestial_sidecar_for_update(
+    dir: &std::path::Path,
+) -> crate::Result<crate::state::libraries::CelestialJson> {
+    if let Some(existing) =
+        crate::state::libraries::CelestialJson::read_from_dir(dir)?
+    {
+        return Ok(existing);
+    }
+    Ok(crate::state::libraries::CelestialJson {
+        created: crate::state::libraries::dir_created_time(dir),
+        ..Default::default()
+    })
+}
+
 /// Update last_played in the JSON sidecar for a JSON-backed instance.
 /// Writes to InstanceJson if present; otherwise falls back to CelestialJson
 /// for .minecraft instances without an instance.json sidecar.
@@ -300,29 +321,10 @@ pub(crate) async fn set_instance_last_played_json(
     instance_path: &str,
     last_played: DateTime<Utc>,
 ) -> crate::Result<()> {
-    // Resolve the absolute instance directory. The instance path stored in
-    // instance.json / CelestialJson is already absolute, but callers may pass
-    // either an absolute path or a relative one; use find_json_instance to
-    // locate it against the current library config.
-    let dir = if std::path::Path::new(instance_path).is_absolute() {
-        let resolved =
-            crate::state::libraries::find_json_instance(
-                &*State::get().await?,
-                &crate::state::libraries::instance_id_from_path(instance_path),
-            )
-            .await?;
-        resolved.unwrap_or_else(|| {
-            // Path doesn't match any known instance — return the original
-            // path so that read_from_dir fails gracefully rather than
-            // resolving to a wrong location.
-            std::path::PathBuf::from(instance_path)
-        })
-    } else {
-        crate::state::libraries::resolve_instance_dir(
-            &*State::get().await?,
-            instance_path,
-        )
-    };
+    let dir = crate::state::libraries::resolve_instance_dir(
+        &*State::get().await?,
+        instance_path,
+    );
     if let Some(mut json) =
         crate::state::libraries::InstanceJson::read_from_dir(&dir)?
     {
@@ -330,19 +332,9 @@ pub(crate) async fn set_instance_last_played_json(
         json.write_to_dir(&dir)?;
         return Ok(());
     }
-    // Fall back to CelestialJson for .minecraft instances without instance.json
-    if let Some(mut celestial) =
-        crate::state::libraries::CelestialJson::read_from_dir(&dir)?
-    {
-        celestial.last_played = Some(last_played);
-        celestial.write_to_dir(&dir)?;
-    } else {
-        tracing::warn!(
-            "set_instance_last_played_json: neither instance.json nor \
-             celestial.json found at {:?}; last_played not written",
-            dir
-        );
-    }
+    let mut celestial = celestial_sidecar_for_update(&dir)?;
+    celestial.last_played = Some(last_played);
+    celestial.write_to_dir(&dir)?;
     Ok(())
 }
 
@@ -377,18 +369,15 @@ pub(crate) async fn add_instance_recent_playtime_json(
         return Ok(());
     }
     // Fall back to CelestialJson for .minecraft instances without instance.json
-    if let Some(mut celestial) =
-        crate::state::libraries::CelestialJson::read_from_dir(&dir)?
-    {
-        celestial.recent_time_played = match celestial.recent_time_played {
-            v if v < seconds as u64 => seconds as u64,
-            v if v > max_playtime_before_increment as u64 => {
-                max_playtime as u64
-            }
-            v => v + seconds as u64,
-        };
-        celestial.write_to_dir(&dir)?;
-    }
+    let mut celestial = celestial_sidecar_for_update(&dir)?;
+    celestial.recent_time_played = match celestial.recent_time_played {
+        v if v < seconds as u64 => seconds as u64,
+        v if v > max_playtime_before_increment as u64 => {
+            max_playtime as u64
+        }
+        v => v + seconds as u64,
+    };
+    celestial.write_to_dir(&dir)?;
     Ok(())
 }
 
@@ -424,18 +413,15 @@ pub(crate) async fn mark_instance_playtime_submitted_json(
         return Ok(());
     }
     // Fall back to CelestialJson for .minecraft instances without instance.json
-    if let Some(mut celestial) =
-        crate::state::libraries::CelestialJson::read_from_dir(&dir)?
-    {
-        celestial.submitted_time_played = match celestial.submitted_time_played {
-            v if v < recent_time_played as u64 => recent_time_played as u64,
-            v if v > max_playtime_before_increment as u64 => {
-                max_playtime as u64
-            }
-            v => v + recent_time_played as u64,
-        };
-        celestial.recent_time_played = 0;
-        celestial.write_to_dir(&dir)?;
-    }
+    let mut celestial = celestial_sidecar_for_update(&dir)?;
+    celestial.submitted_time_played = match celestial.submitted_time_played {
+        v if v < recent_time_played as u64 => recent_time_played as u64,
+        v if v > max_playtime_before_increment as u64 => {
+            max_playtime as u64
+        }
+        v => v + recent_time_played as u64,
+    };
+    celestial.recent_time_played = 0;
+    celestial.write_to_dir(&dir)?;
     Ok(())
 }

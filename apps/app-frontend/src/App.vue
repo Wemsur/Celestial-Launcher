@@ -1832,6 +1832,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
             <NavButton
                 v-tooltip.right="formatMessage(messages.library)"
                 to="/library"
+                v-if="false"
                 :is-primary="(r) => r.path === '/library' || r.path === '/library'"
                 :is-subpage="
 					() =>

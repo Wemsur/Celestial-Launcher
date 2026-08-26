@@ -34,6 +34,35 @@ where
 
 pub const LIBRARIES_FILE_NAME: &str = "libraries.json";
 
+/// Current `libraries.json` schema version.
+///
+/// Bump this when a sidecar field is added that existing instances need
+/// backfilled, and extend `run_schema_backfills` with the new step. The
+/// `migrated` flag only tracks the one-time SQLite import, so it cannot express
+/// "already imported, but predates field X".
+pub const LIBRARIES_SCHEMA_VERSION: u32 = 1;
+
+/// Best-effort creation timestamp for an instance directory.
+///
+/// Instances imported from SQLite predate the `created` field in the JSON
+/// sidecars, so their creation time has to be recovered from the filesystem.
+/// Falls back to the modification time on filesystems that do not record a
+/// birth time. Returns `None` only when the directory cannot be stat'd.
+pub(crate) fn dir_created_time(dir: &Path) -> Option<DateTime<Utc>> {
+    let metadata = fs::metadata(dir).ok()?;
+    let time = metadata
+        .created()
+        .or_else(|_| metadata.modified())
+        .ok()?;
+    Some(DateTime::<Utc>::from(time))
+}
+
+/// Modification timestamp for an instance directory.
+pub(crate) fn dir_modified_time(dir: &Path) -> Option<DateTime<Utc>> {
+    let metadata = fs::metadata(dir).ok()?;
+    Some(DateTime::<Utc>::from(metadata.modified().ok()?))
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LibraryInfo {
     #[serde(default)]
@@ -90,6 +119,9 @@ pub struct LibrariesConfig {
     pub libraries: Vec<LibraryInfo>,
     #[serde(default)]
     pub migrated: bool,
+    /// Schema version of the sidecar data, used to drive one-time backfills.
+    #[serde(default)]
+    pub schema_version: u32,
     /// Path of the library that was last active on the home page.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_library_path: Option<String>,
@@ -210,6 +242,7 @@ impl InstanceJson {
         format: InstanceFormat,
     ) -> Instance {
         let id = instance_id_from_path(absolute_path);
+        let dir = Path::new(absolute_path);
         // Prefer stored name, then fall back to directory name
         let name = self
             .name
@@ -225,8 +258,15 @@ impl InstanceJson {
             update_channel: self.update_channel,
             name: name.unwrap_or_default(),
             icon_path: self.icon_path.clone(),
-            created: self.created.unwrap_or_else(Utc::now),
-            modified: Utc::now(),
+            // Never substitute `Utc::now()` here: this runs on every scan, so a
+            // fabricated timestamp would make the instance look freshly created
+            // each time and outrank genuinely recent instances when callers sort
+            // by `last_played` with a `created` fallback.
+            created: self
+                .created
+                .or_else(|| dir_created_time(dir))
+                .unwrap_or_else(Utc::now),
+            modified: dir_modified_time(dir).unwrap_or_else(Utc::now),
             last_played: self.last_played,
             submitted_time_played: self.submitted_time_played,
             recent_time_played: self.recent_time_played,
@@ -268,6 +308,10 @@ pub(crate) struct CelestialJson {
     pub icon_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_played: Option<DateTime<Utc>>,
+    /// When the instance was first created. Recovered from the instance
+    /// directory when absent, so ordering by creation time stays stable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub link: Option<InstanceLink>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -357,6 +401,7 @@ pub async fn get_libraries_config(state: &State) -> crate::Result<LibrariesConfi
         return Ok(LibrariesConfig {
             libraries: vec![],
             migrated: false,
+            schema_version: 0,
             active_library_path: None,
         });
     }
@@ -492,8 +537,13 @@ pub async fn list_instances_from_json(
                                 .unwrap_or_default(),
                             name: dir_name.clone().unwrap_or_default(),
                             icon_path: celestial.as_ref().and_then(|c| c.icon_path.clone()),
-                            created: Utc::now(),
-                            modified: Utc::now(),
+                            created: celestial
+                                .as_ref()
+                                .and_then(|c| c.created)
+                                .or_else(|| dir_created_time(&dir))
+                                .unwrap_or_else(Utc::now),
+                            modified: dir_modified_time(&dir)
+                                .unwrap_or_else(Utc::now),
                             last_played: celestial
                                 .as_ref()
                                 .and_then(|c| c.last_played),
@@ -606,6 +656,9 @@ pub(crate) async fn migrate_instances_from_db(
     let config = LibrariesConfig {
         libraries: libraries_vec,
         migrated: true,
+        // Migration writes `created` into every sidecar it touches, so the data
+        // it produces is already at the current schema version.
+        schema_version: LIBRARIES_SCHEMA_VERSION,
         active_library_path: None,
     };
 
@@ -664,6 +717,112 @@ pub(crate) async fn ensure_migration_done(state: &State) -> crate::Result<()> {
             config.active_library_path = Some(active);
             save_libraries_config(state, &config).await?;
         }
+    }
+    if config.schema_version < LIBRARIES_SCHEMA_VERSION {
+        run_schema_backfills(&config).await?;
+        config.schema_version = LIBRARIES_SCHEMA_VERSION;
+        save_libraries_config(state, &config).await?;
+    }
+    Ok(())
+}
+
+/// Apply one-time data fixes to sidecars written by an older schema version.
+///
+/// This is best-effort: individual failures are logged and skipped so a single
+/// unwritable instance directory cannot block startup.
+async fn run_schema_backfills(config: &LibrariesConfig) -> crate::Result<()> {
+    let mut patched = 0usize;
+
+    for library in &config.libraries {
+        let lib_path = Path::new(&library.path);
+        if !lib_path.exists() {
+            continue;
+        }
+        let scan_root = match library.format {
+            InstanceFormat::Modrinth => lib_path.join("profiles"),
+            InstanceFormat::Minecraft => lib_path.join("versions"),
+        };
+        // Mirror `list_instances_from_json`: a registered library path may already
+        // point at the container directory (the default Modrinth library is
+        // `<...>/Modrinth/profiles`), in which case joining again misses.
+        // Scanning the library root is safe here because this pass only patches
+        // sidecars that already exist and never creates one, so shared content
+        // folders such as `mods/` are skipped for lack of a sidecar.
+        let scan_root = if scan_root.exists() {
+            scan_root
+        } else {
+            lib_path.to_path_buf()
+        };
+        let Ok(entries) = fs::read_dir(&scan_root) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let dir = entry.path();
+            if !dir.is_dir() {
+                continue;
+            }
+            let Some(created) = dir_created_time(&dir) else {
+                continue;
+            };
+
+            match InstanceJson::read_from_dir(&dir) {
+                Ok(Some(mut json)) => {
+                    if json.created.is_some() {
+                        continue;
+                    }
+                    json.created = Some(created);
+                    match json.write_to_dir(&dir) {
+                        Ok(()) => patched += 1,
+                        Err(e) => warn!(
+                            dir = ?dir,
+                            error = %e,
+                            "Failed to backfill created into instance.json"
+                        ),
+                    }
+                }
+                Ok(None) => {
+                    // `.minecraft` instances without an instance.json keep their
+                    // launcher-managed settings in celestial.json. If neither
+                    // sidecar exists, leave the directory untouched — the read
+                    // path rederives `created` from the directory itself.
+                    if library.format != InstanceFormat::Minecraft {
+                        continue;
+                    }
+                    match CelestialJson::read_from_dir(&dir) {
+                        Ok(Some(mut celestial)) => {
+                            if celestial.created.is_some() {
+                                continue;
+                            }
+                            celestial.created = Some(created);
+                            match celestial.write_to_dir(&dir) {
+                                Ok(()) => patched += 1,
+                                Err(e) => warn!(
+                                    dir = ?dir,
+                                    error = %e,
+                                    "Failed to backfill created into celestial.json"
+                                ),
+                            }
+                        }
+                        Ok(None) => {}
+                        Err(e) => warn!(
+                            dir = ?dir,
+                            error = %e,
+                            "Failed to read celestial.json during backfill"
+                        ),
+                    }
+                }
+                Err(e) => warn!(
+                    dir = ?dir,
+                    error = %e,
+                    "Failed to read instance.json during backfill"
+                ),
+            }
+        }
+    }
+
+    if patched > 0 {
+        info!("Backfilled created timestamp into {patched} instance sidecar(s)");
     }
     Ok(())
 }
@@ -1353,4 +1512,104 @@ pub(crate) fn rename_minecraft_instance(
 
     tracing::info!("rename_minecraft_instance: completed successfully, returning {:?}", new_dir);
     Ok(new_dir)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write_sidecar(dir: &Path, file: &str, body: &str) {
+        fs::create_dir_all(dir).unwrap();
+        fs::write(dir.join(file), body).unwrap();
+    }
+
+    /// The backfill has to cope with both shapes of registered library path:
+    /// the default Modrinth library is registered as `<...>/Modrinth/profiles`
+    /// (already the container), while `.minecraft` libraries are registered as
+    /// the root and hold instances under `versions/`.
+    #[tokio::test]
+    async fn backfill_fills_created_for_both_library_layouts() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Modrinth library registered *at* the profiles directory.
+        let mr_root = tmp.path().join("Modrinth").join("profiles");
+        let mr_instance = mr_root.join("BBS FS");
+        write_sidecar(&mr_instance, "instance.json", r#"{"name":"BBS FS"}"#);
+
+        // .minecraft library registered at the root, instances under versions/.
+        let mc_root = tmp.path().join(".minecraft");
+        let mc_instance = mc_root.join("versions").join("1.21.1self");
+        write_sidecar(&mc_instance, "celestial.json", r#"{"name":"1.21.1self"}"#);
+
+        // Library-root shared content: must not gain a sidecar.
+        let shared_mods = mc_root.join("mods");
+        fs::create_dir_all(&shared_mods).unwrap();
+
+        let config = LibrariesConfig {
+            libraries: vec![
+                LibraryInfo {
+                    name: "default".into(),
+                    path: mr_root.to_string_lossy().to_string(),
+                    format: InstanceFormat::Modrinth,
+                },
+                LibraryInfo {
+                    name: "pcl".into(),
+                    path: mc_root.to_string_lossy().to_string(),
+                    format: InstanceFormat::Minecraft,
+                },
+            ],
+            migrated: true,
+            schema_version: 0,
+            active_library_path: None,
+        };
+
+        run_schema_backfills(&config).await.unwrap();
+
+        let mr = InstanceJson::read_from_dir(&mr_instance).unwrap().unwrap();
+        assert!(
+            mr.created.is_some(),
+            "Modrinth library registered at the profiles dir must still be backfilled"
+        );
+
+        let mc = CelestialJson::read_from_dir(&mc_instance).unwrap().unwrap();
+        assert!(
+            mc.created.is_some(),
+            "celestial.json sidecar must be backfilled"
+        );
+
+        assert!(
+            !shared_mods.join("instance.json").exists()
+                && !shared_mods.join("celestial.json").exists(),
+            "backfill must never create a sidecar in a shared content directory"
+        );
+    }
+
+    /// Regression guard for the ordering bug: a sidecar without `created` must
+    /// resolve to a stable directory-derived timestamp, never `Utc::now()`,
+    /// otherwise every scan makes the instance look freshly created and it
+    /// outranks genuinely recent instances.
+    #[test]
+    fn missing_created_resolves_to_stable_directory_time() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("versions").join("1.21.1");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.to_string_lossy().to_string();
+
+        let json = InstanceJson::default();
+        assert!(json.created.is_none());
+
+        let first = json.to_instance_with_format(&path, InstanceFormat::Minecraft);
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        let second = json.to_instance_with_format(&path, InstanceFormat::Minecraft);
+
+        assert_eq!(
+            first.created, second.created,
+            "created must be stable across scans"
+        );
+        assert_eq!(
+            first.created,
+            dir_created_time(&dir).unwrap(),
+            "created must come from the instance directory"
+        );
+    }
 }

@@ -251,6 +251,21 @@
   "app.browse.project-type.modpacks": {
     "message": "整合包"
   },
+  "app.browse.project-type.mods": {
+    "message": "模组"
+  },
+  "app.browse.project-type.resource-packs": {
+    "message": "资源包"
+  },
+  "app.browse.project-type.data-packs": {
+    "message": "数据包"
+  },
+  "app.browse.project-type.shaders": {
+    "message": "光影"
+  },
+  "app.browse.project-type.servers": {
+    "message": "服务器"
+  },
   "app.browse.server-instance-content-warning": {
     "message": "加入服务器时，添加内容可能会破坏兼容性。当更新服务器实例内容时，任何添加的内容也将丢失。"
   },
