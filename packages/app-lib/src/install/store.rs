@@ -547,18 +547,24 @@ fn deserialize_rows(rows: Vec<InstallJobRow>) -> Vec<InstallJobRecord> {
         .collect()
 }
 
+/// The `instances` row this job should be linked to, if any.
+///
+/// `install_jobs.instance_id` carries a foreign key to `instances(id)`, so it
+/// may only ever hold the ID of a DB-backed instance. JSON-backed instances have
+/// no such row, and writing their ID here fails the constraint (SQLite 787) —
+/// which is why every caller must go through this function rather than reading
+/// the target directly. The column is nullable and the real ID is preserved in
+/// `paths.json_backed_instance_id`, so `None` is the correct link for them.
 fn instance_id(state: &InstallJobState) -> Option<String> {
-    match &state.target {
+    let id = match &state.target {
         super::model::InstallTarget::NewInstance { instance_id } => {
-            // For JSON-backed instances the target is null to avoid FK
-            // violations.  The real ID lives in paths.json_backed_instance_id
-            // and must not be written to the install_jobs table.
             instance_id.clone()
         }
         super::model::InstallTarget::ExistingInstance { instance_id } => {
             Some(instance_id.clone())
         }
-    }
+    }?;
+    (!crate::state::libraries::is_json_backed_id(&id)).then_some(id)
 }
 
 fn timestamp(value: i64) -> DateTime<Utc> {
@@ -569,4 +575,42 @@ fn timestamp(value: i64) -> DateTime<Utc> {
 
 fn optional_timestamp(value: i64) -> Option<DateTime<Utc>> {
     Utc.timestamp_opt(value, 0).single()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::install::model::InstallRequest;
+
+    fn existing_instance_job(instance_id: &str) -> InstallJobState {
+        InstallJobState::new(InstallRequest::InstallExistingInstance {
+            instance_id: instance_id.to_string(),
+            force: false,
+        })
+    }
+
+    /// Repairing, or changing the version of, a JSON-backed instance targets an
+    /// existing instance whose ID is not in the `instances` table. Linking the
+    /// job to it fails `install_jobs`' foreign key with SQLite 787, so the link
+    /// must come back empty.
+    #[test]
+    fn existing_json_backed_instance_is_not_linked() {
+        let id = crate::state::libraries::instance_id_from_path(
+            r"C:\Users\me\Minecraft\.minecraft\versions\1.21.1",
+        );
+        assert!(crate::state::libraries::is_json_backed_id(&id));
+        assert_eq!(instance_id(&existing_instance_job(&id)), None);
+    }
+
+    /// DB-backed instances must still be linked, otherwise the job list loses
+    /// its association with the instance it belongs to.
+    #[test]
+    fn existing_db_backed_instance_is_linked() {
+        let id = "3f8c1e42-0000-4000-8000-000000000001";
+        assert!(!crate::state::libraries::is_json_backed_id(id));
+        assert_eq!(
+            instance_id(&existing_instance_job(id)),
+            Some(id.to_string())
+        );
+    }
 }

@@ -375,6 +375,22 @@ impl CelestialJson {
     }
 }
 
+/// Prefix of every instance ID derived from a filesystem path.
+///
+/// These identify JSON-backed instances, which deliberately have no row in the
+/// `instances` table — their metadata lives in an `instance.json` /
+/// `celestial.json` sidecar next to the instance.
+pub const JSON_BACKED_ID_PREFIX: &str = "local:";
+
+/// Whether an instance ID belongs to a JSON-backed instance.
+///
+/// Use this before writing an instance ID into any column with a foreign key to
+/// `instances(id)`: for these IDs there is no such row, so the write would fail
+/// the constraint.
+pub fn is_json_backed_id(instance_id: &str) -> bool {
+    instance_id.starts_with(JSON_BACKED_ID_PREFIX)
+}
+
 pub(crate) fn instance_id_from_path(path: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(path.as_bytes());
@@ -383,7 +399,7 @@ pub(crate) fn instance_id_from_path(path: &str) -> String {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
-    format!("local:{}", &hex[..32])
+    format!("{JSON_BACKED_ID_PREFIX}{}", &hex[..32])
 }
 
 /// Returns the default Modrinth library path (`<home>/Minecraft/Modrinth/profiles`).

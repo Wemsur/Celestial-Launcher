@@ -434,6 +434,29 @@ fn display_from_request(state: &InstallJobState) -> Option<InstallJobDisplay> {
     }
 }
 
+/// Put a JSON-backed instance's install stage back after a failed install.
+///
+/// The counterpart to `set_instance_install_stage` for instances that have no
+/// `instances` row: the stage is stored in the `instance.json` sidecar. A
+/// missing instance or sidecar is not an error — there is simply nothing to
+/// restore, and cleanup must not mask the original install failure.
+async fn restore_json_backed_install_stage(
+    instance_id: &str,
+    previous_stage: &str,
+    state: &State,
+) -> crate::Result<()> {
+    let Some(dir) =
+        libraries::find_json_instance(state, instance_id).await?
+    else {
+        return Ok(());
+    };
+    if let Some(mut json) = libraries::InstanceJson::read_from_dir(&dir)? {
+        json.install_stage = previous_stage.to_string();
+        json.write_to_dir(&dir)?;
+    }
+    Ok(())
+}
+
 pub async fn apply_cleanup(
     job_state: &InstallJobState,
     state: &State,
@@ -484,6 +507,26 @@ pub async fn apply_cleanup(
                     )
                     .await?;
                 }
+                if let Err(error) =
+                    emit_instance(instance_id, InstancePayloadType::Edited)
+                        .await
+                {
+                    tracing::warn!(
+                        "Failed to emit restored instance {instance_id}: {error}"
+                    );
+                }
+            } else if let Some(previous_stage) =
+                &job_state.paths.json_backed_previous_install_stage
+            {
+                // JSON-backed instances have no DB row, so no rollback snapshot
+                // was taken and the DB restore above does not apply. The stage
+                // recorded before the install lives in the sidecar instead.
+                restore_json_backed_install_stage(
+                    instance_id,
+                    previous_stage,
+                    state,
+                )
+                .await?;
                 if let Err(error) =
                     emit_instance(instance_id, InstancePayloadType::Edited)
                         .await

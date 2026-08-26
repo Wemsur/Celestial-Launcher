@@ -258,9 +258,8 @@ function handlePageOption({ option }: { option: string }) {
 </script>
 
 <template>
-	<WelcomeScreen v-if="isReady && !hasCreatedInstance" />
 	<div
-		v-else-if="isReady"
+		v-if="isReady"
 		data-library-page-background
 		class="flex flex-col gap-3 p-6"
 		@contextmenu="openPageContextMenu"

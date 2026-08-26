@@ -772,7 +772,7 @@ impl Process {
                     return;
                 }
             };
-            if instance_id.starts_with("local:") {
+            if crate::state::libraries::is_json_backed_id(instance_id) {
                 // JSON-backed instance: write playtime to the sidecar file
                 if let Err(e) =
                     crate::state::instances::commands::add_instance_recent_playtime_json(
