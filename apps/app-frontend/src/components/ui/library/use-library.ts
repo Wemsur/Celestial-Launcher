@@ -31,7 +31,15 @@ import {
 	set_group_memberships as setInstanceGroupMemberships,
 	set_group_order as setInstanceGroupOrder,
 } from '@/helpers/instance-groups'
+import {
+	load_library_sort_directions,
+	type LibrarySortDirection,
+	type LibrarySortDirections,
+	save_library_sort_directions,
+} from '@/helpers/librarySortDirection'
 import type { GameInstance, InstanceIconConfig } from '@/helpers/types'
+
+export type { LibrarySortDirection }
 
 export const librarySortOptions = [
 	'Name',
@@ -66,6 +74,21 @@ const libraryLoaderPriority: Record<string, number> = {
 export type LibrarySort = (typeof librarySortOptions)[number]
 export type LibraryGroupBy = (typeof libraryGroupOptions)[number]['value']
 export type LibraryFilters = Record<'instanceType' | 'gameVersion' | 'loader', string[]>
+
+/**
+ * Default direction per sort mode, chosen so the out-of-the-box ordering is
+ * unchanged: alphabetical/version modes start ascending, "how recent" and
+ * "how much" modes start descending (most recent / largest first).
+ */
+export const librarySortDefaultDirections: Record<LibrarySort, LibrarySortDirection> = {
+	Name: 'asc',
+	Loader: 'asc',
+	'Game version': 'asc',
+	'Last played': 'desc',
+	'Hours played': 'desc',
+	'Date created': 'desc',
+	'Date modified': 'desc',
+}
 
 export type InstanceGroup = {
 	id: string
@@ -192,6 +215,37 @@ function createLibraryState(instances: Ref<GameInstance[]>, libraryPath?: string
 
 	if (!libraryGroupOptions.some((option) => option.value === displayState.value.group)) {
 		displayState.value.group = 'Group'
+	}
+
+	// Per-sort-mode ascending/descending state, persisted in
+	// custom_backgrounds/celestial_settings.json rather than localStorage.
+	const sortDirections = ref<LibrarySortDirections>({})
+	const sortDirectionsLoaded = ref(false)
+
+	void (async () => {
+		sortDirections.value = await load_library_sort_directions()
+		sortDirectionsLoaded.value = true
+	})()
+
+	const sortDirection = computed<LibrarySortDirection>(
+		() =>
+			sortDirections.value[displayState.value.sortBy] ??
+			librarySortDefaultDirections[displayState.value.sortBy],
+	)
+
+	const isSortAscending = computed(() => sortDirection.value === 'asc')
+
+	const setSortDirection = (direction: LibrarySortDirection) => {
+		sortDirections.value = { ...sortDirections.value, [displayState.value.sortBy]: direction }
+		// Only write once the saved state has been read, so a slow initial load
+		// cannot be overwritten by an early toggle.
+		if (sortDirectionsLoaded.value) {
+			void save_library_sort_directions(sortDirections.value)
+		}
+	}
+
+	const toggleSortDirection = () => {
+		setSortDirection(sortDirection.value === 'asc' ? 'desc' : 'asc')
 	}
 
 	const linkedInstances = computed(() => instances.value.filter((instance) => instance.link))
@@ -356,44 +410,36 @@ function createLibraryState(instances: Ref<GameInstance[]>, libraryPath?: string
 		}),
 	)
 
+	// Every comparator is written in *ascending* order (A→Z, oldest→newest,
+	// fewest→most). Descending is the same comparator negated, which keeps the
+	// two directions exact mirrors of each other for every sort mode.
+	const ascendingInstanceComparators: Record<
+		LibrarySort,
+		(a: GameInstance, b: GameInstance) => number
+	> = {
+		Name: (a, b) => a.name.localeCompare(b.name),
+		Loader: (a, b) =>
+			formatLoader(formatMessage, a.loader).localeCompare(formatLoader(formatMessage, b.loader)),
+		'Game version': (a, b) =>
+			a.game_version.localeCompare(b.game_version, undefined, { numeric: true }),
+		'Last played': (a, b) => dayjs(a.last_played ?? 0).diff(dayjs(b.last_played ?? 0)),
+		'Hours played': (a, b) =>
+			a.recent_time_played +
+			a.submitted_time_played -
+			(b.recent_time_played + b.submitted_time_played),
+		'Date created': (a, b) => dayjs(a.created).diff(dayjs(b.created)),
+		'Date modified': (a, b) => dayjs(a.modified).diff(dayjs(b.modified)),
+	}
+
 	const instanceGroups = computed<InstanceGroup[]>(() => {
 		const visibleInstances = filteredInstances.value.filter((instance) =>
 			instance.name.toLowerCase().includes(search.value.toLowerCase()),
 		)
 
-		switch (displayState.value.sortBy) {
-			case 'Name':
-				visibleInstances.sort((a, b) => a.name.localeCompare(b.name))
-				break
-			case 'Loader':
-				visibleInstances.sort((a, b) =>
-					formatLoader(formatMessage, a.loader).localeCompare(
-						formatLoader(formatMessage, b.loader),
-					),
-				)
-				break
-			case 'Game version':
-				visibleInstances.sort((a, b) =>
-					a.game_version.localeCompare(b.game_version, undefined, { numeric: true }),
-				)
-				break
-			case 'Last played':
-				visibleInstances.sort((a, b) => dayjs(b.last_played ?? 0).diff(dayjs(a.last_played ?? 0)))
-				break
-			case 'Hours played':
-				visibleInstances.sort(
-					(a, b) =>
-						b.recent_time_played +
-						b.submitted_time_played -
-						(a.recent_time_played + a.submitted_time_played),
-				)
-				break
-			case 'Date created':
-				visibleInstances.sort((a, b) => dayjs(b.created).diff(dayjs(a.created)))
-				break
-			case 'Date modified':
-				visibleInstances.sort((a, b) => dayjs(b.modified).diff(dayjs(a.modified)))
-				break
+		const directionMultiplier = sortDirection.value === 'asc' ? 1 : -1
+		const compareInstances = ascendingInstanceComparators[displayState.value.sortBy]
+		if (compareInstances) {
+			visibleInstances.sort((a, b) => directionMultiplier * compareInstances(a, b))
 		}
 
 		const groupedInstances = new Map<string, { name: string; instances: GameInstance[] }>()
@@ -460,8 +506,12 @@ function createLibraryState(instances: Ref<GameInstance[]>, libraryPath?: string
 			instances: group.instances,
 		}))
 
+		// Sorting by name also orders the group headers themselves, so they have
+		// to follow the same direction as the instances inside them.
 		if (displayState.value.sortBy === 'Name') {
-			groups.sort((a, b) => a.key.localeCompare(b.key) || a.id.localeCompare(b.id))
+			groups.sort(
+				(a, b) => directionMultiplier * (a.key.localeCompare(b.key) || a.id.localeCompare(b.id)),
+			)
 		}
 
 		if (displayState.value.group === 'Loader') {
@@ -1281,6 +1331,10 @@ function createLibraryState(instances: Ref<GameInstance[]>, libraryPath?: string
 		isSearching,
 		filters,
 		displayState,
+		sortDirection,
+		isSortAscending,
+		setSortDirection,
+		toggleSortDirection,
 		instanceGroups,
 		isNewGroupModalOpen,
 		newGroupName,

@@ -1,6 +1,13 @@
 <script setup lang="ts">
-import { ArrowUpDownIcon, LayoutGridIcon } from '@modrinth/assets'
-import { Combobox, type ComboboxOption, defineMessages, useVIntl } from '@modrinth/ui'
+import { ArrowUpDownIcon, LayoutGridIcon, SortAscIcon, SortDescIcon } from '@modrinth/assets'
+import {
+	Combobox,
+	type ComboboxOption,
+	defineMessages,
+	type MessageDescriptor,
+	useVIntl,
+} from '@modrinth/ui'
+import { computed } from 'vue'
 
 import {
 	type LibraryGroupBy,
@@ -10,7 +17,7 @@ import {
 	useLibrary,
 } from '@/components/ui/library/use-library'
 
-const { displayState } = useLibrary()
+const { displayState, isSortAscending, toggleSortDirection } = useLibrary()
 const { formatMessage } = useVIntl()
 
 const messages = defineMessages({
@@ -28,6 +35,46 @@ const messages = defineMessages({
 	noGrouping: { id: 'app.library.group-by.none', defaultMessage: 'No grouping' },
 	sortBy: { id: 'app.library.sort.label', defaultMessage: 'Sort by' },
 	groupBy: { id: 'app.library.group-by.label', defaultMessage: 'Group by' },
+	ascAlphabetical: { id: 'app.library.sort.direction.asc-alphabetical', defaultMessage: 'A–Z' },
+	descAlphabetical: { id: 'app.library.sort.direction.desc-alphabetical', defaultMessage: 'Z–A' },
+	ascVersion: {
+		id: 'app.library.sort.direction.asc-version',
+		defaultMessage: 'Oldest version first',
+	},
+	descVersion: {
+		id: 'app.library.sort.direction.desc-version',
+		defaultMessage: 'Newest version first',
+	},
+	ascRecency: {
+		id: 'app.library.sort.direction.asc-recency',
+		defaultMessage: 'Least recent first',
+	},
+	descRecency: {
+		id: 'app.library.sort.direction.desc-recency',
+		defaultMessage: 'Most recent first',
+	},
+	ascAmount: { id: 'app.library.sort.direction.asc-amount', defaultMessage: 'Fewest first' },
+	descAmount: { id: 'app.library.sort.direction.desc-amount', defaultMessage: 'Most first' },
+	ascDate: { id: 'app.library.sort.direction.asc-date', defaultMessage: 'Oldest first' },
+	descDate: { id: 'app.library.sort.direction.desc-date', defaultMessage: 'Newest first' },
+})
+
+// What the up/down arrow means for each sort mode. The arrow always points in
+// the direction of the underlying value: up = ascending, down = descending.
+const sortDirectionLabels: Record<LibrarySort, { asc: MessageDescriptor; desc: MessageDescriptor }> =
+	{
+		Name: { asc: messages.ascAlphabetical, desc: messages.descAlphabetical },
+		Loader: { asc: messages.ascAlphabetical, desc: messages.descAlphabetical },
+		'Game version': { asc: messages.ascVersion, desc: messages.descVersion },
+		'Last played': { asc: messages.ascRecency, desc: messages.descRecency },
+		'Hours played': { asc: messages.ascAmount, desc: messages.descAmount },
+		'Date created': { asc: messages.ascDate, desc: messages.descDate },
+		'Date modified': { asc: messages.ascDate, desc: messages.descDate },
+	}
+
+const sortDirectionLabel = computed(() => {
+	const labels = sortDirectionLabels[displayState.value.sortBy]
+	return formatMessage(isSortAscending.value ? labels.asc : labels.desc)
 })
 
 const sortLabels = {
@@ -74,6 +121,17 @@ const groupOptions: ComboboxOption<LibraryGroupBy>[] = libraryGroupOptions.map((
 			<span>{{ label }}</span>
 		</template>
 	</Combobox>
+	<button
+		v-tooltip="sortDirectionLabel"
+		type="button"
+		class="flex h-[40px] w-[40px] shrink-0 cursor-pointer items-center justify-center rounded-xl border-none bg-button-bg p-0 text-button-text transition-all hover:bg-button-bg hover:text-contrast active:scale-[0.97]"
+		:aria-label="sortDirectionLabel"
+		:aria-pressed="isSortAscending"
+		@click="toggleSortDirection()"
+	>
+		<SortAscIcon v-if="isSortAscending" class="size-5" />
+		<SortDescIcon v-else class="size-5" />
+	</button>
 	<Combobox
 		v-model="displayState.group"
 		class="w-max"

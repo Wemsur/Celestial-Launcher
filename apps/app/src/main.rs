@@ -508,6 +508,78 @@ async fn load_hue_value(app_handle: tauri::AppHandle) -> Result<u32, String> {
     Ok(json.get("hue_value").and_then(|v| v.as_u64()).unwrap_or(0) as u32)
 }
 
+// 5. 保存 Library 每种排序方式的正序/倒序状态
+#[tauri::command]
+async fn save_library_sort_directions(
+    app_handle: tauri::AppHandle,
+    directions: std::collections::HashMap<String, String>,
+) -> Result<(), String> {
+    let mut config_path = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
+
+    config_path.push("custom_backgrounds");
+    if !config_path.exists() {
+        fs::create_dir_all(&config_path)
+            .map_err(|e| format!("创建配置文件夹失败: {}", e))?;
+    }
+
+    config_path.push("celestial_settings.json");
+
+    // 读取现有配置，仅覆盖 library_sort_directions 字段，保留其他设置
+    let existing = if config_path.exists() {
+        let content = fs::read_to_string(&config_path).unwrap_or_else(|_| "{}".to_string());
+        serde_json::from_str::<serde_json::Value>(&content).unwrap_or_else(|_| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    let mut updated = existing.clone();
+    updated["library_sort_directions"] = serde_json::json!(directions);
+
+    fs::write(&config_path, serde_json::to_string_pretty(&updated).map_err(|e| format!("序列化失败: {}", e))?)
+        .map_err(|e| format!("写入配置文件失败: {}", e))?;
+
+    Ok(())
+}
+
+// 6. 读取 Library 每种排序方式的正序/倒序状态
+#[tauri::command]
+async fn load_library_sort_directions(
+    app_handle: tauri::AppHandle,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    let mut config_path = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
+
+    config_path.push("custom_backgrounds");
+    config_path.push("celestial_settings.json");
+
+    // 无配置文件时返回空表，前端会退回到每种排序方式的默认方向
+    if !config_path.exists() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let content = fs::read_to_string(&config_path)
+        .map_err(|e| format!("读取配置文件失败: {}", e))?;
+
+    let json: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("JSON解析失败: {}", e))?;
+
+    let mut directions = std::collections::HashMap::new();
+    if let Some(map) = json.get("library_sort_directions").and_then(|v| v.as_object()) {
+        for (key, value) in map {
+            if let Some(direction) = value.as_str() {
+                directions.insert(key.clone(), direction.to_string());
+            }
+        }
+    }
+
+    Ok(directions)
+}
+
 #[tauri::command]
 async fn get_background_as_base64(app_handle: tauri::AppHandle) -> Result<String, String> {
     let mut path = app_handle
@@ -803,6 +875,8 @@ fn main() {
             load_bg_blur_status,
             save_hue_value,
             load_hue_value,
+            save_library_sort_directions,
+            load_library_sort_directions,
             check_for_import,
             import_old_data,
             set_dont_show_import_modal,
