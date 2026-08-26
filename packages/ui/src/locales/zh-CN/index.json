@@ -6128,6 +6128,129 @@
   "app.library.group.ungrouped": {
     "defaultMessage": "未分组"
   },
+  "app.library.search.placeholder": {
+    "defaultMessage": "搜索"
+  },
+  "app.library.group.new": {
+    "defaultMessage": "新建分组"
+  },
+  "app.library.instance.new": {
+    "defaultMessage": "新建实例"
+  },
+  "app.library.sort.label": {
+    "defaultMessage": "排序方式"
+  },
+  "app.library.sort.name": {
+    "defaultMessage": "名称"
+  },
+  "app.library.sort.loader": {
+    "defaultMessage": "加载器"
+  },
+  "app.library.sort.game-version": {
+    "defaultMessage": "游戏版本"
+  },
+  "app.library.sort.last-played": {
+    "defaultMessage": "最后游玩"
+  },
+  "app.library.sort.hours-played": {
+    "defaultMessage": "游玩时长"
+  },
+  "app.library.sort.date-created": {
+    "defaultMessage": "创建日期"
+  },
+  "app.library.sort.date-modified": {
+    "defaultMessage": "修改日期"
+  },
+  "app.library.sort.direction.asc-alphabetical": {
+    "defaultMessage": "A–Z 顺序"
+  },
+  "app.library.sort.direction.desc-alphabetical": {
+    "defaultMessage": "Z–A 倒序"
+  },
+  "app.library.sort.direction.asc-version": {
+    "defaultMessage": "旧版本在前"
+  },
+  "app.library.sort.direction.desc-version": {
+    "defaultMessage": "新版本在前"
+  },
+  "app.library.sort.direction.asc-recency": {
+    "defaultMessage": "最久未玩在前"
+  },
+  "app.library.sort.direction.desc-recency": {
+    "defaultMessage": "最近游玩在前"
+  },
+  "app.library.sort.direction.asc-amount": {
+    "defaultMessage": "时长最少在前"
+  },
+  "app.library.sort.direction.desc-amount": {
+    "defaultMessage": "时长最多在前"
+  },
+  "app.library.sort.direction.asc-date": {
+    "defaultMessage": "最早的在前"
+  },
+  "app.library.sort.direction.desc-date": {
+    "defaultMessage": "最新的在前"
+  },
+  "app.library.group-by.label": {
+    "defaultMessage": "分组方式"
+  },
+  "app.library.group-by.custom-group": {
+    "defaultMessage": "自定义分组"
+  },
+  "app.library.group-by.instance-type": {
+    "defaultMessage": "实例类型"
+  },
+  "app.library.group-by.loader": {
+    "defaultMessage": "加载器"
+  },
+  "app.library.group-by.game-version": {
+    "defaultMessage": "游戏版本"
+  },
+  "app.library.group-by.none": {
+    "defaultMessage": "不分组"
+  },
+  "app.library.filter.label": {
+    "defaultMessage": "筛选条件"
+  },
+  "app.library.filter.add": {
+    "defaultMessage": "添加筛选"
+  },
+  "app.library.filter.clear": {
+    "defaultMessage": "清除筛选"
+  },
+  "app.library.filter.instance-type": {
+    "defaultMessage": "实例类型"
+  },
+  "app.library.filter.instance-type.modpack": {
+    "defaultMessage": "整合包"
+  },
+  "app.library.filter.instance-type.server": {
+    "defaultMessage": "服务器"
+  },
+  "app.library.filter.instance-type.custom": {
+    "defaultMessage": "自定义"
+  },
+  "app.library.filter.game-version": {
+    "defaultMessage": "游戏版本"
+  },
+  "app.library.filter.loader": {
+    "defaultMessage": "加载器"
+  },
+  "app.library.group.favorites": {
+    "defaultMessage": "收藏"
+  },
+  "app.library.group.unknown": {
+    "defaultMessage": "未知分组"
+  },
+  "app.library.group.empty": {
+    "defaultMessage": "拖放实例到此处以添加。"
+  },
+  "app.library.group.collapse": {
+    "defaultMessage": "折叠分组"
+  },
+  "app.library.group.expand": {
+    "defaultMessage": "展开分组"
+  },
   "app.instance.tab.content": {
     "defaultMessage": "内容"
   },
