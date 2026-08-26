@@ -479,6 +479,7 @@ const handleDeleteBackground = async () => {
 onMounted(async () => {
 	await useCheckDisableMouseover()
     await appTheme.loadHueValue()
+    await appTheme.loadBgBlur()
 
 	document.querySelector('body').addEventListener('click', handleClick)
 	document.querySelector('body').addEventListener('auxclick', handleAuxClick)

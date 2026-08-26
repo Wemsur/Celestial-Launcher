@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core'
 import { computed, reactive, ref, watch } from 'vue'
 
 export const THEME_OPTIONS = ['customdark', 'customlight', 'oled', 'retro', 'elegant', 'antiquedark', 'system'] as const
@@ -42,7 +43,37 @@ watch(
 	{ immediate: true },
 )
 
-const customBgBlur = ref<boolean>(() => localStorage.getItem('celestial_custom_bg_blur') === 'true')
+/**
+ * Background blur lives in `custom_backgrounds/celestial_settings.json`
+ * (`blur_enabled`), read and written through the Tauri commands below.
+ * localStorage is only a cache so the very first frame paints the right state
+ * without waiting on the async round-trip; the file is the source of truth.
+ */
+const BG_BLUR_STORAGE_KEY = 'celestial_custom_bg_blur'
+const BG_BLUR_DEFAULT = true
+
+function cachedBgBlur(): boolean {
+	const saved = localStorage.getItem(BG_BLUR_STORAGE_KEY)
+	return saved === null ? BG_BLUR_DEFAULT : saved === 'true'
+}
+
+const customBgBlur = ref<boolean>(cachedBgBlur())
+
+function applyBgBlur(enabled: boolean): void {
+	customBgBlur.value = enabled
+	localStorage.setItem(BG_BLUR_STORAGE_KEY, String(enabled))
+	document.body.classList.toggle('custom-bgblur', enabled)
+}
+
+applyBgBlur(customBgBlur.value)
+
+async function loadBgBlur(): Promise<void> {
+	try {
+		applyBgBlur(await invoke<boolean>('load_bg_blur_status'))
+	} catch (error) {
+		console.error('Failed to load background blur setting:', error)
+	}
+}
 
 async function loadHueValue(): Promise<void> {
 	const saved = localStorage.getItem('celestial_hue_value')
@@ -56,10 +87,13 @@ function saveHueValue(val: number): void {
 	document.documentElement.style.setProperty('--brand-hue', String(val))
 }
 
-function toggleBgBlur(enabled: boolean): void {
-	customBgBlur.value = enabled
-	localStorage.setItem('celestial_custom_bg_blur', String(enabled))
-	document.body.classList.toggle('custom-bgblur', enabled)
+async function toggleBgBlur(enabled: boolean): Promise<void> {
+	applyBgBlur(enabled)
+	try {
+		await invoke('save_bg_blur_status', { isActive: enabled })
+	} catch (error) {
+		console.error('Failed to save background blur setting:', error)
+	}
 }
 
 const theme = reactive({
@@ -74,6 +108,7 @@ const theme = reactive({
 	options: THEME_OPTIONS,
 	loadHueValue,
 	saveHueValue,
+	loadBgBlur,
 	toggleBgBlur,
 })
 
