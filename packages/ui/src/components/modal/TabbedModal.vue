@@ -111,7 +111,7 @@ defineExpose({ show, hide, selectedTab, setTab })
 		</template>
 		<div class="grid grid-cols-[minmax(8rem,12rem)_minmax(0,1fr)] p-6 pb-3 pr-0">
 			<div
-				class="flex min-w-0 max-h-[min(65vh,600px)] flex-col border-0 border-r-[1px] border-solid border-divider pr-4"
+				class="flex min-w-0 max-h-[min(70vh,600px)] flex-col border-0 border-r-[1px] border-solid border-divider pr-4"
 			>
 				<div class="relative min-h-0 flex-1">
 					<Transition
@@ -184,7 +184,7 @@ defineExpose({ show, hide, selectedTab, setTab })
 
 				<slot name="footer" />
 			</div>
-			<div class="relative min-h-[min(65vh,600px)]">
+			<div class="relative min-h-[min(70vh,600px)]">
 				<Transition
 					enter-active-class="transition-all duration-200 ease-out"
 					enter-from-class="opacity-0 max-h-0"
