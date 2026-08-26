@@ -7045,5 +7045,605 @@
   },
   "instance.settings.sharing.revoke-invite.admonition-body": {
     "defaultMessage": "邀请链接 <monospace>{code}</monospace> 将立即失效。已经加入的人仍会保留访问权限。"
+  },
+  "app.instance.action.play": {
+    "defaultMessage": "启动"
+  },
+  "app.instance.action.stop": {
+    "defaultMessage": "停止"
+  },
+  "app.instance.action.edit": {
+    "defaultMessage": "编辑"
+  },
+  "app.instance.action.add-content": {
+    "defaultMessage": "添加内容"
+  },
+  "app.instance.action.open-folder": {
+    "defaultMessage": "打开文件夹"
+  },
+  "app.instance.action.copy-path": {
+    "defaultMessage": "复制路径"
+  },
+  "app.instance.navigation.back-to-instance": {
+    "defaultMessage": "返回实例"
+  },
+  "app.instance.card.icon-alt": {
+    "defaultMessage": "实例图标"
+  },
+  "app.instance.card.play": {
+    "defaultMessage": "启动"
+  },
+  "app.instance.card.stop": {
+    "defaultMessage": "停止"
+  },
+  "app.instance.card.repair": {
+    "defaultMessage": "修复"
+  },
+  "app.instance.card.installing": {
+    "defaultMessage": "正在安装…"
+  },
+  "app.instance.card.loading": {
+    "defaultMessage": "实例正在加载…"
+  },
+  "app.instance.card.never-played": {
+    "defaultMessage": "从未游玩"
+  },
+  "app.instance.card.played": {
+    "defaultMessage": "上次游玩 {relativeTime}"
+  },
+  "app.instance.shortcut.created": {
+    "defaultMessage": "已创建快捷方式"
+  },
+  "app.instance.shortcut.creation-error": {
+    "defaultMessage": "创建快捷方式失败"
+  },
+  "app.instance.confirm-delete.header": {
+    "defaultMessage": "删除实例"
+  },
+  "app.instance.confirm-delete.delete-button": {
+    "defaultMessage": "删除实例"
+  },
+  "app.instance.confirm-delete.admonition-header": {
+    "defaultMessage": "此操作无法撤销"
+  },
+  "app.instance.confirm-delete.admonition-body": {
+    "defaultMessage": "该实例的所有数据都将被永久删除，包括你的世界、配置和全部已安装内容。"
+  },
+  "app.instance.confirm-delete.bulk-header": {
+    "defaultMessage": "删除 {count} 个实例"
+  },
+  "app.instance.confirm-delete.bulk-delete-button": {
+    "defaultMessage": "删除 {count} 个实例"
+  },
+  "app.instance.confirm-delete.bulk-admonition-body": {
+    "defaultMessage": "这 {count} 个实例的所有数据都将被永久删除，包括它们的世界、配置和全部已安装内容。"
+  },
+  "app.instance.confirm-delete.instances-label": {
+    "defaultMessage": "{count, plural, one {实例} other {实例（{count}）}}"
+  },
+  "app.instance.content.managed-content.modpack-header": {
+    "defaultMessage": "整合包内容"
+  },
+  "app.instance.content.managed-content.shared-header": {
+    "defaultMessage": "共享内容"
+  },
+  "app.instance.mods.content-type-project": {
+    "defaultMessage": "项目"
+  },
+  "app.instance.mods.freeze-content": {
+    "defaultMessage": "锁定版本"
+  },
+  "app.instance.mods.unfreeze-content": {
+    "defaultMessage": "解锁版本"
+  },
+  "app.instance.mods.locked-content": {
+    "defaultMessage": "锁定的实例中的内容无法更改。"
+  },
+  "app.instance.mods.project-was-added": {
+    "defaultMessage": "已添加“{name}”"
+  },
+  "app.instance.mods.projects-were-added": {
+    "defaultMessage": "已添加 {count} 个项目"
+  },
+  "app.instance.mods.successfully-uploaded": {
+    "defaultMessage": "上传成功"
+  },
+  "app.instance.mods.share-title": {
+    "defaultMessage": "分享整合包内容"
+  },
+  "app.instance.mods.share-text": {
+    "defaultMessage": "来看看我在整合包里用了哪些项目！"
+  },
+  "app.instance.mods.bulk-update.resolving-versions": {
+    "defaultMessage": "正在解析版本…"
+  },
+  "app.instance.mods.bulk-update.downloading-projects": {
+    "defaultMessage": "正在下载 {current, number}/{total, number} 个项目…"
+  },
+  "app.instance.mods.bulk-update.finishing": {
+    "defaultMessage": "正在完成更新…"
+  },
+  "app.instance.worlds.add-server": {
+    "defaultMessage": "添加服务器"
+  },
+  "app.instance.worlds.browse-servers": {
+    "defaultMessage": "浏览服务器"
+  },
+  "app.instance.worlds.refreshing": {
+    "defaultMessage": "正在刷新…"
+  },
+  "app.instance.worlds.search-worlds-placeholder": {
+    "defaultMessage": "搜索 {count} 个世界…"
+  },
+  "app.instance.worlds.no-worlds-heading": {
+    "defaultMessage": "尚未添加服务器或世界"
+  },
+  "app.instance.worlds.no-worlds-description": {
+    "defaultMessage": "添加一个服务器或浏览内容以开始"
+  },
+  "app.instance.worlds.filter-online": {
+    "defaultMessage": "在线"
+  },
+  "app.instance.worlds.filter-offline": {
+    "defaultMessage": "离线"
+  },
+  "app.instance.worlds.filter-modded": {
+    "defaultMessage": "已装模组"
+  },
+  "app.instance.worlds.filter-vanilla": {
+    "defaultMessage": "原版"
+  },
+  "app.instance.worlds.delete-world-modal.title": {
+    "defaultMessage": "删除世界"
+  },
+  "app.instance.worlds.delete-world-modal.delete-button": {
+    "defaultMessage": "删除世界"
+  },
+  "app.instance.worlds.delete-world-modal.warning-header": {
+    "defaultMessage": "正在删除 {name}"
+  },
+  "app.instance.worlds.delete-world-modal.warning-body": {
+    "defaultMessage": "该世界将从此实例中永久删除。此操作无法撤销。"
+  },
+  "app.instance.worlds.remove-server-modal.title": {
+    "defaultMessage": "移除服务器"
+  },
+  "app.instance.worlds.remove-server-modal.remove-button": {
+    "defaultMessage": "移除服务器"
+  },
+  "app.instance.worlds.remove-server-modal.warning-header": {
+    "defaultMessage": "正在移除 {name}"
+  },
+  "app.instance.worlds.remove-server-modal.warning-body": {
+    "defaultMessage": "该服务器将从你的服务器列表和游戏内的服务器列表中移除。如果你记得地址，之后可以重新添加。"
+  },
+  "app.instance.add-server.title": {
+    "defaultMessage": "将服务器添加到实例"
+  },
+  "app.instance.add-server.search-placeholder": {
+    "defaultMessage": "搜索实例"
+  },
+  "app.instance.add-server.add": {
+    "defaultMessage": "添加"
+  },
+  "app.instance.add-server.added": {
+    "defaultMessage": "已添加"
+  },
+  "app.instance.add-server.adding": {
+    "defaultMessage": "正在添加…"
+  },
+  "app.instance.add-server.cancel": {
+    "defaultMessage": "取消"
+  },
+  "app.instance.add-server.compatibility-warning": {
+    "defaultMessage": "该服务器可能并非与所有实例都兼容。"
+  },
+  "app.instance.modpack-already-installed.header": {
+    "defaultMessage": "整合包已安装"
+  },
+  "app.instance.modpack-already-installed.body": {
+    "defaultMessage": "该整合包已安装在实例 <bold>{instanceName}</bold> 中。确定要再创建一个副本吗？"
+  },
+  "app.instance.modpack-already-installed.create": {
+    "defaultMessage": "创建"
+  },
+  "app.instance.modpack-already-installed.instance": {
+    "defaultMessage": "实例"
+  },
+  "app.instance.shared-instance-already-installed.header": {
+    "defaultMessage": "共享实例已安装"
+  },
+  "app.instance.shared-instance-already-installed.body": {
+    "defaultMessage": "该共享实例已安装为 <bold>{instanceName}</bold>。确定要再安装一个副本吗？"
+  },
+  "app.instance.shared-instance-already-installed.install-anyway": {
+    "defaultMessage": "仍然安装"
+  },
+  "app.instance.shared-instance-already-installed.instance": {
+    "defaultMessage": "实例"
+  },
+  "app.instance.admonitions.shared-instance.changes-header": {
+    "defaultMessage": "你的更改尚未共享"
+  },
+  "app.instance.admonitions.shared-instance.changes-body": {
+    "defaultMessage": "你的本地实例比与你共享的用户更新。"
+  },
+  "app.instance.admonitions.shared-instance.publish-button": {
+    "defaultMessage": "推送更新"
+  },
+  "app.instance.admonitions.shared-instance.publishing-button": {
+    "defaultMessage": "正在推送…"
+  },
+  "app.instance.admonitions.shared-instance.review-header": {
+    "defaultMessage": "查看更改"
+  },
+  "app.instance.admonitions.shared-instance.review-admonition-header": {
+    "defaultMessage": "推送更新"
+  },
+  "app.instance.admonitions.shared-instance.review-description": {
+    "defaultMessage": "查看将要共享给所有使用该实例的人的内容更改。"
+  },
+  "app.instance.admonitions.shared-instance.reviewing-button": {
+    "defaultMessage": "正在检查…"
+  },
+  "app.instance.admonitions.shared-instance.added-label": {
+    "defaultMessage": "已添加"
+  },
+  "app.instance.admonitions.shared-instance.removed-label": {
+    "defaultMessage": "已移除"
+  },
+  "app.instance.shared-instance-wrong-account.warning-header": {
+    "defaultMessage": "你使用的 Modrinth 账户不正确"
+  },
+  "app.instance.shared-instance-wrong-account.signed-out-header": {
+    "defaultMessage": "你需要登录 Modrinth"
+  },
+  "app.instance.shared-instance-wrong-account.sign-in-as-label": {
+    "defaultMessage": "请登录"
+  },
+  "app.instance.shared-instance-wrong-account.fallback-username": {
+    "defaultMessage": "已关联的账户"
+  },
+  "app.instance.shared-instance-wrong-account.owner-admonition-body-v2": {
+    "defaultMessage": "以管理该共享实例。否则你将无法向用户推送更新。"
+  },
+  "app.instance.shared-instance-wrong-account.user-admonition-body-v2": {
+    "defaultMessage": "以接收该共享实例的更新。"
+  },
+  "app.instance.share.empty.heading": {
+    "defaultMessage": "尚未邀请好友"
+  },
+  "app.instance.share.empty.description": {
+    "defaultMessage": "你可以把这个实例分享给好友！"
+  },
+  "app.instance.share.empty.invite-friends-button": {
+    "defaultMessage": "邀请好友"
+  },
+  "app.instance.share.invite-modal.heading": {
+    "defaultMessage": "分享 {name}"
+  },
+  "app.instance.share.invite-modal.user-limit-reached": {
+    "defaultMessage": "该实例已达到 {limit} 人的上限。"
+  },
+  "app.instance.share.members.empty": {
+    "defaultMessage": "还没有用户加入"
+  },
+  "app.instance.share.members.no-filter-results": {
+    "defaultMessage": "没有用户符合你的筛选条件。"
+  },
+  "app.instance.share.sign-in.button": {
+    "defaultMessage": "登录"
+  },
+  "app.instance.share.locked.signed-out-heading": {
+    "defaultMessage": "未登录"
+  },
+  "app.instance.share.locked.wrong-account-heading": {
+    "defaultMessage": "账户不正确"
+  },
+  "app.instance.share.locked.empty-description-prefix": {
+    "defaultMessage": "你需要登录"
+  },
+  "app.instance.share.locked.empty-description-suffix": {
+    "defaultMessage": "才能访问此页面。"
+  },
+  "app.instance.share.locked.linked-account-fallback": {
+    "defaultMessage": "已关联的账户"
+  },
+  "app.instance.share.locked.switch-account-button": {
+    "defaultMessage": "切换账户"
+  },
+  "app.instance.share.unable-to-connect.heading": {
+    "defaultMessage": "无法连接"
+  },
+  "app.instance.share.unable-to-connect.description": {
+    "defaultMessage": "共享实例服务当前无法访问，请稍后重试"
+  },
+  "app.instance.share.unlink.header": {
+    "defaultMessage": "共享前需要取消关联"
+  },
+  "app.instance.share.unlink.body": {
+    "defaultMessage": "你必须取消该整合包的关联才能共享此实例"
+  },
+  "app.instance.share.remove-user-modal.header": {
+    "defaultMessage": "撤销访问权限"
+  },
+  "app.instance.share.remove-user-modal.remove-button": {
+    "defaultMessage": "撤销访问权限"
+  },
+  "app.instance.share.remove-user-modal.user-avatar-alt": {
+    "defaultMessage": "{username} 的头像"
+  },
+  "app.instance.share.remove-user-modal.warning-body": {
+    "defaultMessage": "如果你撤销 {username} 对该共享实例的访问权限，需要重新邀请对方才能让其继续接收更新。"
+  },
+  "app.instance.share.remove-user-modal.effects-label": {
+    "defaultMessage": "会发生什么？"
+  },
+  "app.instance.share.remove-user-modal.effect-access": {
+    "defaultMessage": "对方将不再收到该共享实例的更新"
+  },
+  "app.instance.share.remove-user-modal.effect-installed-copy": {
+    "defaultMessage": "对方已安装的副本仍会保留在其设备上"
+  },
+  "app.instance.share.remove-user-modal.effect-invite-again": {
+    "defaultMessage": "你之后可以重新邀请对方"
+  },
+  "app.instance.share.remove-user-modal.effect-last-user": {
+    "defaultMessage": "这是最后一位用户，该实例的共享将被关闭"
+  },
+  "app.icon-editor.apply-icons-modal.title": {
+    "defaultMessage": "自定义图标编辑器"
+  },
+  "app.icon-editor.apply-icons-modal.badge": {
+    "defaultMessage": "本次更新新增"
+  },
+  "app.icon-editor.apply-icons-modal.description": {
+    "defaultMessage": "直接在启动器中为你的实例创建自定义图标。用 Minecraft 和热门模组的符号搭配各种背景！"
+  },
+  "app.icon-editor.apply-icons-modal.instances-without-icons": {
+    "defaultMessage": "还有 {count, plural, other {# 个实例}} 尚未设置图标。要先为它们随机生成一些吗？"
+  },
+  "app.icon-editor.apply-icons-modal.random-icons": {
+    "defaultMessage": "随机图标"
+  },
+  "app.icon-editor.apply-icons-modal.skip": {
+    "defaultMessage": "跳过"
+  },
+  "app.icon-editor.apply-icons-modal.close": {
+    "defaultMessage": "关闭"
+  },
+  "app.icon-editor.apply-icons-modal.apply-success": {
+    "defaultMessage": "已为 {num, plural, other {# 个实例}} 随机生成图标。"
+  },
+  "app.icon-editor.apply-icons-modal.apply-error": {
+    "defaultMessage": "为实例应用随机图标失败。"
+  },
+  "app.icon-editor.notification.title": {
+    "defaultMessage": "全新图标编辑器"
+  },
+  "app.icon-editor.notification.description": {
+    "defaultMessage": "个性化你的实例！"
+  },
+  "app.icon-editor.notification.view-update": {
+    "defaultMessage": "查看更新"
+  },
+  "app.icon-editor.notification.dismiss": {
+    "defaultMessage": "不再提示"
+  },
+  "app.icon-editor.notification.close": {
+    "defaultMessage": "关闭"
+  },
+  "instance.icon-editor.title": {
+    "defaultMessage": "图标编辑器"
+  },
+  "instance.icon-editor.description": {
+    "defaultMessage": "混合搭配各种元素，创建自定义图标。"
+  },
+  "instance.icon-editor.save": {
+    "defaultMessage": "保存图标"
+  },
+  "instance.icon-editor.surprise-me": {
+    "defaultMessage": "随机生成"
+  },
+  "instance.icon-editor.recents": {
+    "defaultMessage": "最近使用"
+  },
+  "instance.icon-editor.background": {
+    "defaultMessage": "背景"
+  },
+  "instance.icon-editor.symbol": {
+    "defaultMessage": "符号"
+  },
+  "instance.icon-editor.background.red": {
+    "defaultMessage": "红色"
+  },
+  "instance.icon-editor.background.rose": {
+    "defaultMessage": "玫红色"
+  },
+  "instance.icon-editor.background.pink": {
+    "defaultMessage": "粉色"
+  },
+  "instance.icon-editor.background.orange": {
+    "defaultMessage": "橙色"
+  },
+  "instance.icon-editor.background.yellow": {
+    "defaultMessage": "黄色"
+  },
+  "instance.icon-editor.background.lime": {
+    "defaultMessage": "黄绿色"
+  },
+  "instance.icon-editor.background.green": {
+    "defaultMessage": "绿色"
+  },
+  "instance.icon-editor.background.dark-green": {
+    "defaultMessage": "深绿色"
+  },
+  "instance.icon-editor.background.blue": {
+    "defaultMessage": "蓝色"
+  },
+  "instance.icon-editor.background.indigo": {
+    "defaultMessage": "靛蓝色"
+  },
+  "instance.icon-editor.background.lavender": {
+    "defaultMessage": "淡紫色"
+  },
+  "instance.icon-editor.background.purple": {
+    "defaultMessage": "紫色"
+  },
+  "instance.icon-editor.background.light-gray": {
+    "defaultMessage": "浅灰色"
+  },
+  "instance.icon-editor.background.gray": {
+    "defaultMessage": "灰色"
+  },
+  "instance.icon-editor.background.dark-gray": {
+    "defaultMessage": "深灰色"
+  },
+  "instance.icon-editor.symbol.grass-block": {
+    "defaultMessage": "草方块"
+  },
+  "instance.icon-editor.symbol.crafting-table": {
+    "defaultMessage": "工作台"
+  },
+  "instance.icon-editor.symbol.furnace": {
+    "defaultMessage": "熔炉"
+  },
+  "instance.icon-editor.symbol.chest": {
+    "defaultMessage": "箱子"
+  },
+  "instance.icon-editor.symbol.ender-chest": {
+    "defaultMessage": "末影箱"
+  },
+  "instance.icon-editor.symbol.bookshelf": {
+    "defaultMessage": "书架"
+  },
+  "instance.icon-editor.symbol.enchanting-table": {
+    "defaultMessage": "附魔台"
+  },
+  "instance.icon-editor.symbol.beacon": {
+    "defaultMessage": "信标"
+  },
+  "instance.icon-editor.symbol.command-block": {
+    "defaultMessage": "命令方块"
+  },
+  "instance.icon-editor.symbol.redstone-block": {
+    "defaultMessage": "红石块"
+  },
+  "instance.icon-editor.symbol.sticky-piston": {
+    "defaultMessage": "粘性活塞"
+  },
+  "instance.icon-editor.symbol.slime-block": {
+    "defaultMessage": "黏液块"
+  },
+  "instance.icon-editor.symbol.sculk-sensor": {
+    "defaultMessage": "幽匿感测体"
+  },
+  "instance.icon-editor.symbol.tnt": {
+    "defaultMessage": "TNT"
+  },
+  "instance.icon-editor.symbol.campfire": {
+    "defaultMessage": "营火"
+  },
+  "instance.icon-editor.symbol.lantern": {
+    "defaultMessage": "灯笼"
+  },
+  "instance.icon-editor.symbol.cake": {
+    "defaultMessage": "蛋糕"
+  },
+  "instance.icon-editor.symbol.pickaxe": {
+    "defaultMessage": "镐"
+  },
+  "instance.icon-editor.symbol.sword": {
+    "defaultMessage": "剑"
+  },
+  "instance.icon-editor.symbol.creeper": {
+    "defaultMessage": "爬行者"
+  },
+  "instance.icon-editor.symbol.zombie": {
+    "defaultMessage": "僵尸"
+  },
+  "instance.icon-editor.symbol.skeleton": {
+    "defaultMessage": "骷髅"
+  },
+  "instance.icon-editor.symbol.ender-dragon": {
+    "defaultMessage": "末影龙"
+  },
+  "instance.icon-editor.symbol.moobloom": {
+    "defaultMessage": "花牛"
+  },
+  "instance.icon-editor.symbol.brown-bear": {
+    "defaultMessage": "棕熊"
+  },
+  "instance.icon-editor.symbol.blue-shark": {
+    "defaultMessage": "蓝鲨"
+  },
+  "instance.icon-editor.symbol.tiny-potato": {
+    "defaultMessage": "小土豆"
+  },
+  "instance.icon-editor.symbol.backpack": {
+    "defaultMessage": "背包"
+  },
+  "instance.icon-editor.symbol.couch": {
+    "defaultMessage": "沙发"
+  },
+  "instance.icon-editor.symbol.cooking-pot": {
+    "defaultMessage": "炖锅"
+  },
+  "instance.icon-editor.symbol.skillet": {
+    "defaultMessage": "煎锅"
+  },
+  "instance.icon-editor.symbol.pancakes": {
+    "defaultMessage": "煎饼"
+  },
+  "instance.icon-editor.symbol.cogwheel": {
+    "defaultMessage": "齿轮"
+  },
+  "instance.icon-editor.symbol.engine": {
+    "defaultMessage": "引擎"
+  },
+  "instance.icon-editor.symbol.gizmo": {
+    "defaultMessage": "小装置"
+  },
+  "instance.icon-editor.symbol.tire": {
+    "defaultMessage": "轮胎"
+  },
+  "instance.icon-editor.symbol.orb": {
+    "defaultMessage": "宝珠"
+  },
+  "instance.icon-editor.symbol.globe": {
+    "defaultMessage": "地球仪"
+  },
+  "instance.icon-editor.symbol.terminal": {
+    "defaultMessage": "终端"
+  },
+  "instance.icon-editor.symbol.space-helmet": {
+    "defaultMessage": "太空头盔"
+  },
+  "instance.icon-editor.symbol.oxygen-distributor": {
+    "defaultMessage": "氧气分配器"
+  },
+  "instance.icon-editor.symbol.poke-ball": {
+    "defaultMessage": "精灵球"
+  },
+  "instance.icon-editor.symbol.create-wrench": {
+    "defaultMessage": "扳手"
+  },
+  "instance.icon-editor.symbol.wrenth-rinth": {
+    "defaultMessage": "Modrinth 扳手"
+  },
+  "instance.icon-editor.symbol.mr-pack": {
+    "defaultMessage": "Modrinth 整合包"
+  },
+  "instance.icon-editor.symbol.fabric": {
+    "defaultMessage": "Fabric"
+  },
+  "instance.icon-editor.symbol.forge": {
+    "defaultMessage": "Forge"
+  },
+  "instance.icon-editor.symbol.neoforge": {
+    "defaultMessage": "NeoForge"
+  },
+  "instance.icon-editor.symbol.quilt": {
+    "defaultMessage": "Quilt"
   }
 }
