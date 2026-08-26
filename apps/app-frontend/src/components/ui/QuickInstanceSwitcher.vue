@@ -126,21 +126,27 @@ const getInstances = async () => {
 		queryClient.setQueryData(instanceKeys.detail(instance.id), instance)
 	}
 
-	allInstances.value = instances.sort((a, b) => {
+	allInstances.value = [...instances].sort((a, b) => {
+		const dateAPlayed = a.last_played ? dayjs(a.last_played) : null
+		const dateBPlayed = b.last_played ? dayjs(b.last_played) : null
+
+		if (dateAPlayed && dateBPlayed) {
+			if (!dateAPlayed.isSame(dateBPlayed)) {
+				return dateBPlayed.valueOf() - dateAPlayed.valueOf()
+			}
+			return a.name.localeCompare(b.name)
+		}
+
 		const dateACreated = dayjs(a.created)
-		const dateAPlayed = a.last_played ? dayjs(a.last_played) : dayjs(0)
-
 		const dateBCreated = dayjs(b.created)
-		const dateBPlayed = b.last_played ? dayjs(b.last_played) : dayjs(0)
-
-		const dateA = dateACreated.isAfter(dateAPlayed) ? dateACreated : dateAPlayed
-		const dateB = dateBCreated.isAfter(dateBPlayed) ? dateBCreated : dateBPlayed
+		const dateA = dateAPlayed ?? dateACreated
+		const dateB = dateBPlayed ?? dateBCreated
 
 		if (dateA.isSame(dateB)) {
 			return a.name.localeCompare(b.name)
 		}
 
-		return dateB - dateA
+		return dateB.valueOf() - dateA.valueOf()
 	})
 }
 

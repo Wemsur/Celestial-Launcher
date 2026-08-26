@@ -45,6 +45,7 @@ const messages = defineMessages({
 		id: 'app.library.context-menu.create-instance',
 		defaultMessage: 'New instance',
 	},
+    library: { id: 'app.library.title', defaultMessage: 'Library' },
 })
 
 const homeBreadcrumb = useRootBreadcrumb({
@@ -353,6 +354,9 @@ function handlePageOption({ option }: { option: string }) {
 			:recent-instances="recentInstances"
 		/>
 
+        <h2 class="m-0 text-2xl font-semibold text-contrast">
+            {{ formatMessage(messages.library) }}
+        </h2>
         <!-- 库navtabs -->
         <div class="flex items-center gap-4">
             <NavTabs
@@ -362,6 +366,8 @@ function handlePageOption({ option }: { option: string }) {
                 @tab-click="handleTabClick"
             />
             <NavButton
+                class="bg-brand"
+                style="--button-color: var(--color-brand) !important"
                 :to="() => addLibraryModalRef?.show()"
             >
                 <PlusIcon />

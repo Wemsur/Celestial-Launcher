@@ -194,25 +194,25 @@ pub async fn get_recent_worlds(
 ) -> Result<Vec<WorldWithInstance>> {
     let state = State::get().await?;
 
-    let mut instances = crate::state::list_instances(&state.pool).await?;
-    instances.sort_by_key(|x| Reverse(x.instance.last_played));
+    // Use the JSON-based instance scanner (no longer reads from SQLite).
+    let mut instances = libraries::list_instances_from_json(&state).await?;
+    instances.sort_by_key(|x| Reverse(x.last_played));
 
     let mut result = Vec::with_capacity(limit);
 
     let mut least_recent_time = None;
     for instance in instances {
         if result.len() >= limit
-            && instance.instance.last_played < least_recent_time
+            && instance.last_played < least_recent_time
         {
             break;
         }
-        let instance_id = &instance.instance.id;
-        let instance_path = &instance.instance.path;
-        let instance_dir =
-            libraries::resolve_instance_dir(&state, instance_path);
-        let instance_worlds =
-            get_all_worlds_in_instance(instance_id, &instance_dir).await;
-        if let Err(e) = instance_worlds {
+        let instance_id = &instance.id;
+        let instance_dir = libraries::resolve_instance_dir(&state, &instance.path);
+        let mut worlds = Vec::new();
+        let world_result =
+            get_all_worlds_in_instance(instance_id, &instance_dir, &mut worlds).await;
+        if let Err(e) = world_result {
             tracing::error!(
                 "Failed to get worlds for instance {}: {}",
                 instance_id,
@@ -220,7 +220,7 @@ pub async fn get_recent_worlds(
             );
             continue;
         }
-        for world in instance_worlds? {
+        for world in worlds {
             let is_older = least_recent_time.is_none()
                 || world.last_played < least_recent_time;
             if result.len() >= limit && is_older {
@@ -250,8 +250,10 @@ pub async fn get_recent_worlds(
 }
 
 pub async fn get_instance_worlds(instance_id: &str) -> Result<Vec<World>> {
-    get_all_worlds_in_instance(instance_id, &get_full_path(instance_id).await?)
-        .await
+    let mut worlds = Vec::new();
+    let instance_dir = get_full_path(instance_id).await?;
+    get_all_worlds_in_instance(instance_id, &instance_dir, &mut worlds).await?;
+    Ok(worlds)
 }
 
 async fn resolve_instance_id(instance: &str, state: &State) -> Result<String> {
@@ -291,28 +293,12 @@ async fn resolve_instance_identity(
 async fn get_all_worlds_in_instance(
     instance_id: &str,
     instance_dir: &Path,
-) -> Result<Vec<World>> {
-    let mut worlds = vec![];
-    get_singleplayer_worlds_in_instance(instance_dir, &mut worlds).await?;
-    let state = State::get().await?;
-
-    get_server_worlds_in_instance(instance_id, instance_dir, &mut worlds)
+    worlds: &mut Vec<World>,
+) -> Result<()> {
+    get_singleplayer_worlds_in_instance(instance_dir, worlds).await?;
+    get_server_worlds_in_instance(instance_id, instance_dir, worlds)
         .await?;
-
-    let attached_data =
-        AttachedWorldData::get_all_for_instance(instance_id, &state.pool)
-            .await?;
-    if !attached_data.is_empty() {
-        for world in &mut worlds {
-            if let Some(data) = attached_data
-                .get(&(world.world_type(), world.world_id().to_owned()))
-            {
-                attach_world_data_to_world(world, data);
-            }
-        }
-    }
-
-    Ok(worlds)
+    Ok(())
 }
 
 async fn get_singleplayer_worlds_in_instance(

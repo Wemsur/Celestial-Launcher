@@ -5157,7 +5157,7 @@
     "defaultMessage": "简介"
   },
   "settings.profile.navigation-title": {
-    "defaultMessage": "个人资料"
+    "defaultMessage": "账号管理"
   },
   "settings.profile.profile-picture.title": {
     "defaultMessage": "头像"
@@ -6109,5 +6109,71 @@
   },
   "version.supplementary-resources.type": {
     "defaultMessage": "类型"
+  },
+  "app.navigation.home": {
+    "defaultMessage": "首页"
+  },
+  "app.home.jump-back-in.title": {
+    "defaultMessage": "快速返回"
+  },
+  "app.library.title": {
+    "defaultMessage": "版本"
+  },
+  "app.home.jump-back-in.never-played": {
+    "message": "从未游玩"
+  },
+  "app.home.jump-back-in.new-instance": {
+    "message": "新的实例"
+  },
+  "app.library.group.ungrouped": {
+    "defaultMessage": "未分组"
+  },
+  "app.instance.tab.content": {
+    "defaultMessage": "内容"
+  },
+  "app.instance.tab.files": {
+    "defaultMessage": "文件"
+  },
+  "app.instance.tab.worlds": {
+    "defaultMessage": "世界"
+  },
+  "app.instance.tab.logs": {
+    "defaultMessage": "日志"
+  },
+  "app.instance.tab.share": {
+    "defaultMessage": "分享"
+  },
+  "": {
+    "defaultMessage": ""
+  },
+  "": {
+    "defaultMessage": ""
+  },
+  "": {
+    "defaultMessage": ""
+  },
+  "": {
+    "defaultMessage": ""
+  },
+  "": {
+    "defaultMessage": ""
+  },
+  "": {
+    "defaultMessage": ""
+  },
+  "": {
+    "defaultMessage": ""
+  },
+  "": {
+    "defaultMessage": ""
+  },
+  "": {
+    "defaultMessage": ""
+  },
+  "": {
+    "defaultMessage": ""
+  },
+  "settings.display.sidebar.advanced-rendering.title": {
+    "defaultMessage": "高级渲染"
   }
 }

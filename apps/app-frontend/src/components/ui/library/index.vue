@@ -308,9 +308,6 @@ watch(selectedLibraryInstances, (selectedInstances) => {
 <template>
 	<InstanceGroupDnd :instances="instances">
 		<section data-library-page-background class="flex flex-col gap-3 pb-16 min-h-[500px]">
-			<h2 class="m-0 text-2xl font-semibold text-contrast">
-				{{ formatMessage(messages.library) }}
-			</h2>
 			<LibraryToolbar />
 			<div
 				v-if="libraryGroupsLoaded && isSearching && visibleInstanceGroups.length === 0"

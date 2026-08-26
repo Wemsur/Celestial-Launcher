@@ -300,10 +300,29 @@ pub(crate) async fn set_instance_last_played_json(
     instance_path: &str,
     last_played: DateTime<Utc>,
 ) -> crate::Result<()> {
-    let dir = crate::state::libraries::resolve_instance_dir(
-        &*State::get().await?,
-        instance_path,
-    );
+    // Resolve the absolute instance directory. The instance path stored in
+    // instance.json / CelestialJson is already absolute, but callers may pass
+    // either an absolute path or a relative one; use find_json_instance to
+    // locate it against the current library config.
+    let dir = if std::path::Path::new(instance_path).is_absolute() {
+        let resolved =
+            crate::state::libraries::find_json_instance(
+                &*State::get().await?,
+                &crate::state::libraries::instance_id_from_path(instance_path),
+            )
+            .await?;
+        resolved.unwrap_or_else(|| {
+            // Path doesn't match any known instance — return the original
+            // path so that read_from_dir fails gracefully rather than
+            // resolving to a wrong location.
+            std::path::PathBuf::from(instance_path)
+        })
+    } else {
+        crate::state::libraries::resolve_instance_dir(
+            &*State::get().await?,
+            instance_path,
+        )
+    };
     if let Some(mut json) =
         crate::state::libraries::InstanceJson::read_from_dir(&dir)?
     {
@@ -317,6 +336,12 @@ pub(crate) async fn set_instance_last_played_json(
     {
         celestial.last_played = Some(last_played);
         celestial.write_to_dir(&dir)?;
+    } else {
+        tracing::warn!(
+            "set_instance_last_played_json: neither instance.json nor \
+             celestial.json found at {:?}; last_played not written",
+            dir
+        );
     }
     Ok(())
 }
