@@ -402,16 +402,17 @@ pub(crate) fn instance_id_from_path(path: &str) -> String {
     format!("{JSON_BACKED_ID_PREFIX}{}", &hex[..32])
 }
 
-/// Returns the default Modrinth library path (`<home>/Minecraft/Modrinth/profiles`).
+/// Returns the default Modrinth library root (`<home>/Minecraft/Modrinth`).
 ///
-/// This mirrors the default app data directory shown in settings
-/// (`<home>/Minecraft/Modrinth`) with the `profiles` subfolder appended.
+/// This is the default app data directory shown in settings. Library paths are
+/// always the library *root*; the format-specific subfolder (`profiles/` for
+/// Modrinth, `versions/` for `.minecraft`) is appended by the path resolvers,
+/// so this must NOT include `profiles`.
 pub fn default_library_path() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_default()
         .join("Minecraft")
         .join("Modrinth")
-        .join("profiles")
 }
 
 /// Build the initial `libraries.json` contents for a fresh install: a single
@@ -753,6 +754,13 @@ pub(crate) async fn ensure_migration_done(state: &State) -> crate::Result<()> {
         config = default_libraries_config();
         save_libraries_config(state, &config).await?;
     }
+    // Repair libraries seeded by an earlier build that registered the default
+    // Modrinth library *at* `<root>/profiles`. Every path resolver appends
+    // `profiles` itself, so such an entry resolved to `<root>/profiles/profiles`
+    // for both instance creation and scanning.
+    if normalize_modrinth_library_paths(&mut config) {
+        save_libraries_config(state, &config).await?;
+    }
     // Restore saved active tab after migration
     if let Some(active) = saved_active {
         if config.libraries.iter().any(|l| l.path == active) {
@@ -766,6 +774,45 @@ pub(crate) async fn ensure_migration_done(state: &State) -> crate::Result<()> {
         save_libraries_config(state, &config).await?;
     }
     Ok(())
+}
+
+/// Strips a trailing `profiles` segment from Modrinth library paths.
+///
+/// A Modrinth library path is always the library *root*; the resolvers append
+/// `profiles` themselves. An entry pointing at the container directory would
+/// therefore double it. Returns whether anything changed.
+fn normalize_modrinth_library_paths(config: &mut LibrariesConfig) -> bool {
+    let mut changed = false;
+    let mut renames: Vec<(String, String)> = Vec::new();
+
+    for library in &mut config.libraries {
+        if library.format != InstanceFormat::Modrinth {
+            continue;
+        }
+        let path = Path::new(&library.path);
+        if path.file_name().and_then(|name| name.to_str()) != Some("profiles") {
+            continue;
+        }
+        let Some(parent) = path.parent() else {
+            continue;
+        };
+        let fixed = parent.to_string_lossy().to_string();
+        if fixed.is_empty() {
+            continue;
+        }
+        renames.push((library.path.clone(), fixed.clone()));
+        library.path = fixed;
+        changed = true;
+    }
+
+    if let Some(active) = &config.active_library_path {
+        if let Some((_, fixed)) = renames.iter().find(|(old, _)| old == active) {
+            config.active_library_path = Some(fixed.clone());
+            changed = true;
+        }
+    }
+
+    changed
 }
 
 /// Apply one-time data fixes to sidecars written by an older schema version.
