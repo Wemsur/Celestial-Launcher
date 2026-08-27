@@ -18,7 +18,7 @@ import RecentWorldsList from '@/components/ui/world/RecentWorldsList.vue'
 import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
 import type { InstanceFormat, LibraryInfo } from '@/helpers/library'
-import { library_add, library_list, library_default_path, library_set_active, library_update_name, library_remove } from '@/helpers/library'
+import { library_add, library_list, library_default_path, library_reorder, library_set_active, library_update_name, library_remove } from '@/helpers/library'
 import { list } from '@/helpers/instance'
 import type { GameInstance } from '@/helpers/types'
 import { useRootBreadcrumb } from '@/providers/breadcrumbs'
@@ -146,6 +146,28 @@ const handleTabClick = (index: number, tab: { href: string }) => {
 		library_set_active(tab.href).catch(() => {})
 	} else {
 		library_set_active('').catch(() => {})
+	}
+}
+
+// Drag-and-drop reordering of the library tabs. Tab 0 is the pinned "全部实例"
+// entry, so both indices are shifted by one to index into `libraries`.
+const handleTabReorder = async (fromIndex: number, toIndex: number) => {
+	const from = fromIndex - 1
+	const to = toIndex - 1
+	const reordered = [...libraries.value]
+	if (from < 0 || to < 0 || from >= reordered.length || to >= reordered.length) return
+
+	const [moved] = reordered.splice(from, 1)
+	reordered.splice(to, 0, moved)
+	// Optimistic: the nav reflects the new order immediately; on failure we
+	// reload from disk to undo it.
+	libraries.value = reordered
+
+	try {
+		await library_reorder(reordered.map((lib) => lib.path))
+	} catch (e) {
+		await loadLibraries()
+		handleError(e instanceof Error ? e : new Error(String(e)))
 	}
 }
 
@@ -362,7 +384,10 @@ function handlePageOption({ option }: { option: string }) {
                 mode="local"
                 :links="tabLinks"
                 :active-index="activeTabIndex"
+                reorderable
+                :pinned-count="1"
                 @tab-click="handleTabClick"
+                @reorder="handleTabReorder"
                 class="light-sense"
             />
             <NavButton

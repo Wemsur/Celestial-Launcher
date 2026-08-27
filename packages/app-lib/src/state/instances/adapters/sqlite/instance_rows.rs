@@ -168,6 +168,10 @@ pub(crate) struct InstanceMetadataRecord {
     pub applied_content_set: ContentSet,
     pub link: InstanceLink,
     pub shared_instance: Option<SharedInstanceAttachment>,
+    /// Legacy DB-side membership. No longer consumed — group membership comes
+    /// from `state::instance_groups`. Kept so the query text (and its offline
+    /// cache) does not have to change.
+    #[allow(dead_code)]
     pub group_ids: Vec<String>,
     pub launch_overrides: InstanceLaunchOverrides,
 }
@@ -915,6 +919,10 @@ where
     }
 }
 
+/// Superseded by `state::instance_groups` (groups moved to
+/// `instance_groups.json`). Kept so the SQL and its offline query cache stay
+/// untouched.
+#[allow(dead_code)]
 pub(crate) async fn get_instance_groups<'e, E>(
     instance_id: &str,
     exec: E,
@@ -939,6 +947,8 @@ where
     Ok(rows)
 }
 
+/// Superseded by `state::instance_groups`.
+#[allow(dead_code)]
 pub(crate) async fn list_instance_groups(
     pool: &SqlitePool,
 ) -> crate::Result<Vec<(String, String)>> {
@@ -955,6 +965,8 @@ pub(crate) async fn list_instance_groups(
     Ok(groups)
 }
 
+/// Superseded by `state::instance_groups`.
+#[allow(dead_code)]
 pub(crate) async fn create_instance_group(
     id: &str,
     name: &str,
@@ -989,6 +1001,8 @@ pub(crate) async fn create_instance_group(
     Ok(())
 }
 
+/// Superseded by `state::instance_groups`.
+#[allow(dead_code)]
 pub(crate) async fn set_instance_group_order(
     group_ids: &[String],
     pool: &SqlitePool,
@@ -1326,6 +1340,8 @@ pub(crate) async fn set_shared_instance_attachment(
     Ok(())
 }
 
+/// Superseded by `state::instance_groups`.
+#[allow(dead_code)]
 pub(crate) async fn replace_instance_groups(
     instance_id: &str,
     group_ids: &[String],

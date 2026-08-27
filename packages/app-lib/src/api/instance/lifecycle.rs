@@ -83,6 +83,15 @@ pub async fn edit(
                 let library_format = inst.library_format.clone();
                 let mut saved = false;
 
+                // Group membership lives in `instance_groups.json`, not in the
+                // sidecars, so it is applied once here for both branches below.
+                if let Some(group_ids) = &patch.group_ids {
+                    crate::state::instance_groups::set_instance_groups(
+                        instance_id,
+                        group_ids,
+                    );
+                }
+
                 // Try instance.json first (Modrinth format, or .minecraft with sidecar)
                 if let Some(mut instance_json) =
                     crate::state::libraries::InstanceJson::read_from_dir(&dir)?
@@ -136,9 +145,6 @@ pub async fn edit(
                     }
                     if let Some(update_channel) = patch.update_channel {
                         instance_json.update_channel = update_channel;
-                    }
-                    if let Some(group_ids) = &patch.group_ids {
-                        instance_json.groups = group_ids.clone();
                     }
                     if let Some(cs_patch) = &patch.content_set_patch {
                         if let Some(ref gv) = cs_patch.game_version {
@@ -211,9 +217,6 @@ pub async fn edit(
                     if let Some(update_channel) = patch.update_channel {
                         celestial.update_channel = update_channel;
                     }
-                    if let Some(group_ids) = &patch.group_ids {
-                        celestial.groups = group_ids.clone();
-                    }
                     celestial.write_to_dir(&dir)?;
                     saved = true;
                 }
@@ -268,6 +271,7 @@ pub async fn remove(instance_id: &str) -> crate::Result<()> {
     )
     .await?;
     crate::state::remove_instance(instance_id, &state).await?;
+    crate::state::instance_groups::forget_instance(instance_id);
 
     emit_instance(instance_id, InstancePayloadType::Removed).await?;
 
@@ -320,6 +324,9 @@ pub async fn rename(
             crate::state::libraries::instance_id_from_path(
                 new_dir.to_string_lossy().as_ref(),
             );
+        // `local:` ids are derived from the path, so renaming mints a new id —
+        // carry the group membership over to it.
+        crate::state::instance_groups::rename_instance(instance_id, &id);
         let updated_inst = Instance {
             id,
             path: new_dir.to_string_lossy().to_string(),

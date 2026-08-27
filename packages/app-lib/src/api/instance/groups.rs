@@ -1,12 +1,11 @@
 use crate::event::emit::emit_instance_groups_changed;
-use crate::state::State;
-use crate::state::instances::adapters::sqlite::instance_rows;
+use crate::state::instance_groups;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;
 
 const MAX_GROUP_NAME_LENGTH: usize = 256;
-pub const FAVORITES_GROUP_ID: &str = "group:favorites";
+pub const FAVORITES_GROUP_ID: &str = instance_groups::FAVORITES_GROUP_ID;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct InstanceGroup {
@@ -70,19 +69,19 @@ fn normalize_membership_updates(
 }
 
 pub async fn list_groups() -> crate::Result<Vec<InstanceGroup>> {
-    let state = State::get().await?;
-    Ok(instance_rows::list_instance_groups(&state.pool)
-        .await?
+    Ok(instance_groups::list()
         .into_iter()
-        .map(|(id, name)| InstanceGroup { id, name })
+        .map(|group| InstanceGroup {
+            id: group.id,
+            name: group.name,
+        })
         .collect())
 }
 
 pub async fn create_group(name: String) -> crate::Result<InstanceGroup> {
     let name = validate_group_name(&name)?;
-    let state = State::get().await?;
     let id = Uuid::new_v4().to_string();
-    instance_rows::create_instance_group(&id, name, &state.pool).await?;
+    instance_groups::create(&id, name);
 
     Ok(InstanceGroup {
         id,
@@ -91,8 +90,8 @@ pub async fn create_group(name: String) -> crate::Result<InstanceGroup> {
 }
 
 pub async fn set_group_order(group_ids: Vec<String>) -> crate::Result<()> {
-    let state = State::get().await?;
-    instance_rows::set_instance_group_order(&group_ids, &state.pool).await
+    instance_groups::set_order(&group_ids);
+    Ok(())
 }
 
 pub async fn set_group_memberships(
@@ -104,21 +103,15 @@ pub async fn set_group_memberships(
 
     let updates = normalize_membership_updates(updates)?;
 
-    let state = State::get().await?;
-    let mut tx = state.pool.begin().await?;
+    // Note: the instances themselves are deliberately not validated here.
+    // JSON-backed instances (`local:` ids) have no row in the `instances` table,
+    // and requiring one is what used to make grouping them fail outright.
     let unique_group_ids = updates
         .iter()
         .flat_map(|update| update.group_ids.iter())
         .collect::<HashSet<_>>();
-
     for group_id in unique_group_ids {
-        let exists = sqlx::query_scalar!(
-            r#"SELECT EXISTS(SELECT 1 FROM instance_groups WHERE id = ?) AS "exists!: bool""#,
-            group_id,
-        )
-        .fetch_one(&mut *tx)
-        .await?;
-        if !exists {
+        if !instance_groups::group_exists(group_id) {
             return Err(crate::ErrorKind::InputError(format!(
                 "Unknown instance group {group_id}"
             ))
@@ -126,30 +119,14 @@ pub async fn set_group_memberships(
         }
     }
 
-    for update in &updates {
-        let result = sqlx::query!(
-            "UPDATE instances SET modified = unixepoch() WHERE id = ?",
-            update.instance_id,
-        )
-        .execute(&mut *tx)
-        .await?;
-        if result.rows_affected() == 0 {
-            return Err(crate::ErrorKind::InputError(format!(
-                "Unknown instance {}",
-                update.instance_id
-            ))
-            .into());
-        }
-
-        instance_rows::replace_instance_groups(
-            &update.instance_id,
-            &update.group_ids,
-            &mut tx,
-        )
-        .await?;
-    }
-
-    tx.commit().await?;
+    instance_groups::set_memberships(
+        &updates
+            .iter()
+            .map(|update| {
+                (update.instance_id.clone(), update.group_ids.clone())
+            })
+            .collect::<Vec<_>>(),
+    );
 
     let instance_ids = updates
         .into_iter()
@@ -172,40 +149,13 @@ pub async fn rename_group(
     }
 
     let new_name = validate_group_name(&new_name)?;
-    let state = State::get().await?;
-    let mut tx = state.pool.begin().await?;
 
-    let instance_ids = sqlx::query_scalar!(
-        "
-		SELECT instance_id
-		FROM instance_group_memberships
-		WHERE group_id = ?
-		",
-        id,
-    )
-    .fetch_all(&mut *tx)
-    .await?;
-
-    let result = sqlx::query!(
-        "
-		UPDATE instance_groups
-		SET name = ?
-		WHERE id = ?
-        ",
-        new_name,
-        id,
-    )
-    .execute(&mut *tx)
-    .await?;
-
-    if result.rows_affected() == 0 {
+    let Some(instance_ids) = instance_groups::rename(&id, new_name) else {
         return Err(crate::ErrorKind::InputError(format!(
             "Unknown instance group {id}"
         ))
         .into());
-    }
-
-    tx.commit().await?;
+    };
 
     emit_instance_groups_changed(&instance_ids).await?;
 
@@ -223,37 +173,12 @@ pub async fn delete_group(id: String) -> crate::Result<()> {
         .into());
     }
 
-    let state = State::get().await?;
-    let mut tx = state.pool.begin().await?;
-    let instance_ids = sqlx::query_scalar!(
-        "
-		SELECT instance_id
-		FROM instance_group_memberships
-		WHERE group_id = ?
-		",
-        id,
-    )
-    .fetch_all(&mut *tx)
-    .await?;
-
-    let result = sqlx::query!(
-        "
-        DELETE FROM instance_groups
-        WHERE id = ?
-        ",
-        id,
-    )
-    .execute(&mut *tx)
-    .await?;
-
-    if result.rows_affected() == 0 {
+    let Some(instance_ids) = instance_groups::delete(&id) else {
         return Err(crate::ErrorKind::InputError(format!(
             "Unknown instance group {id}"
         ))
         .into());
-    }
-
-    tx.commit().await?;
+    };
 
     emit_instance_groups_changed(&instance_ids).await?;
 

@@ -660,25 +660,24 @@ async fn prepare_initial_instance(
                         "Unknown instance".to_string(),
                     )
                 })?;
-            // Determine the target library from the source instance's path
-            let target_library_path = if metadata.instance.library_format
-                == crate::state::libraries::InstanceFormat::Minecraft
-            {
-                let lib_path = metadata.instance.path.split("/versions/")
+            // Determine the target library from the source instance's path so a
+            // duplicate lands in the same library as its source.
+            let target_library_path = match metadata.instance.library_format {
+                crate::state::libraries::InstanceFormat::Minecraft => metadata
+                    .instance
+                    .path
+                    .split("/versions/")
                     .next()
                     .filter(|p| !p.is_empty())
-                    .map(|s| s.to_string());
-                lib_path
-            } else if metadata.instance.library_format
-                == crate::state::libraries::InstanceFormat::Modrinth
-            {
-                let lib_path = metadata.instance.path.split("/profiles/")
-                    .next()
-                    .filter(|p| !p.is_empty())
-                    .map(|s| s.to_string());
-                lib_path
-            } else {
-                None
+                    .map(|s| s.to_string()),
+                // Modrinth instances live directly in the library, so the
+                // parent directory *is* the library path.
+                crate::state::libraries::InstanceFormat::Modrinth => {
+                    std::path::Path::new(&metadata.instance.path)
+                        .parent()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .filter(|p| !p.is_empty())
+                }
             };
             let created = crate::api::instance::create(
                 metadata.instance.name.clone(),

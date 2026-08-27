@@ -402,17 +402,19 @@ pub(crate) fn instance_id_from_path(path: &str) -> String {
     format!("{JSON_BACKED_ID_PREFIX}{}", &hex[..32])
 }
 
-/// Returns the default Modrinth library root (`<home>/Minecraft/Modrinth`).
+/// Returns the default Modrinth library path (`<home>/Minecraft/Modrinth/profiles`).
 ///
-/// This is the default app data directory shown in settings. Library paths are
-/// always the library *root*; the format-specific subfolder (`profiles/` for
-/// Modrinth, `versions/` for `.minecraft`) is appended by the path resolvers,
-/// so this must NOT include `profiles`.
+/// This mirrors the default app data directory shown in settings
+/// (`<home>/Minecraft/Modrinth`) with the `profiles` subfolder appended, so the
+/// default library keeps holding instances at `<appdir>/profiles/<name>`.
+/// Modrinth library paths are the directory instances live in *directly* — no
+/// further subfolder is appended by the path resolvers.
 pub fn default_library_path() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_default()
         .join("Minecraft")
         .join("Modrinth")
+        .join("profiles")
 }
 
 /// Build the initial `libraries.json` contents for a fresh install: a single
@@ -469,13 +471,14 @@ pub async fn list_instances_from_json(
             continue;
         }
 
-        // Determine which subdirectory to scan based on format
+        // Determine which subdirectory to scan based on format. Modrinth
+        // libraries hold their instances directly at the library root; only
+        // `.minecraft` libraries nest them under `versions/`.
         let scan_root = match library.format {
-            InstanceFormat::Modrinth => lib_path.join("profiles"),
+            InstanceFormat::Modrinth => lib_path.to_path_buf(),
             InstanceFormat::Minecraft => lib_path.join("versions"),
         };
 
-        // For Modrinth, scan profiles/ directly; for Minecraft, scan versions/<instance>/
         let entries = if scan_root.exists() {
             match fs::read_dir(&scan_root) {
                 Ok(e) => e,
@@ -754,13 +757,6 @@ pub(crate) async fn ensure_migration_done(state: &State) -> crate::Result<()> {
         config = default_libraries_config();
         save_libraries_config(state, &config).await?;
     }
-    // Repair libraries seeded by an earlier build that registered the default
-    // Modrinth library *at* `<root>/profiles`. Every path resolver appends
-    // `profiles` itself, so such an entry resolved to `<root>/profiles/profiles`
-    // for both instance creation and scanning.
-    if normalize_modrinth_library_paths(&mut config) {
-        save_libraries_config(state, &config).await?;
-    }
     // Restore saved active tab after migration
     if let Some(active) = saved_active {
         if config.libraries.iter().any(|l| l.path == active) {
@@ -776,45 +772,6 @@ pub(crate) async fn ensure_migration_done(state: &State) -> crate::Result<()> {
     Ok(())
 }
 
-/// Strips a trailing `profiles` segment from Modrinth library paths.
-///
-/// A Modrinth library path is always the library *root*; the resolvers append
-/// `profiles` themselves. An entry pointing at the container directory would
-/// therefore double it. Returns whether anything changed.
-fn normalize_modrinth_library_paths(config: &mut LibrariesConfig) -> bool {
-    let mut changed = false;
-    let mut renames: Vec<(String, String)> = Vec::new();
-
-    for library in &mut config.libraries {
-        if library.format != InstanceFormat::Modrinth {
-            continue;
-        }
-        let path = Path::new(&library.path);
-        if path.file_name().and_then(|name| name.to_str()) != Some("profiles") {
-            continue;
-        }
-        let Some(parent) = path.parent() else {
-            continue;
-        };
-        let fixed = parent.to_string_lossy().to_string();
-        if fixed.is_empty() {
-            continue;
-        }
-        renames.push((library.path.clone(), fixed.clone()));
-        library.path = fixed;
-        changed = true;
-    }
-
-    if let Some(active) = &config.active_library_path {
-        if let Some((_, fixed)) = renames.iter().find(|(old, _)| old == active) {
-            config.active_library_path = Some(fixed.clone());
-            changed = true;
-        }
-    }
-
-    changed
-}
-
 /// Apply one-time data fixes to sidecars written by an older schema version.
 ///
 /// This is best-effort: individual failures are logged and skipped so a single
@@ -827,20 +784,21 @@ async fn run_schema_backfills(config: &LibrariesConfig) -> crate::Result<()> {
         if !lib_path.exists() {
             continue;
         }
+        // Modrinth libraries hold instances at the library root; only
+        // `.minecraft` libraries nest them under `versions/`. Falling back to
+        // the library root is safe because this pass only patches sidecars that
+        // already exist and never creates one, so shared content folders such
+        // as `mods/` are skipped for lack of a sidecar.
         let scan_root = match library.format {
-            InstanceFormat::Modrinth => lib_path.join("profiles"),
-            InstanceFormat::Minecraft => lib_path.join("versions"),
-        };
-        // Mirror `list_instances_from_json`: a registered library path may already
-        // point at the container directory (the default Modrinth library is
-        // `<...>/Modrinth/profiles`), in which case joining again misses.
-        // Scanning the library root is safe here because this pass only patches
-        // sidecars that already exist and never creates one, so shared content
-        // folders such as `mods/` are skipped for lack of a sidecar.
-        let scan_root = if scan_root.exists() {
-            scan_root
-        } else {
-            lib_path.to_path_buf()
+            InstanceFormat::Modrinth => lib_path.to_path_buf(),
+            InstanceFormat::Minecraft => {
+                let versions = lib_path.join("versions");
+                if versions.exists() {
+                    versions
+                } else {
+                    lib_path.to_path_buf()
+                }
+            }
         };
         let Ok(entries) = fs::read_dir(&scan_root) else {
             continue;
@@ -919,7 +877,7 @@ async fn run_schema_backfills(config: &LibrariesConfig) -> crate::Result<()> {
 /// Resolve an instance directory from its path string, respecting the
 /// library's format.
 ///
-/// For Modrinth format: `<library>/profiles/<path>` (if relative).
+/// For Modrinth format: `<library>/<path>` (if relative).
 /// For `.minecraft` format: `<library>/versions/<path>` (if relative).
 /// Absolute paths are returned as-is.
 pub(crate) fn resolve_instance_dir_for_library(
@@ -932,7 +890,7 @@ pub(crate) fn resolve_instance_dir_for_library(
         return path.to_path_buf();
     }
     let root = match library_format {
-        InstanceFormat::Modrinth => library_path.join("profiles"),
+        InstanceFormat::Modrinth => library_path.to_path_buf(),
         InstanceFormat::Minecraft => library_path.join("versions"),
     };
     root.join(path)
@@ -987,33 +945,39 @@ pub(crate) fn find_library_for_instance<'a>(
 }
 
 /// Returns the library root directory (the configured library path) for an instance.
-/// For Modrinth format: `<library>/profiles/<instance>/` → `<library>`
+/// For Modrinth format: `<library>/<instance>/` → `<library>`
 /// For .minecraft format: `<library>/versions/<instance>/` → `<library>`
 pub(crate) fn instance_library_root(
     instance_dir: &Path,
     library_format: &InstanceFormat,
 ) -> Option<PathBuf> {
-    let (prefix, _) = match library_format {
-        InstanceFormat::Modrinth => ("profiles", true),
-        InstanceFormat::Minecraft => ("versions", true),
+    // Modrinth instances sit directly in the library, so the parent *is* the root.
+    let prefix = match library_format {
+        InstanceFormat::Modrinth => {
+            return Some(
+                instance_dir
+                    .parent()
+                    .unwrap_or(instance_dir)
+                    .to_path_buf(),
+            );
+        }
+        InstanceFormat::Minecraft => "versions",
     };
-    if !prefix.is_empty() {
-        // Walk up to find the prefix directory
-        let mut current = Some(instance_dir);
-        while let Some(path) = current {
-            if let Some(parent) = path.parent() {
-                if let Some(name) = parent.file_name() {
-                    if name.to_string_lossy() == prefix {
-                        // parent is profiles/ or versions/
-                        if let Some(grandparent) = parent.parent() {
-                            return Some(grandparent.to_path_buf());
-                        }
+    // Walk up to find the prefix directory
+    let mut current = Some(instance_dir);
+    while let Some(path) = current {
+        if let Some(parent) = path.parent() {
+            if let Some(name) = parent.file_name() {
+                if name.to_string_lossy() == prefix {
+                    // parent is versions/
+                    if let Some(grandparent) = parent.parent() {
+                        return Some(grandparent.to_path_buf());
                     }
                 }
-                current = Some(parent);
-            } else {
-                break;
             }
+            current = Some(parent);
+        } else {
+            break;
         }
     }
     // Fallback: the instance dir itself is the root
@@ -1224,7 +1188,7 @@ pub async fn find_json_instance(
         }
 
         let scan_root = match library.format {
-            InstanceFormat::Modrinth => lib_path.join("profiles"),
+            InstanceFormat::Modrinth => lib_path.to_path_buf(),
             InstanceFormat::Minecraft => lib_path.join("versions"),
         };
 
@@ -1612,10 +1576,10 @@ mod tests {
         fs::write(dir.join(file), body).unwrap();
     }
 
-    /// The backfill has to cope with both shapes of registered library path:
-    /// the default Modrinth library is registered as `<...>/Modrinth/profiles`
-    /// (already the container), while `.minecraft` libraries are registered as
-    /// the root and hold instances under `versions/`.
+    /// The backfill has to cope with both library layouts: Modrinth libraries
+    /// hold instances directly at the registered path (the default library is
+    /// `<...>/Modrinth/profiles`), while `.minecraft` libraries hold them under
+    /// `versions/`.
     #[tokio::test]
     async fn backfill_fills_created_for_both_library_layouts() {
         let tmp = tempfile::tempdir().unwrap();

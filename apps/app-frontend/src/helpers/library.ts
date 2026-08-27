@@ -38,6 +38,11 @@ export async function library_update_name(path: string, name: string): Promise<v
 	return await invoke('plugin:instance|library_update_name', { path, name })
 }
 
+/** Persists the library order in `libraries.json` (drag-and-drop on the home nav). */
+export async function library_reorder(paths: string[]): Promise<void> {
+	return await invoke('plugin:instance|library_reorder', { paths })
+}
+
 export async function library_default_path(): Promise<string> {
 	return await invoke('plugin:instance|library_default_path')
 }

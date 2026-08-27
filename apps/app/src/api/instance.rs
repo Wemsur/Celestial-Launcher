@@ -82,6 +82,7 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             library_remove,
             library_set_active,
             library_update_name,
+            library_reorder,
             library_default_path,
         ])
         .build()
@@ -1123,6 +1124,31 @@ pub async fn library_set_active(path: String) -> Result<()> {
     } else {
         config.active_library_path = None;
     }
+    theseus::libraries::save_libraries_config(&state, &config).await?;
+    theseus::emit_library_changed().await?;
+    Ok(())
+}
+
+/// Reorders `libraries.json` to match the given list of library paths.
+///
+/// Paths not present in the config are ignored, and libraries missing from
+/// `paths` keep their relative order at the end, so a stale frontend list can
+/// never drop a library.
+#[tauri::command]
+pub async fn library_reorder(paths: Vec<String>) -> Result<()> {
+    let state = theseus::State::get().await?;
+    let mut config = theseus::libraries::get_libraries_config(&state).await?;
+
+    let mut remaining = config.libraries;
+    let mut ordered = Vec::with_capacity(remaining.len());
+    for path in &paths {
+        if let Some(index) = remaining.iter().position(|l| &l.path == path) {
+            ordered.push(remaining.remove(index));
+        }
+    }
+    ordered.extend(remaining);
+    config.libraries = ordered;
+
     theseus::libraries::save_libraries_config(&state, &config).await?;
     theseus::emit_library_changed().await?;
     Ok(())

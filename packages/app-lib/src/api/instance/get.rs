@@ -196,21 +196,22 @@ pub(crate) fn instance_metadata_from_instance(
         modified: chrono::Utc::now(),
     };
 
-    // Read settings from instance.json if available
-    let (link, launch_overrides, group_ids, update_channel) =
+    // Read settings from instance.json if available. Group membership no longer
+    // lives in the sidecar — it comes from `instance_groups.json`.
+    let group_ids =
+        crate::state::instance_groups::group_ids_for(&instance.id);
+    let (link, launch_overrides, update_channel) =
         if let Ok(Some(json)) = libraries::InstanceJson::read_from_dir(&dir) {
             let json_update_channel = json.update_channel();
             (
                 json.link.clone().unwrap_or(crate::state::InstanceLink::Unmanaged),
                 json.launch_overrides(&instance.id),
-                json.groups().to_vec(),
                 json_update_channel,
             )
         } else {
             (
                 crate::state::InstanceLink::Unmanaged,
                 crate::state::InstanceLaunchOverrides::empty(instance.id.clone()),
-                vec![],
                 instance.update_channel,
             )
         };

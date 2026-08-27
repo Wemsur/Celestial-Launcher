@@ -590,48 +590,14 @@ where
     .execute(exec)
     .await?;
 
+    // Groups are stored in `instance_groups.json`, not the DB.
     for group in input.groups {
-        let group_id = match sqlx::query_scalar::<_, String>(
-            "
-            SELECT id
-            FROM instance_groups
-            WHERE name = ?
-            ",
-        )
-        .bind(&group)
-        .fetch_optional(exec)
-        .await?
-        {
-            Some(group_id) => group_id,
-            None => {
-                let group_id = Uuid::new_v4().to_string();
-                sqlx::query(
-                    "
-                    INSERT INTO instance_groups (id, name)
-                    VALUES (?, ?)
-                    ",
-                )
-                .bind(&group_id)
-                .bind(&group)
-                .execute(exec)
-                .await?;
-                group_id
-            }
-        };
-
-        sqlx::query(
-            "
-            INSERT OR IGNORE INTO instance_group_memberships (
-                instance_id,
-                group_id
-            )
-            VALUES (?, ?)
-            ",
-        )
-        .bind(instance_id_str)
-        .bind(group_id)
-        .execute(exec)
-        .await?;
+        let group_id =
+            crate::state::instance_groups::find_or_create_by_name(&group);
+        crate::state::instance_groups::add_instance_to_group(
+            instance_id_str,
+            &group_id,
+        );
     }
 
     let launch_overrides = InstanceLaunchOverrides {

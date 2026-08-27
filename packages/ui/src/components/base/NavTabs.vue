@@ -45,8 +45,13 @@
 					:key="link.href"
 					ref="tabLinkElements"
 					class="button-animation z-[1] flex flex-row items-center gap-2 px-4 py-2 hover:cursor-pointer focus:rounded-full"
-					:class="getSSRFallbackClasses(index)"
+					:class="[getSSRFallbackClasses(index), getDragClasses(index)]"
+					:draggable="isTabDraggable(index)"
 					@click="emit('tabClick', index, link)"
+					@dragstart="onDragStart(index, $event)"
+					@dragover="onDragOver(index, $event)"
+					@drop="onDrop(index, $event)"
+					@dragend="onDragEnd"
 				>
 					<component
 						:is="link.icon"
@@ -100,18 +105,79 @@ const props = withDefaults(
 		mode?: 'navigation' | 'local'
 		activeIndex?: number
 		pageNav?: boolean
+		/** Enables drag-and-drop reordering of tabs (`local` mode only). */
+		reorderable?: boolean
+		/**
+		 * Number of leading tabs that are pinned: they cannot be dragged, and
+		 * nothing can be dropped before them.
+		 */
+		pinnedCount?: number
 	}>(),
 	{
 		mode: 'navigation',
 		query: undefined,
 		activeIndex: undefined,
 		pageNav: false,
+		reorderable: false,
+		pinnedCount: 0,
 	},
 )
 
 const emit = defineEmits<{
 	tabClick: [index: number, tab: Tab]
+	/** Emitted after a successful drop, with indices into the visible tab list. */
+	reorder: [fromIndex: number, toIndex: number]
 }>()
+
+const dragIndex = ref<number | null>(null)
+const dragOverIndex = ref<number | null>(null)
+
+function isTabDraggable(index: number) {
+	return props.reorderable && props.mode === 'local' && index >= props.pinnedCount
+}
+
+function getDragClasses(index: number) {
+	return {
+		'opacity-50': dragIndex.value === index,
+		'rounded-full ring-2 ring-inset ring-brand':
+			dragOverIndex.value === index && dragIndex.value !== index,
+	}
+}
+
+function onDragStart(index: number, event: DragEvent) {
+	if (!isTabDraggable(index)) {
+		event.preventDefault()
+		return
+	}
+	dragIndex.value = index
+	if (event.dataTransfer) {
+		event.dataTransfer.effectAllowed = 'move'
+		// Firefox refuses to start a drag without any payload.
+		event.dataTransfer.setData('text/plain', String(index))
+	}
+}
+
+function onDragOver(index: number, event: DragEvent) {
+	if (dragIndex.value === null || !isTabDraggable(index)) return
+	// Only claim the event for valid targets so pinned tabs keep the "no drop"
+	// cursor instead of silently swallowing the drag.
+	event.preventDefault()
+	if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+	dragOverIndex.value = index
+}
+
+function onDrop(index: number, event: DragEvent) {
+	const from = dragIndex.value
+	onDragEnd()
+	if (from === null || !isTabDraggable(index) || from === index) return
+	event.preventDefault()
+	emit('reorder', from, index)
+}
+
+function onDragEnd() {
+	dragIndex.value = null
+	dragOverIndex.value = null
+}
 
 // DOM refs
 const scrollContainer = ref<HTMLElement | null>(null)

@@ -201,8 +201,6 @@ pub(crate) async fn create_instance(
         content_rows::insert_content_set(&content_set, &mut tx).await?;
         instance_rows::upsert_instance_link(&instance_id, &input.link, &mut tx)
             .await?;
-        instance_rows::replace_instance_groups(&instance_id, &[], &mut tx)
-            .await?;
         instance_rows::upsert_instance_launch_overrides(
             &launch_overrides,
             &mut tx,

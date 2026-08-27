@@ -262,6 +262,7 @@ fn main() {
                         "library_remove",
                         "library_set_active",
                         "library_update_name",
+                        "library_reorder",
                         "library_default_path",
                     ])
                     .default_permission(

@@ -150,12 +150,11 @@ async fn restore_instance_metadata(
         &mut tx,
     )
     .await?;
-    instance_rows::replace_instance_groups(
+    // Groups live in `instance_groups.json`, not the DB.
+    crate::state::instance_groups::set_instance_groups(
         &metadata.instance.id,
         &metadata.group_ids,
-        &mut tx,
-    )
-    .await?;
+    );
     instance_rows::upsert_instance_launch_overrides(
         &metadata.launch_overrides,
         &mut tx,

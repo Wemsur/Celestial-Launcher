@@ -54,6 +54,7 @@ mod mr_auth;
 pub use self::mr_auth::*;
 
 mod legacy_converter;
+pub mod instance_groups;
 pub mod libraries;
 
 pub mod attached_world_data;
@@ -160,6 +161,12 @@ impl State {
 
             if let Err(e) = libraries::ensure_migration_done(state).await {
                 tracing::error!("Error ensuring migration done: {e}");
+            }
+
+            // Must run after the library migration so JSON-backed instances
+            // exist and their sidecar groups can be imported.
+            if let Err(e) = instance_groups::ensure_imported(state).await {
+                tracing::error!("Error importing instance groups: {e}");
             }
 
             let res = tokio::try_join!(

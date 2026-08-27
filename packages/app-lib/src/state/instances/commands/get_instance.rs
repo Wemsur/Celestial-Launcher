@@ -79,6 +79,10 @@ fn instance_metadata(
     record: instance_rows::InstanceMetadataRecord,
     quarantined: bool,
 ) -> InstanceMetadata {
+    // Group membership comes from `instance_groups.json`, not the DB. The row's
+    // own `group_ids` is left unused (the SQL is kept untouched on purpose).
+    let group_ids =
+        crate::state::instance_groups::group_ids_for(&record.instance.id);
     InstanceMetadata {
         instance: record.instance,
         icon_config: record.icon_config,
@@ -86,7 +90,7 @@ fn instance_metadata(
         link: record.link,
         shared_instance: record.shared_instance,
         quarantined,
-        group_ids: record.group_ids,
+        group_ids,
         launch_overrides: record.launch_overrides,
     }
 }

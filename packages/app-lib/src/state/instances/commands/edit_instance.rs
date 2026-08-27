@@ -182,12 +182,11 @@ pub(crate) async fn edit_instance(
     }
 
     if let Some(group_ids) = &patch.group_ids {
-        instance_rows::replace_instance_groups(
+        // Groups live in `instance_groups.json`, not the DB.
+        crate::state::instance_groups::set_instance_groups(
             &instance.id,
             group_ids,
-            &mut tx,
-        )
-        .await?;
+        );
     }
 
     if let Some(overrides) = launch_overrides.as_mut() {
