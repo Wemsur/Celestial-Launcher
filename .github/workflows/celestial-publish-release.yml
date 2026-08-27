@@ -139,3 +139,67 @@ jobs:
           name: Celestial Launcher ${{ steps.version.outputs.version }}
           draft: true
           files: release-files/*
+
+  publish-gitgay:
+    name: Publish draft release to git.gay
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          version=$(node -p "require('./apps/app-frontend/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # git.gay wants a leading "v"; the updater strips it back off.
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "git.gay release tag will be: v$version"
+
+      - name: Download all build output
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        shell: bash
+        run: |
+          mkdir -p release-files
+          find artifacts -type f -exec cp {} release-files/ \;
+          ls -la release-files
+
+      # Forgejo exposes a Gitea-compatible REST API. Create the release as a
+      # draft, then upload each installer as an asset. Requires a git.gay token
+      # with write:repository scope stored as the GITGAY_TOKEN secret.
+      - name: Create draft release and upload assets
+        shell: bash
+        env:
+          GITGAY_TOKEN: ${{ secrets.GITGAY_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          API="https://git.gay/api/v1/repos/celestial-launcher/Celestial"
+          AUTH="Authorization: token ${GITGAY_TOKEN}"
+
+          echo "Creating draft release ${TAG}..."
+          resp=$(curl -sS -X POST "${API}/releases" \
+            -H "${AUTH}" \
+            -H "Content-Type: application/json" \
+            -d "$(node -e "console.log(JSON.stringify({tag_name: process.env.TAG, name: 'Celestial Launcher ' + process.env.VERSION, draft: true, prerelease: false}))")")
+
+          release_id=$(echo "$resp" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);if(!j.id){console.error(d);process.exit(1)}console.log(j.id)})")
+          echo "Release id: ${release_id}"
+
+          for f in release-files/*; do
+            [ -e "$f" ] || continue
+            name=$(basename "$f")
+            echo "Uploading ${name}..."
+            curl -sS -X POST "${API}/releases/${release_id}/assets?name=$(node -e "console.log(encodeURIComponent(process.argv[1]))" "$name")" \
+              -H "${AUTH}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@${f}" \
+              -o /dev/null
+          done
+          echo "Done."
