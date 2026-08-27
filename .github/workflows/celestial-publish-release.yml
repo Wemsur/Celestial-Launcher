@@ -1,13 +1,11 @@
-name: Celestial Launcher release build
+name: Celestial Launcher publish release
 
-# Builds Windows, macOS and Linux bundles in one run. Trigger it manually from
-# the Actions tab (or push a v* tag) — cross-compiling Tauri locally is not
-# possible, so this is the only way to get all platforms from one machine.
+# Builds all three platforms, then collects every installer into one GitHub
+# Release. The tag is taken from apps/app-frontend/package.json "version"
+# (e.g. 3.2.0, no leading "v"). The release is created as a DRAFT so you can
+# edit its name / notes and then publish it yourself.
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'v*'
 
 jobs:
   build:
@@ -32,10 +30,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
 
     steps:
-      # The repo carries a couple of symlink entries (`.dockerignore`, and an
-      # AGENTS.md that upstream committed with an empty target). Checking out a
-      # symlink with an empty target is impossible, which aborts `git checkout`
-      # on every runner, so tell git to materialise symlinks as plain files.
+      # See celestial-release.yml: the repo carries a symlink with an empty
+      # target that aborts checkout unless git materialises symlinks as files.
       - name: Disable git symlinks
         shell: bash
         run: git config --global core.symlinks false
@@ -47,15 +43,11 @@ jobs:
         with:
           targets: ${{ matrix.name == 'macos' && 'x86_64-apple-darwin,aarch64-apple-darwin' || '' }}
 
-      # Belt and braces: the universal bundle needs both arches, and a missing
-      # one only surfaces after the ~12 min release build.
       - name: Ensure macOS targets
         if: matrix.name == 'macos'
         run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
 
-      # `packages/app-lib/build.rs` shells out to `java/gradlew` to build
-      # theseus.jar, and that Gradle build requires JVM 17+. The ubuntu-22.04
-      # runner still defaults JAVA_HOME to Java 11, so pin it explicitly.
+      # theseus.jar's gradle build needs JVM 17+; ubuntu-22.04 defaults to 11.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -87,9 +79,6 @@ jobs:
           TAURI_BUNDLER_DMG_IGNORE_CI: 'true'
         run: pnpm --filter=@modrinth/app run tauri build ${{ matrix.args }}
 
-      # Collect the built installers into one flat folder so the uploaded
-      # artifact contains the files directly, not the nsis/ msi/ dmg/ … bundle
-      # subfolders Tauri emits.
       - name: Collect installers
         shell: bash
         run: |
@@ -106,9 +95,47 @@ jobs:
           done
           ls -la dist
 
-      - name: Upload bundles
+      - name: Upload build output
         uses: actions/upload-artifact@v4
         with:
           name: CelestialLauncher-${{ matrix.name }}
           path: dist/*
           if-no-files-found: ignore
+
+  release:
+    name: Publish draft release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          version=$(node -p "require('./apps/app-frontend/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Release tag will be: $version"
+
+      # Pull every platform's installers back into one flat folder.
+      - name: Download all build output
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        shell: bash
+        run: |
+          mkdir -p release-files
+          find artifacts -type f -exec cp {} release-files/ \;
+          ls -la release-files
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Celestial Launcher ${{ steps.version.outputs.version }}
+          draft: true
+          files: release-files/*
