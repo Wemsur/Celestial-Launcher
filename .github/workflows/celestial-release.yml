@@ -32,7 +32,15 @@ jobs:
     runs-on: ${{ matrix.runner }}
 
     steps:
-      - uses: actions/checkout@v4
+      # The repo carries a couple of symlink entries (`.dockerignore`, and an
+      # AGENTS.md that upstream committed with an empty target). Checking out a
+      # symlink with an empty target is impossible, which aborts `git checkout`
+      # on every runner, so tell git to materialise symlinks as plain files.
+      - name: Disable git symlinks
+        shell: bash
+        run: git config --global core.symlinks false
+
+      - uses: actions/checkout@v5
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
