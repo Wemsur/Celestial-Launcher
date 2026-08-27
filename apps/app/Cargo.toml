@@ -39,7 +39,8 @@ url = { workspace = true }
 urlencoding = { workspace = true }
 uuid = { workspace = true, features = ["serde", "v4"] }
 base64 = "0.22.1"
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json", "stream"] }
+futures = { workspace = true }
 
 [dependencies.tauri]
 workspace = true

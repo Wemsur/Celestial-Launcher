@@ -535,15 +535,20 @@ onMounted(async () => {
     /*checkUpdates()*/
     checkCelestialUpdates()
     watch(
-        () => appUpdateState.downloadPercent,
+        () => appUpdateState.downloadPercent.value,
         (percent) => {
             if (downloadingUpdateNotificationId == null) return
             const notif = popupNotificationManager
                 .getNotifications()
                 .find(n => n.id === downloadingUpdateNotificationId)
-            if (!notif || !notif.progressItems?.length) return
-            notif.progressItems[0].progress = percent / 100
+            if (!notif) return
+            // The download notification is a `standard` `download` toast, which
+            // renders its bar from `notif.progress` (0..1). Feed it the streamed
+            // percentage so the top-right toast fills alongside the settings bar.
             notif.progress = percent / 100
+            if (notif.progressItems?.length) {
+                notif.progressItems[0].progress = percent / 100
+            }
         }
     )
     watch(finishedDownloading, (val) => {
@@ -1430,6 +1435,11 @@ const appUpdateDownload = {
 }
 let unlistenUpdateDownload
 let downloadingUpdateNotificationId = null
+// Remembered from the latest successful update check so the manual "Update"
+// pill (metered connections skip the auto-download) can start the same
+// git.gay download the auto path uses.
+let pendingUpdateAssetUrl = null
+let pendingUpdateVersion = null
 
 const {
 	metered,
@@ -1615,6 +1625,8 @@ async function checkCelestialUpdates() {
         downloading.value = false
         updateSize.value = asset.size
         availableUpdate.value = { rid: 0, version: latestVersion }
+        pendingUpdateAssetUrl = asset.browser_download_url
+        pendingUpdateVersion = latestVersion
 
         console.log(`Update ${latestVersion} is available.`)
 
@@ -1664,19 +1676,33 @@ async function checkLinuxUpdates() {
 }
 
 async function downloadAvailableUpdate() {
-	return downloadUpdate(availableUpdate.value)
+	// `downloadUpdate` (the old Modrinth tauri-updater flow) no longer exists;
+	// route the manual pill through the same git.gay downloader as the auto path.
+	if (!pendingUpdateAssetUrl) {
+		console.warn('No pending update asset to download')
+		return
+	}
+	return downloadCelestialUpdate(
+		pendingUpdateAssetUrl,
+		pendingUpdateVersion ?? availableUpdate.value?.version ?? '',
+	)
 }
 
 async function downloadCelestialUpdate(assetUrl, version) {
     console.log(`Downloading update ${version}`)
     downloading.value = true
+    // The settings modal reads the version from the download-progress provider
+    // (injectAppUpdateDownloadProgress().version), which is this ref; without it
+    // the label renders as "正在下载 v" with no version.
+    appUpdateDownload.version.value = version
 
     downloadingUpdateNotificationId = addPopupNotification({
         title: formatMessage(updatePopupMessages.downloading, { version }),
         text: formatMessage(updatePopupMessages.downloadingBody, { version }),
         type: 'info',
+        progress: 0,
         autoCloseMs: null,
-    })
+    }).id
 
     try {
         await downloadAndRunRelease(assetUrl, version)

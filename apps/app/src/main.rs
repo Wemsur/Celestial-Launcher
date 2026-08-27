@@ -642,7 +642,21 @@ async fn download_and_run_msi(
     asset_url: String,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
-    let resp = reqwest::get(&asset_url)
+    // git.gay (Forgejo) sits behind a WAF that 403s requests with no / a
+    // non-browser User-Agent. `reqwest::get` sends none, so the asset download
+    // was rejected even though the release-metadata fetch (from the webview,
+    // which does send a UA) succeeded. Send a browser-like UA explicitly.
+    let client = reqwest::Client::builder()
+        .user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+             (KHTML, like Gecko) CelestialLauncher/updater",
+        )
+        .build()
+        .map_err(|e| format!("Client build failed: {}", e))?;
+
+    let resp = client
+        .get(&asset_url)
+        .send()
         .await
         .map_err(|e| format!("Download failed: {}", e))?;
 
@@ -650,10 +664,29 @@ async fn download_and_run_msi(
         return Err(format!("HTTP error: {}", resp.status()));
     }
 
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| format!("Read failed: {}", e))?;
+    // Stream the body so we can report download progress to the frontend, the
+    // way the original Modrinth updater did. `resp.bytes()` would swallow the
+    // whole file in one await and leave the progress bar stuck at 0.
+    let total = resp.content_length().unwrap_or(0);
+    let mut downloaded: u64 = 0;
+    let mut bytes: Vec<u8> = Vec::with_capacity(total as usize);
+    let mut stream = resp.bytes_stream();
+    let mut last_emit = 0.0_f64;
+
+    use futures::StreamExt;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Read failed: {}", e))?;
+        bytes.extend_from_slice(&chunk);
+        downloaded += chunk.len() as u64;
+        if total > 0 {
+            let fraction = downloaded as f64 / total as f64;
+            // Throttle to whole-percent steps to avoid flooding the event loop.
+            if fraction - last_emit >= 0.01 || fraction >= 1.0 {
+                last_emit = fraction;
+                let _ = app_handle.emit_to("main", "app-update-progress", fraction);
+            }
+        }
+    }
 
     let filename = asset_url
         .split('/')

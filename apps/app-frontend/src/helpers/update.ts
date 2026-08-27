@@ -1,5 +1,6 @@
 import { getVersion } from '@tauri-apps/api/app'
 import {invoke} from "@tauri-apps/api/core";
+import { listen } from '@tauri-apps/api/event'
 
 import {
     appUpdateState,
@@ -85,12 +86,20 @@ export async function downloadAndRunRelease(
     appUpdateState.downloading.value = true
     appUpdateState.progress.value = 0
 
+    // The Rust side streams the download and emits `app-update-progress` with a
+    // 0..1 fraction; mirror it into the shared state so the settings-page
+    // progress bar fills up the way it did with the original Modrinth updater.
+    const unlisten = await listen<number>('app-update-progress', (event) => {
+        appUpdateState.progress.value = event.payload
+    })
+
     try {
         const filename = assetUrl.split('/').pop() ?? 'update.exe'
         localStorage.setItem('celestial-last-msi-filename', filename)
         const result = await invoke('download_and_run_msi', { assetUrl })
         localStorage.setItem('celestial-last-msi-filename', result as string)
 
+        appUpdateState.progress.value = 1
         appUpdateState.downloading.value = false
         appUpdateState.finishedDownloading.value = true
         markAppUpdateActionable(version, 'downloaded')
@@ -99,5 +108,7 @@ export async function downloadAndRunRelease(
         appUpdateState.downloading.value = false
         appUpdateState.progress.value = 0
         console.error('Update download failed:', e)
+    } finally {
+        unlisten()
     }
 }
