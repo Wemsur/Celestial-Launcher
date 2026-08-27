@@ -8,7 +8,7 @@ import {
 } from '@modrinth/ui'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
-import { computed, inject, onActivated, onUnmounted, ref, shallowRef, watch, watchEffect } from 'vue'
+import { computed, inject, onActivated, onUnmounted, provide, ref, shallowRef, watch, watchEffect } from 'vue'
 import dayjs from 'dayjs'
 
 import ContextMenu from '@/components/ui/context-menu/index.vue'
@@ -88,6 +88,30 @@ if (hasCreatedInstance.value) {
 
 useAppEvent('instance', () => fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value))
 useAppEvent('instance_groups_changed', () => fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value))
+
+// Manual rescan, wired to the refresh button in the library toolbar. `list()`
+// re-walks the libraries on disk on every call, so re-fetching is a full
+// re-detection; the library list is reloaded too in case a library folder
+// appeared or vanished.
+const isRefreshingInstances = ref(false)
+
+async function refreshInstances() {
+	if (isRefreshingInstances.value) return
+	isRefreshingInstances.value = true
+	try {
+		await loadLibraries()
+		// A library tab may have disappeared while we were away.
+		if (activeTab.value !== 'all' && !libraries.value.some((l) => l.path === activeTab.value)) {
+			activeTab.value = 'all'
+		}
+		await fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value)
+	} finally {
+		isRefreshingInstances.value = false
+	}
+}
+
+provide('refreshLibraryInstances', refreshInstances)
+provide('isRefreshingLibraryInstances', isRefreshingInstances)
 
 // ── Library tabs ─────────────────────────────────────────────────────────────
 

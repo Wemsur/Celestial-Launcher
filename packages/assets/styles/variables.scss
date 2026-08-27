@@ -595,6 +595,7 @@ html {
 	--color-green-900: hsl(var(--brand-hue, 217), 21%, 25%);
 	--color-green-950: hsl(var(--brand-hue, 217), 74%, 10%);
 	--color-green: var(--color-green-500);
+	--color-green-bg: hsl(var(--brand-hue, 143) 80% 48% / 0.2);
 
 	--color-text-primary: hsl(var(--brand-hue, 217), 26%, 93%);
 	--color-text-default: hsl(var(--brand-hue, 217), 12%, 60%);
@@ -613,7 +614,10 @@ html {
 		hsl(var(--brand-hue, 217), 8%, 12%) 0%,
 		hsl(var(--brand-hue, 217), 18%, 42%) 100%
 	);
-	--color-brand-highlight: hsl(var(--brand-hue, 217), 9%, 30%);
+	/*--color-brand-highlight: hsl(var(--brand-hue, 217), 9%, 30%);
+	--color-brand-highlight: rgb(140 129 82 / 0.25);*/
+	--color-brand-highlight: hsl(var(--brand-hue, 49) 26% 44% / 0.25);
+	--color-brand-shadow: hsl(var(--brand-hue, 143) 80% 48% / 0.7);
 }
 
 .customlight-mode {
@@ -652,19 +656,6 @@ html {
 	--color-orange-900: #6e2d19;
 	--color-orange-950: #3f1509;
 	--color-orange: var(--color-orange-500);
-
-	--color-green-50: #eefff6;
-	--color-green-100: #d7ffeb;
-	--color-green-200: #b2ffd9;
-	--color-green-300: #76ffbc;
-	--color-green-400: #33f598;
-	--color-green-500: #deb309;
-	--color-green-600: #00af5c;
-	--color-green-700: #04914f;
-	--color-green-800: #0a7141;
-	--color-green-900: #0a5d38;
-	--color-green-950: #00341d;
-	--color-green: var(--color-green-600);
 
 	--color-blue-50: #f2f7fd;
 	--color-blue-100: #e4ecfa;
@@ -736,13 +727,12 @@ html {
 
 	--color-red-bg: rgba(203, 34, 69, 0.1);
 	--color-orange-bg: rgba(224, 131, 37, 0.1);
-	--color-green-bg: rgba(0, 175, 92, 0.1);
+	--color-green-bg: hsl(var(--brand-hue, 151.5) 100% 34.3% / 0.1);
 	--color-blue-bg: rgba(31, 104, 192, 0.1);
 	--color-purple-bg: rgba(142, 50, 243, 0.1);
 
 	--color-brand: var(--color-green);
-	--color-brand-highlight: var(--color-green-highlight);
-	--color-brand-shadow: rgba(0, 175, 92, 0.7);
+	--color-brand-shadow: hsl(var(--brand-hue, 151.5) 100% 34.3% / 0.7);
 
 	--shadow-inset-lg: inset 0px -2px 2px hsla(221, 39%, 91%, 0.1);
 	--shadow-inset: inset 0px -2px 2px hsla(221, 39%, 91%, 0.05);
@@ -831,4 +821,7 @@ html {
 		hsl(var(--brand-hue, 217), 18%, 42%) 100%
 	);
 	--color-brand-highlight: hsl(var(--brand-hue, 217), 9%, 90%);
+	--color-brand-highlight: hsl(var(--brand-hue, 49) 26% 44% / 0.25);
+	--color-green-highlight: hsl(var(--brand-hue, 151.5) 100% 34.3% / 0.25);
+	--color-brand-highlight: hsl(var(--brand-hue, 151.5) 100% 34.3% / 0.25);
 }

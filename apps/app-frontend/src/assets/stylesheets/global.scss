@@ -428,6 +428,10 @@ body.custom-bg-active:not(.custom-bgblur) .notification-toast {
 	background: none;
 }*/
 
+.bg-surface-1\.5 {
+	background-color: color-mix(in srgb, var(--surface-1-5) 70%, transparent);
+}
+
 body.custom-bg-active .bg-surface-2 {
 	background-color: color-mix(in srgb, var(--surface-2) 70%, transparent);
 }
@@ -491,4 +495,19 @@ body.custom-bg-active .card {
 
 	pointer-events: none;
 	z-index: 10;
+}
+
+body.custom-bg-active.custom-bgblur {
+	[class*="app-sidebar"] {
+		backdrop-filter: blur(3px) !important;
+		-webkit-backdrop-filter: blur(3px) !important;
+		background-color: color-mix(in srgb, var(--surface-4) 14%, transparent) !important;
+	}
+}
+body.custom-bg-active:not(.custom-bgblur) {
+	[class*="app-sidebar"] {
+		backdrop-filter: blur(3px) !important;
+		-webkit-backdrop-filter: blur(3px) !important;
+		background-color: color-mix(in srgb, var(--surface-4) 14%, transparent) !important;
+	}
 }
