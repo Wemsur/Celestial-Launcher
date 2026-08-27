@@ -4,10 +4,12 @@ import {
 	EditIcon,
 	EyeIcon,
 	InfoIcon,
+	LogInIcon,
 	RotateCounterClockwiseIcon,
 	ShirtIcon,
 	SpinnerIcon,
 	WindowsIcon,
+	XIcon,
 } from '@modrinth/assets'
 import {
 	Button,
@@ -17,7 +19,9 @@ import {
 	injectAuth,
 	injectModrinthClient,
 	injectNotificationManager,
+	NewModal,
 	SkinPreviewRenderer,
+	StyledInput,
 	Toggle,
 	useVIntl,
 } from '@modrinth/ui'
@@ -35,7 +39,7 @@ import VirtualSkinSectionList from '@/components/ui/skin/VirtualSkinSectionList.
 import { useAppSettings } from '@/composables/use-app-settings.ts'
 import { handleSevereError } from '@/composables/use-error.js'
 import { trackEvent } from '@/helpers/analytics'
-import { check_reachable, get_default_user, login as login_flow, users } from '@/helpers/auth'
+import { check_reachable, create_offline_user, get_default_user, login as login_flow, set_default_user, users } from '@/helpers/auth'
 import type { RenderResult } from '@/helpers/rendering/batch-skin-renderer.ts'
 import {
 	generateSkinPreviews,
@@ -1089,6 +1093,9 @@ async function handleCreateOffline() {
         const newCred = await create_offline_user(offlineUsername.value.trim())
         // 设为默认激活账户
         await set_default_user(newCred.profile.id)
+        // 刷新侧边栏与本页的当前账户，条自动消失
+        await accountsCard.value?.refreshValues()
+        await loadCurrentUser()
         // 关闭弹窗
         hideOfflineModal()
         // 通知
@@ -1336,19 +1343,62 @@ await loadSkins()
 					</p>
 				</div>
 			</div>
-			<Button
-				v-show="accountsCard"
-				type="colored"
-				color="brand"
-				:disabled="accountsCard.loginDisabled"
-				@click="login"
-			>
-				<SpinnerIcon v-if="accountsCard.loginDisabled" class="animate-spin" />
-				<WindowsIcon v-else />
-				{{ formatMessage(messages.signInButton) }}
-			</Button>
+			<div class="flex shrink-0 items-center gap-2">
+				<Button
+					v-show="accountsCard"
+					type="colored"
+					color="brand"
+					:disabled="accountsCard.loginDisabled"
+					@click="login"
+				>
+					<SpinnerIcon v-if="accountsCard.loginDisabled" class="animate-spin" />
+					<WindowsIcon v-else />
+					微软登录
+				</Button>
+				<Button
+					type="colored"
+					color="medal_promotion"
+					:disabled="accountsCard?.loginDisabled"
+					@click="offlineModalRef?.show()"
+				>
+					<LogInIcon />
+					离线登录
+				</Button>
+			</div>
 		</div>
 	</div>
+
+	<NewModal ref="offlineModalRef" header="添加离线账户" :max-width="'500px'">
+		<form class="space-y-6 min-w-[400px]" @submit.prevent="handleCreateOffline">
+			<label class="flex flex-col gap-2">
+				<span class="font-semibold text-contrast">用户名</span>
+				<StyledInput
+					ref="offlineInputRef"
+					v-model="offlineUsername"
+					wrapper-class="w-full"
+					placeholder="请输入玩家名..."
+				/>
+				<div v-if="offlineError" class="text-sm text-red">{{ offlineError }}</div>
+			</label>
+		</form>
+		<template #actions>
+			<div class="flex gap-2 justify-end">
+				<Button type="outlined" @click="hideOfflineModal">
+					<XIcon class="h-5 w-5" />
+					取消
+				</Button>
+				<Button
+					type="colored"
+					color="brand"
+					:disabled="offlineSubmitting"
+					@click="handleCreateOffline"
+				>
+					<EditIcon class="h-5 w-5" />
+					添加
+				</Button>
+			</div>
+		</template>
+	</NewModal>
 </template>
 
 <style lang="scss" scoped>
