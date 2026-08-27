@@ -129,6 +129,7 @@ import { cancelLogin, get as getCreds, login, logout } from '@/helpers/mr_auth.t
 import { mergeUrlQuery, parseModrinthLink } from '@/helpers/project-links.ts'
 import { get as getSettings, set as setSettings } from '@/helpers/settings.ts'
 import { get_opening_command, initialize_state } from '@/helpers/state'
+import { checkForUpdate, downloadAndRunRelease } from '@/helpers/update'
 import { hasActivePride26Midas, hasMidasBadge } from '@/helpers/user-campaigns.ts'
 import { parse_modrinth_user_link } from '@/helpers/users'
 import {
