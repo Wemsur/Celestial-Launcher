@@ -125,6 +125,9 @@ async function show() {
 			: null)
 	ctx.selectedLibraryPath.value = preselected
 	await ctx.reset()
+	// `reset()` restores the preselection captured when the context was created,
+	// which is stale by now, so re-apply the freshest one afterwards.
+	ctx.selectedLibraryPath.value = preselected
 	void ctx.prefetchLoaderMetadata()
 	modal.value?.setStage(0)
 	modal.value?.show()

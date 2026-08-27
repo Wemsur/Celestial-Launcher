@@ -62,8 +62,15 @@ onActivated(homeBreadcrumb.reset)
 const instances = ref<GameInstance[]>([])
 let latestInstanceFetch = 0
 
+// "Jump in" is about the whole launcher, not the selected library tab, so it
+// gets its own unfiltered list. Sharing the tab-filtered one made the row
+// unmount/remount (it is an async-setup component behind a `v-if`) on every
+// library switch, which read as a flash.
+const allInstances = ref<GameInstance[]>([])
+let latestAllInstanceFetch = 0
+
 const recentInstances = computed(() =>
-	instances.value
+	allInstances.value
 		.slice()
 		.sort((a, b) => dayjs(b.last_played ?? b.created).diff(dayjs(a.last_played ?? a.created))),
 )
@@ -82,11 +89,22 @@ async function fetchInstances(filter?: string) {
 	}
 }
 
-if (hasCreatedInstance.value) {
-	await fetchInstances()
+async function fetchAllInstances() {
+	const fetchId = ++latestAllInstanceFetch
+	const nextInstances = await list().catch(() => [])
+	if (fetchId === latestAllInstanceFetch) {
+		allInstances.value = nextInstances
+	}
 }
 
-useAppEvent('instance', () => fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value))
+if (hasCreatedInstance.value) {
+	await Promise.all([fetchInstances(), fetchAllInstances()])
+}
+
+useAppEvent('instance', () => {
+	fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value)
+	fetchAllInstances()
+})
 useAppEvent('instance_groups_changed', () => fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value))
 
 // Manual rescan, wired to the refresh button in the library toolbar. `list()`
@@ -105,6 +123,7 @@ async function refreshInstances() {
 			activeTab.value = 'all'
 		}
 		await fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value)
+		await fetchAllInstances()
 	} finally {
 		isRefreshingInstances.value = false
 	}
@@ -200,6 +219,22 @@ watch(activeTab, async (tab) => {
 	fetchInstances(tab === 'all' ? undefined : tab)
 })
 
+// Mirror the active library into localStorage so the creation modal (and the
+// library picker) can pre-select it. "all" means "no specific library", i.e.
+// fall back to the default one.
+watch(
+	activeTab,
+	(tab) => {
+		if (typeof window === 'undefined') return
+		if (tab && tab !== 'all') {
+			localStorage.setItem('celestial-library-active-tab', tab)
+		} else {
+			localStorage.removeItem('celestial-library-active-tab')
+		}
+	},
+	{ immediate: true },
+)
+
 // ── Add library modal ───────────────────────────────────────────────────────
 
 const addLibraryPath = ref('')
@@ -224,6 +259,7 @@ async function addLibrary() {
 		addLibraryName.value = ''
 		await loadLibraries()
 		fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value)
+		fetchAllInstances()
 	} catch (e) {
 		handleError(e instanceof Error ? e : new Error(String(e)))
 	}
@@ -277,6 +313,7 @@ async function removeLibrary() {
 		closeLibrarySettingsModal()
 		await loadLibraries()
 		fetchInstances('all')
+		fetchAllInstances()
 	} catch (e) {
 		handleError(e instanceof Error ? e : new Error(String(e)))
 	}

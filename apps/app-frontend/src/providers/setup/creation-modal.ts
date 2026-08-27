@@ -69,19 +69,36 @@ export function setupCreationModal(
 	// ── showCreationModal with preselection ────────────────────────────────
 	// Read the currently active library from localStorage so the modal
 	// always pre-selects the right library regardless of which page opens it.
-	const persistedTab =
-		typeof window !== 'undefined'
-			? localStorage.getItem('celestial-library-active-tab') ?? null
-			: null
-	const preselectedLibraryPath = ref<string | null>(persistedTab)
-	const lastSelectedLibraryPath = ref<string | null>(persistedTab)
+	// The home page removes that key while the "全部实例" tab is active, in which
+	// case we fall back to the default library instead of leaving the picker
+	// empty.
+	function readActiveLibraryPath(): string | null {
+		if (typeof window === 'undefined') return null
+		return localStorage.getItem('celestial-library-active-tab') ?? null
+	}
+
+	function resolvePreselectedLibraryPath(): string | null {
+		const active = readActiveLibraryPath()
+		if (active && active !== 'all') return active
+		// The picker's option values are library paths, and the default library's
+		// own entry can be `<default>/profiles` while `library_default_path()`
+		// returns `<default>`, so match it the same way the label does.
+		const fallback = defaultLibraryPath.value
+		if (!fallback) return null
+		const normDefault = fallback.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '')
+		const match = availableLibraries.value.find((lib) => {
+			const normLib = lib.path.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '')
+			return normLib === normDefault || normLib === `${normDefault}/profiles`
+		})
+		return match?.path ?? fallback
+	}
+
+	const preselectedLibraryPath = ref<string | null>(resolvePreselectedLibraryPath())
+	const lastSelectedLibraryPath = ref<string | null>(preselectedLibraryPath.value)
 
 	provide('showCreationModal', () => {
 		// Re-read persisted tab each time so it stays in sync
-		const currentTab =
-			typeof window !== 'undefined'
-				? localStorage.getItem('celestial-library-active-tab') ?? null
-				: null
+		const currentTab = resolvePreselectedLibraryPath()
 		lastSelectedLibraryPath.value = currentTab
 		preselectedLibraryPath.value = currentTab
 		installationModal.value?.show(currentTab)
