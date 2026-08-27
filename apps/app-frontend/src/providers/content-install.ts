@@ -39,6 +39,7 @@ import {
 import { get_game_versions } from '@/helpers/tags'
 import type { GameInstance, InstanceLoader } from '@/helpers/types'
 import type { AppEvents } from '@/providers/app-events'
+import { pickInstallLibrary } from '@/providers/library-picker'
 interface ModalRef {
 	show: (initialVersionId?: string) => void
 	hide: () => void
@@ -420,6 +421,49 @@ export function createContentInstall(opts: {
 		callback: ContentInstallCallback
 		createInstanceCallback: (instanceId: string) => void
 	} | null = null
+
+	/**
+	 * Shared tail of the modpack install flow: ask for a target library, kick off
+	 * the install job and report it. Returns `false` when the user cancelled the
+	 * library picker, so callers can abort silently.
+	 */
+	async function createModpackInstance(pending: {
+		project: Labrinth.Projects.v2.Project
+		version: string
+		source: string
+		callback: ContentInstallCallback
+		createInstanceCallback: (instanceId: string) => void
+	}): Promise<boolean> {
+		const { project, version, source, callback, createInstanceCallback } = pending
+
+		const { cancelled, library } = await pickInstallLibrary()
+		if (cancelled) return false
+
+		const job = await install_create_modpack_instance(
+			{
+				type: 'fromVersionId',
+				project_id: project.id,
+				version_id: version,
+				title: project.title,
+				icon_url: project.icon_url,
+			},
+			null,
+			library?.path ?? null,
+			library?.format ?? null,
+		)
+		const instanceId = installJobInstanceId(job)
+		if (instanceId) {
+			createInstanceCallback(instanceId)
+		}
+		trackEvent('PackInstall', {
+			id: project.id,
+			version_id: version,
+			title: project.title,
+			source,
+		})
+		callback(version)
+		return true
+	}
 
 	async function showModInstallModal(
 		project: Labrinth.Projects.v2.Project,
@@ -864,24 +908,13 @@ export function createContentInstall(opts: {
 				return
 			}
 
-			const job = await install_create_modpack_instance({
-				type: 'fromVersionId',
-				project_id: project.id,
-				version_id: version,
-				title: project.title,
-				icon_url: project.icon_url,
-			})
-			const instanceId = installJobInstanceId(job)
-			if (instanceId) {
-				createInstanceCallback(instanceId)
-			}
-			trackEvent('PackInstall', {
-				id: project.id,
-				version_id: version,
-				title: project.title,
+			await createModpackInstance({
+				project,
+				version,
 				source,
+				callback,
+				createInstanceCallback,
 			})
-			callback(version)
 		} else if (instanceId) {
 			const [instanceOrNull, instanceProjects, versions] = await Promise.all([
 				get(instanceId),
@@ -978,26 +1011,9 @@ export function createContentInstall(opts: {
 		},
 		async handleModpackDuplicateCreateAnyway() {
 			if (!pendingModpackInstall) return
-			const { project, version, source, callback, createInstanceCallback } = pendingModpackInstall
+			const pending = pendingModpackInstall
 			pendingModpackInstall = null
-			const job = await install_create_modpack_instance({
-				type: 'fromVersionId',
-				project_id: project.id,
-				version_id: version,
-				title: project.title,
-				icon_url: project.icon_url,
-			})
-			const instanceId = installJobInstanceId(job)
-			if (instanceId) {
-				createInstanceCallback(instanceId)
-			}
-			trackEvent('PackInstall', {
-				id: project.id,
-				version_id: version,
-				title: project.title,
-				source,
-			})
-			callback(version)
+			await createModpackInstance(pending)
 		},
 		handleModpackDuplicateGoToInstance(instanceId: string) {
 			pendingModpackInstall = null

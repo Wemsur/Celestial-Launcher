@@ -110,10 +110,14 @@ pub async fn install_create_instance(
 pub async fn install_create_modpack_instance(
     location: CreatePackLocation,
     post_install_edit: Option<InstallPostInstallEditRequest>,
+    library_path: Option<String>,
+    instance_format: Option<String>,
 ) -> Result<InstallJobSnapshot> {
     Ok(theseus::install::create_modpack_instance(
         location,
         post_install_edit.map(|edit| edit.into_core()).transpose()?,
+        library_path,
+        instance_format,
     )
     .await?)
 }

@@ -24,6 +24,7 @@ import {
 } from '@/helpers/install'
 import { list } from '@/helpers/instance'
 import { library_default_path, library_list } from '@/helpers/library'
+import { pickInstallLibrary } from '@/providers/library-picker'
 import { get_loader_versions as getLoaderManifest } from '@/helpers/metadata.js'
 import type { InstanceIconConfig, InstanceLoader } from '@/helpers/types'
 
@@ -129,7 +130,14 @@ export function setupCreationModal(
 	}
 
 	async function proceedWithModpackFileCreation(location: CreatePackLocation) {
-		const job = await install_create_modpack_instance(location)
+		const { cancelled, library } = await pickInstallLibrary()
+		if (cancelled) return
+		const job = await install_create_modpack_instance(
+			location,
+			null,
+			library?.path ?? null,
+			library?.format ?? null,
+		)
 		await navigateToCreatedInstance(job)
 		trackEvent('InstanceCreate', { source: 'CreationModalModpackFile' })
 	}

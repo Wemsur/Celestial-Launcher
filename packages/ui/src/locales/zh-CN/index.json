@@ -6110,6 +6110,24 @@
   "version.supplementary-resources.type": {
     "defaultMessage": "类型"
   },
+  "app.modal.library-select.header": {
+    "defaultMessage": "选择库"
+  },
+  "app.modal.library-select.description": {
+    "defaultMessage": "选择要把该实例安装到哪个库中。"
+  },
+  "app.modal.library-select.empty": {
+    "defaultMessage": "尚未配置任何库，将使用默认库。"
+  },
+  "app.modal.library-select.badge-modrinth": {
+    "defaultMessage": "Modrinth"
+  },
+  "app.modal.library-select.badge-minecraft": {
+    "defaultMessage": ".minecraft"
+  },
+  "app.modal.library-select.confirm": {
+    "defaultMessage": "安装到此处"
+  },
   "app.navigation.home": {
     "defaultMessage": "首页"
   },

@@ -89,6 +89,7 @@ import AppSettingsModal from '@/components/ui/modal/AppSettingsModal.vue'
 import AuthGrantFlowWaitModal from '@/components/ui/modal/AuthGrantFlowWaitModal.vue'
 import ImportModal from '@/components/ui/modal/ImportModal.vue'
 import InstallToPlayModal from '@/components/ui/modal/InstallToPlayModal.vue'
+import LibrarySelectModal from '@/components/ui/modal/LibrarySelectModal.vue'
 import ModpackAlreadyInstalledModal from '@/components/ui/modal/ModpackAlreadyInstalledModal.vue'
 import ModrinthAccountRequiredModal from '@/components/ui/modal/ModrinthAccountRequiredModal.vue'
 import UpdateToPlayModal from '@/components/ui/modal/UpdateToPlayModal.vue'
@@ -154,6 +155,7 @@ import {
 	provideAppUpdateDownloadProgress,
 	subscribeToDownloadProgress,
 } from '@/providers/download-progress.ts'
+import { pickInstallLibrary, setLibraryPickerModal } from '@/providers/library-picker'
 import { createServerInstall, provideServerInstall } from '@/providers/server-install'
 import { setupProviders } from '@/providers/setup'
 import { setupAppEventsProvider } from '@/providers/setup/app-events'
@@ -1060,6 +1062,7 @@ const contentInstallModpackAlreadyInstalledModal = ref()
 const addServerToInstanceModal = ref()
 const incompatibilityWarningModal = ref()
 const installToPlayModal = ref()
+const librarySelectModal = ref()
 const sharedInstanceInviteHandler = ref()
 const updateToPlayModal = ref()
 
@@ -1247,6 +1250,7 @@ onMounted(() => {
 	setContentInstallModal(modInstallModal.value)
 	setContentInstallModpackAlreadyInstalledModal(contentInstallModpackAlreadyInstalledModal.value)
 	setModpackAlreadyInstalledModal(modpackAlreadyInstalledModal.value)
+	setLibraryPickerModal(librarySelectModal)
 	setServerAddServerToInstanceModal(addServerToInstanceModal.value)
 	setServerInstallToPlayModal(installToPlayModal.value)
 	setServerUpdateToPlayModal(updateToPlayModal.value)
@@ -1361,17 +1365,27 @@ async function handleCommand(e) {
 		// RunMRPack should directly install a local mrpack given a path
 		if (e.path.endsWith('.mrpack')) {
 			const location = { type: 'fromFile', path: e.path }
+			const createWithLibrary = async () => {
+				const { cancelled, library } = await pickInstallLibrary()
+				if (cancelled) return
+				await install_create_modpack_instance(
+					location,
+					null,
+					library?.path ?? null,
+					library?.format ?? null,
+				)
+			}
 			const preview = await install_get_modpack_preview(location).catch(handleError)
 			if (preview?.unknownFile || preview?.externalFilesInModpack.length > 0) {
 				const splitPath = e.path.split(/[\\/]/)
 				const fileName = splitPath ? splitPath[splitPath.length - 1] : e.path
 				unknownPackWarningModal.value?.show(
-					() => install_create_modpack_instance(location).then(() => undefined),
+					() => createWithLibrary().catch(handleError),
 					fileName,
 					preview.externalFilesInModpack,
 				)
 			} else {
-				await install_create_modpack_instance(location).catch(handleError)
+				await createWithLibrary().catch(handleError)
 			}
 			trackEvent('InstanceCreate', {
 				source: 'CreationModalFileDrop',
@@ -2180,6 +2194,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 		@create-anyway="handleContentInstallModpackDuplicateCreateAnyway"
 		@go-to-instance="handleContentInstallModpackDuplicateGoToInstance"
 	/>
+	<LibrarySelectModal ref="librarySelectModal" />
 	<SharedInstanceInviteHandler ref="sharedInstanceInviteHandler" />
 	<InstallToPlayModal ref="installToPlayModal" :show-external-warnings="false" />
 	<UpdateToPlayModal ref="updateToPlayModal" :show-external-warnings="false" />

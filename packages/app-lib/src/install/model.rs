@@ -175,6 +175,15 @@ pub enum InstallRequest {
         location: CreatePackLocation,
         #[serde(default)]
         post_install_edit: Option<InstallPostInstallEdit>,
+        /// Library the new instance should be created in. `None` falls back to
+        /// the default library, which is what every caller did before the
+        /// target-library picker existed.
+        #[serde(default)]
+        library_path: Option<String>,
+        /// Explicit library format ('modrinth' | 'minecraft'), overrides
+        /// path-based detection.
+        #[serde(default)]
+        instance_format: Option<String>,
     },
     CreateSharedInstance {
         data: SharedInstanceInstallData,

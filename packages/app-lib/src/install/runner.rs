@@ -60,10 +60,14 @@ pub async fn create_instance(
 pub async fn create_modpack_instance(
     location: CreatePackLocation,
     post_install_edit: Option<InstallPostInstallEdit>,
+    library_path: Option<String>,
+    instance_format: Option<String>,
 ) -> crate::Result<InstallJobSnapshot> {
     start(InstallRequest::CreateModpackInstance {
         location,
         post_install_edit,
+        library_path,
+        instance_format,
     })
     .await
 }
@@ -527,6 +531,8 @@ async fn prepare_initial_instance(
         InstallRequest::CreateModpackInstance {
             location,
             post_install_edit,
+            library_path,
+            instance_format,
         } => {
             let preview = match location {
                 CreatePackLocation::FromFile { path } => {
@@ -562,8 +568,8 @@ async fn prepare_initial_instance(
                 icon_path,
                 None,
                 link,
-                None,
-                None,
+                library_path,
+                instance_format,
             )
             .await?;
             set_display(
@@ -980,6 +986,7 @@ async fn run_request(
         InstallRequest::CreateModpackInstance {
             location,
             post_install_edit,
+            ..
         } => {
             let Some(instance_id) = current_instance_id(job_state) else {
                 return Err(crate::ErrorKind::InputError(
