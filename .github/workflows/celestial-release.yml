@@ -47,6 +47,20 @@ jobs:
         with:
           targets: ${{ matrix.name == 'macos' && 'x86_64-apple-darwin,aarch64-apple-darwin' || '' }}
 
+      # Belt and braces: the universal bundle needs both arches, and a missing
+      # one only surfaces after the ~12 min release build.
+      - name: Ensure macOS targets
+        if: matrix.name == 'macos'
+        run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
+
+      # `packages/app-lib/build.rs` shells out to `java/gradlew` to build
+      # theseus.jar, and that Gradle build requires JVM 17+. The ubuntu-22.04
+      # runner still defaults JAVA_HOME to Java 11, so pin it explicitly.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - uses: Swatinem/rust-cache@v2
 
       - name: Install Linux build dependencies
