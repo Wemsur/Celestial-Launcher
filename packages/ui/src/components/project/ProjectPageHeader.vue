@@ -2,6 +2,7 @@
 	<PageHeader
 		:title="project.title"
 		:summary="project.description"
+		:stack-actions-when-narrow="stackActionsWhenNarrow"
 		@contextmenu="emit('contextmenu', $event)"
 	>
 		<template #leading>
@@ -89,10 +90,13 @@ withDefaults(
 		project: HeaderProject
 		projectV3?: HeaderProjectV3 | null
 		showStatusBadge?: boolean
+		/** See PageHeader: moves the actions to their own row when the header itself is narrow. */
+		stackActionsWhenNarrow?: boolean
 	}>(),
 	{
 		projectV3: null,
 		showStatusBadge: false,
+		stackActionsWhenNarrow: false,
 	},
 )
 

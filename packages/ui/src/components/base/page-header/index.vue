@@ -52,6 +52,7 @@ const props = withDefaults(defineProps<PageHeaderProps>(), {
 	divider: true,
 	bottomPadding: true,
 	disableLineClamp: false,
+	stackActionsWhenNarrow: false,
 })
 
 const slots = useSlots()
@@ -59,9 +60,21 @@ const slots = useSlots()
 const rootClass = computed(() => [
 	props.divider ? 'border-0 border-b border-solid border-divider' : '',
 	props.bottomPadding ? 'pb-4' : '',
+	props.stackActionsWhenNarrow ? 'page-header--narrow-actions' : '',
 	props.headerClass,
 ])
 const titleClassValue = computed(() => [props.truncateTitle ? 'truncate' : '', props.titleClass])
 const summaryClass = computed(() => (props.disableLineClamp ? '' : 'line-clamp-2'))
 const hasSummary = computed(() => !!props.summary || !!slots.summary)
 </script>
+
+<style scoped>
+/*
+ * A wide window is no guarantee of a wide header — in the launcher's split view this
+ * one only gets half the app. Naming a container lets page-header-actions.vue react
+ * to the header's own width instead of the viewport's.
+ */
+.page-header--narrow-actions {
+	container: page-header / inline-size;
+}
+</style>

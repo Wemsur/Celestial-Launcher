@@ -33,4 +33,11 @@ export type PageHeaderProps = {
 	divider?: boolean
 	bottomPadding?: boolean
 	disableLineClamp?: boolean
+	/**
+	 * Lets the header react to its own width instead of the viewport's: when it gets
+	 * narrower than 800px the actions move to a full-width row of their own, with the
+	 * primary action stretched. Useful wherever the header lives in a pane rather than
+	 * the full page (e.g. the launcher's split view).
+	 */
+	stackActionsWhenNarrow?: boolean
 }

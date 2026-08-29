@@ -23,6 +23,7 @@
 					:project="data"
 					:project-v3="projectV3"
 					:show-status-badge="data.status !== 'approved'"
+					stack-actions-when-narrow
 					@contextmenu.prevent.stop="handleRightClick"
 					@category="(category) => router.push(`${projectSearchUrl}?f=categories:${category}`)"
 				>
