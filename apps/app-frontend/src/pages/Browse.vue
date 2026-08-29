@@ -1325,6 +1325,8 @@ provideBrowseManager({
         getProjectDetailLocation(result.slug ?? result.project_id),
     selectableProjectTypes,
     showProjectTypeTabs: computed(() => !isServerContext.value),
+    // Half the viewport is easily too narrow for every project type tab.
+    scrollableProjectTypeTabs: computed(() => splitViewActive.value),
     variant: 'app',
     getCardActions,
     installContext,
@@ -1384,33 +1386,35 @@ provideBrowseManager({
 
 <template>
     <div class="browse-shell" :class="{ 'browse-shell--split': splitViewActive }">
-        <div class="browse-list-pane flex flex-col gap-3 p-6">
-            <BrowsePageLayout>
-                <template #after>
-                    <ContextMenu ref="contextMenuRef" @option-clicked="handleOptionsClick">
-                        <template #open_link>
-                            <GlobeIcon /> {{ formatMessage(commonMessages.openInModrinthButton) }} <ExternalIcon />
-                        </template>
-                        <template #copy_link>
-                            <ClipboardCopyIcon /> {{ formatMessage(commonMessages.copyLinkButton) }}
-                        </template>
-                    </ContextMenu>
-                </template>
-            </BrowsePageLayout>
-            <CreationFlowModal
-                v-if="isServerContext && projectType === 'modpack'"
-                ref="serverSetupModalRef"
-                :type="serverFlowFrom === 'reset-server' ? 'reset-server' : 'server-onboarding'"
-                :available-loaders="['vanilla', 'fabric', 'neoforge', 'forge', 'quilt', 'paper', 'purpur']"
-                :show-snapshot-toggle="true"
-                :on-back="onServerFlowBack"
-                :search-modpacks="searchServerModpacks"
-                :get-project-versions="getServerProjectVersions"
-                :get-loader-manifest="getLoaderManifest"
-                @hide="() => {}"
-                @browse-modpacks="() => {}"
-                @create="handleServerModpackFlowCreate"
-            />
+        <div class="browse-list-pane">
+            <div class="browse-list-content flex flex-col gap-3 p-6">
+                <BrowsePageLayout>
+                    <template #after>
+                        <ContextMenu ref="contextMenuRef" @option-clicked="handleOptionsClick">
+                            <template #open_link>
+                                <GlobeIcon /> {{ formatMessage(commonMessages.openInModrinthButton) }} <ExternalIcon />
+                            </template>
+                            <template #copy_link>
+                                <ClipboardCopyIcon /> {{ formatMessage(commonMessages.copyLinkButton) }}
+                            </template>
+                        </ContextMenu>
+                    </template>
+                </BrowsePageLayout>
+                <CreationFlowModal
+                    v-if="isServerContext && projectType === 'modpack'"
+                    ref="serverSetupModalRef"
+                    :type="serverFlowFrom === 'reset-server' ? 'reset-server' : 'server-onboarding'"
+                    :available-loaders="['vanilla', 'fabric', 'neoforge', 'forge', 'quilt', 'paper', 'purpur']"
+                    :show-snapshot-toggle="true"
+                    :on-back="onServerFlowBack"
+                    :search-modpacks="searchServerModpacks"
+                    :get-project-versions="getServerProjectVersions"
+                    :get-loader-manifest="getLoaderManifest"
+                    @hide="() => {}"
+                    @browse-modpacks="() => {}"
+                    @create="handleServerModpackFlowCreate"
+                />
+            </div>
         </div>
         <div v-if="splitViewActive" class="browse-detail-pane bg-surface-1">
             <RouterView v-slot="{ Component }">
@@ -1433,8 +1437,12 @@ provideBrowseManager({
 </template>
 
 <style scoped lang="scss">
-/* Without split view the shell must not exist as far as layout is concerned. */
-.browse-shell {
+/*
+ * Without split view neither the shell nor the pane may exist as far as layout is
+ * concerned: .browse-list-content stays the page's only box, exactly as before.
+ */
+.browse-shell,
+.browse-list-pane {
     display: contents;
 }
 
@@ -1448,9 +1456,15 @@ provideBrowseManager({
     /*
      * Both panes scroll themselves so each scrollbar sits on its own inner edge;
      * .app-viewport gives up scrolling in split view (see App.vue).
+     *
+     * The list pane deliberately carries no padding of its own: `position: sticky`
+     * resolves against its scroll container, so padding here would offset the
+     * sticky install header downwards. The padding stays on .browse-list-content,
+     * which keeps the header's geometry identical to the non-split layout.
      */
     .browse-list-pane,
     .browse-detail-pane {
+        display: block;
         min-width: 0;
         height: 100%;
         overflow-y: auto;

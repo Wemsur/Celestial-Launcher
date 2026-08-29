@@ -39,6 +39,13 @@ const sortOptions = computed<ComboboxOption<SortType>[]>(() =>
 	})),
 )
 
+// Mirrors NavTabs' own visibility rule so the scroll wrapper never becomes an empty row.
+const scrollableProjectTypeTabs = computed(
+	() =>
+		!!ctx.scrollableProjectTypeTabs?.value &&
+		ctx.selectableProjectTypes.value.filter((link) => link.shown ?? true).length > 1,
+)
+
 const maxResultsOptions = computed<ComboboxOption<number>[]>(() =>
 	(ctx.maxResultsOptions?.value ?? [5, 10, 15, 20, 50, 100]).map((n) => ({
 		value: n,
@@ -142,11 +149,23 @@ function getProjectCardTags(result: Labrinth.Search.v3.ResultSearchProject, disp
 	</template>
 	<SelectedProjectsFloatingBar v-if="ctx.installContext?.value && ctx.variant !== 'web'" />
 
-	<NavTabs
+	<!--
+		When the tab row cannot fit (narrow window, split view) it has to scroll
+		instead of being clipped. The negative margins bleed the scroll area to the
+		page padding so the tabs still line up, -my-2/py-2 cancel out so the wrapper
+		takes up exactly as much room as the tabs do on their own, and the scrollbar
+		is hidden because a 15px bar under a 40px tab row is all noise.
+	-->
+	<div
 		v-if="ctx.showProjectTypeTabs.value"
-		:links="ctx.selectableProjectTypes.value"
-		:replace="ctx.variant === 'app'"
-	/>
+		:class="
+			scrollableProjectTypeTabs
+				? '-mx-6 -my-2 overflow-x-auto px-6 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+				: 'contents'
+		"
+	>
+		<NavTabs :links="ctx.selectableProjectTypes.value" :replace="ctx.variant === 'app'" />
+	</div>
 
 	<StyledInput
 		v-model="ctx.query.value"

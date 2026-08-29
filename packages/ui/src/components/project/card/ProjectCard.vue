@@ -395,6 +395,20 @@ const cssColor = computed(() => {
 		@apply items-start w-full;
 	}
 
+	/* Only one column is left, so downloads, followers and the date share a single line. */
+	.grid-project-card-list__stats {
+		@apply flex-row flex-wrap items-center;
+	}
+
+	/*
+	 * ...and the actions get a row of their own, so let them use all of it. Equal
+	 * columns instead of flex-grow so any number of buttons splits the row evenly;
+	 * icon-only buttons have a fixed width and keep it.
+	 */
+	.grid-project-card-list__actions > :deep(*) {
+		@apply grid flex-1 grid-flow-col auto-cols-fr;
+	}
+
 	.grid-project-card-list__info {
 		@apply gap-0.5;
 	}

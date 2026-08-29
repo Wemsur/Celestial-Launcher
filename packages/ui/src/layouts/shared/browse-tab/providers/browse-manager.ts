@@ -56,6 +56,8 @@ export interface BrowseManagerContext {
 
 	selectableProjectTypes: ComputedRef<{ label: string; href: string; shown?: boolean }[]>
 	showProjectTypeTabs: ComputedRef<boolean>
+	/** Lets the project type tabs scroll horizontally when the layout is too narrow for them. */
+	scrollableProjectTypeTabs?: ComputedRef<boolean>
 
 	variant: 'app' | 'web'
 
