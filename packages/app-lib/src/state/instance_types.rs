@@ -11,6 +11,10 @@ pub enum InstanceInstallStage {
     PackInstalled,
     PackInstalling,
     NotInstalled,
+    /// The instance directory exists but its metadata could not be read
+    /// (missing/unparseable `instance.json`, unreadable sidecar, …). The card is
+    /// still listed so the user can see and fix it, but it cannot be launched.
+    Broken,
 }
 
 impl InstanceInstallStage {
@@ -21,6 +25,7 @@ impl InstanceInstallStage {
             Self::PackInstalled => "pack_installed",
             Self::PackInstalling => "pack_installing",
             Self::NotInstalled => "not_installed",
+            Self::Broken => "broken",
         }
     }
 
@@ -32,6 +37,7 @@ impl InstanceInstallStage {
             "pack_installed" => Self::PackInstalled,
             "pack_installing" => Self::PackInstalling,
             "not_installed" => Self::NotInstalled,
+            "broken" => Self::Broken,
             _ => Self::NotInstalled,
         }
     }

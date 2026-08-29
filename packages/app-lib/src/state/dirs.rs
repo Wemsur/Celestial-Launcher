@@ -13,6 +13,7 @@ pub const CACHES_FOLDER_NAME: &str = "caches";
 pub const LAUNCHER_LOGS_FOLDER_NAME: &str = "launcher_logs";
 pub const INSTANCES_FOLDER_NAME: &str = "profiles";
 pub const METADATA_FOLDER_NAME: &str = "meta";
+pub const ICONS_FOLDER_NAME: &str = "icons";
 
 #[derive(Debug)]
 pub struct DirectoryInfo {
@@ -145,7 +146,7 @@ impl DirectoryInfo {
     /// Get the directory containing instance icons
     #[inline]
     pub fn icon_dir(&self) -> PathBuf {
-        self.config_dir.join("icons")
+        self.config_dir.join(ICONS_FOLDER_NAME)
     }
 
     /// Get the instances directory
@@ -276,10 +277,14 @@ impl DirectoryInfo {
                     return Err(crate::ErrorKind::DirectoryMoveError(format!("Cannot move directory to {}: directory is not writable", move_dir.display())).into());
                 }
 
+                // Instances are NOT moved: they live in registered libraries
+                // (`libraries.json`), whose absolute paths are independent of the
+                // app directory. Moving `profiles` would relocate files the
+                // libraries still point at. Only launcher-managed game data moves.
                 const MOVE_DIRS: &[&str] = &[
                     CACHES_FOLDER_NAME,
-                    INSTANCES_FOLDER_NAME,
                     METADATA_FOLDER_NAME,
+                    ICONS_FOLDER_NAME,
                 ];
 
                 struct MovePath {

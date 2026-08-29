@@ -20,31 +20,40 @@ export function setLibraryPickerModal(ref: ModalRef) {
 /**
  * Asks the user which library an install should target.
  *
- * Resolves to `null` in two very different situations, which callers must
- * distinguish by intent:
- * - the user cancelled → abort the install (see {@link pickInstallLibrary}'s
- *   `cancelled` flag below), or
- * - there is nothing to choose from (0 or 1 library) → fall through to the
- *   backend default.
+ * Always resolves to a concrete library when one can be determined, so the
+ * install takes the same JSON-backed path no matter how many libraries exist.
+ * Returning `null` here used to mean "let the backend pick a default", but the
+ * backend's default is the DB path (`config_dir/profiles/<name>`), which lands
+ * the instance *outside* every registered library — `find_json_instance` then
+ * cannot resolve it at completion time and `install_stage` is never advanced
+ * past `*_installing`, leaving the card spinning forever.
  *
- * To keep call sites simple we return `{ cancelled, library }` instead.
+ * `library` is only `null` when the user cancelled (`cancelled: true`) or when
+ * `libraries.json` could not be read at all.
  */
 export async function pickInstallLibrary(): Promise<{
 	cancelled: boolean
 	library: LibrarySelection | null
 }> {
-	let libraryCount = 0
+	let config: Awaited<ReturnType<typeof library_list>>
 	try {
-		const config = await library_list()
-		libraryCount = config.libraries.length
+		config = await library_list()
 	} catch {
 		return { cancelled: false, library: null }
 	}
 
-	// Nothing meaningful to pick: single library installs there anyway, and zero
-	// libraries falls back to the default library on the backend.
-	if (libraryCount <= 1 || !modalRef?.value) {
-		return { cancelled: false, library: null }
+	const libraries = config.libraries ?? []
+	const toSelection = (library: (typeof libraries)[number]): LibrarySelection => ({
+		path: library.path,
+		format: library.type,
+	})
+
+	// Only one library (or no modal mounted yet): nothing to ask, but still
+	// resolve it explicitly instead of falling through to the backend default.
+	if (libraries.length <= 1 || !modalRef?.value) {
+		const active =
+			libraries.find((library) => library.path === config.active_library_path) ?? libraries[0]
+		return { cancelled: false, library: active ? toSelection(active) : null }
 	}
 
 	const library = await modalRef.value.pick()

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { KeyboardSensor, PointerSensor, useDraggable } from '@dnd-kit/vue'
-import { CheckIcon, DownloadIcon, PlayIcon, SpinnerIcon, StopCircleIcon } from '@modrinth/assets'
+import { CheckIcon, CircleAlertIcon, DownloadIcon, PlayIcon, SpinnerIcon, StopCircleIcon } from '@modrinth/assets'
 import { defineMessages, IconButton, injectNotificationManager, useVIntl } from '@modrinth/ui'
 import { useEventListener, useMagicKeys } from '@vueuse/core'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -50,6 +50,7 @@ const messages = defineMessages({
 	play: { id: 'app.library.instance.play', defaultMessage: 'Play' },
 	select: { id: 'app.library.instance.select', defaultMessage: 'Select instance' },
 	deselect: { id: 'app.library.instance.deselect', defaultMessage: 'Deselect instance' },
+	broken: { id: 'app.library.instance.broken', defaultMessage: '该实例已损坏' },
 })
 const {
 	displayState,
@@ -82,6 +83,9 @@ const modLoading = computed(
 )
 const installing = computed(() => props.instance.install_stage.includes('installing'))
 const installed = computed(() => props.instance.install_stage === 'installed')
+// Scanning could not read this instance's metadata: it is listed so the user can
+// find and fix it, but it cannot be launched or repaired.
+const broken = computed(() => props.instance.install_stage === 'broken')
 const loadingIndicatorRequested = computed(
 	() => !playing.value && (modLoading.value || installing.value),
 )
@@ -289,7 +293,11 @@ onMounted(() => {
 	>
 		<template #loading="{ compact }">
 			<div
-				v-if="loadingIndicatorVisible"
+				v-if="broken"
+				class="pointer-events-none absolute inset-0 z-[1] bg-red/25"
+			/>
+			<div
+				v-else-if="loadingIndicatorVisible"
 				class="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center"
 			>
 				<div class="absolute inset-0 bg-surface-1 opacity-30" />
@@ -308,7 +316,18 @@ onMounted(() => {
 			>
 				<div class="absolute inset-0 flex items-center justify-center">
 					<IconButton
-						v-if="playing"
+						v-if="broken"
+						v-tooltip="formatMessage(messages.broken)"
+						:label="formatMessage(messages.broken)"
+						type="colored"
+						color="red"
+						:size="compact ? 'md' : 'lg'"
+						@click.stop
+					>
+						<CircleAlertIcon />
+					</IconButton>
+					<IconButton
+						v-else-if="playing"
 						v-tooltip="formatMessage(messages.stop)"
 						:label="formatMessage(messages.stop)"
 						type="colored"

@@ -449,6 +449,36 @@ pub async fn get_libraries_config(state: &State) -> crate::Result<LibrariesConfi
     Ok(config)
 }
 
+/// The library a new instance should be created in when the caller did not name
+/// one explicitly.
+///
+/// Instances are always JSON-backed and always live inside a registered
+/// library; there is no DB-backed fallback any more. Prefers the active library,
+/// falls back to the first entry, and returns `None` only when `libraries.json`
+/// holds no libraries at all.
+pub async fn resolve_target_library(
+    state: &State,
+) -> crate::Result<Option<(String, InstanceFormat)>> {
+    let config = get_libraries_config(state).await?;
+    if config.libraries.is_empty() {
+        // No libraries registered yet (pre-migration or a hand-emptied file).
+        // Seed the default one rather than returning None, so the caller never
+        // has to fall back to a path outside every library.
+        let seeded = default_libraries_config();
+        save_libraries_config(state, &seeded).await?;
+        return Ok(seeded
+            .libraries
+            .first()
+            .map(|library| (library.path.clone(), library.format.clone())));
+    }
+    let library = config
+        .libraries
+        .iter()
+        .find(|library| Some(&library.path) == config.active_library_path.as_ref())
+        .or_else(|| config.libraries.first());
+    Ok(library.map(|library| (library.path.clone(), library.format.clone())))
+}
+
 pub async fn save_libraries_config(
     state: &State,
     config: &LibrariesConfig,
@@ -457,6 +487,32 @@ pub async fn save_libraries_config(
     let content = serde_json::to_string_pretty(config)?;
     fs::write(&path, content)?;
     Ok(())
+}
+
+/// Build a placeholder instance for a directory whose metadata could not be
+/// read. It is listed (so the user can see and fix it) but flagged `Broken`,
+/// which the UI renders as a damaged card and `launcher` refuses to launch.
+fn broken_instance(
+    dir: &Path,
+    dir_name: &str,
+    format: InstanceFormat,
+) -> Instance {
+    Instance {
+        id: instance_id_from_path(dir.to_string_lossy().as_ref()),
+        path: dir.to_string_lossy().to_string(),
+        applied_content_set_id: None,
+        install_stage: crate::state::InstanceInstallStage::Broken,
+        launcher_feature_version: crate::state::LauncherFeatureVersion::MOST_RECENT,
+        update_channel: Default::default(),
+        name: dir_name.to_string(),
+        icon_path: None,
+        created: dir_created_time(dir).unwrap_or_else(Utc::now),
+        modified: dir_modified_time(dir).unwrap_or_else(Utc::now),
+        last_played: None,
+        submitted_time_played: 0,
+        recent_time_played: 0,
+        library_format: format,
+    }
 }
 
 pub async fn list_instances_from_json(
@@ -502,102 +558,110 @@ pub async fn list_instances_from_json(
                 continue;
             }
 
-            // For Modrinth format, require instance.json; for .minecraft format,
-            // derive a minimal instance from the directory even without one.
-            match library.format {
-                InstanceFormat::Modrinth => {
-                    let Some(instance_json) = (match InstanceJson::read_from_dir(&dir) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            warn!(
-                                dir = ?dir,
-                                error = %e,
-                                "Failed to parse instance.json, skipping"
-                            );
-                            continue;
-                        }
-                    }) else {
-                        continue;
-                    };
-                    let instance = instance_json.to_instance_with_format(
-                        dir.to_string_lossy().as_ref(),
-                        library.format.clone(),
+            // Every directory produces a card. A directory whose metadata cannot
+            // be used (unparseable `instance.json`, or a missing one in a
+            // Modrinth library where it is mandatory) is still listed, named
+            // after its folder and flagged `Broken` so the UI can mark it as
+            // damaged and refuse to launch it. Nothing here may abort the loop:
+            // one bad directory must not hide the others.
+            let dir_name = dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| dir.to_string_lossy().to_string());
+
+            // Read the sidecar. `Err` = damaged, `Ok(None)` = simply absent.
+            let instance_json = match InstanceJson::read_from_dir(&dir) {
+                Ok(v) => v,
+                Err(e) => {
+                    warn!(
+                        dir = ?dir,
+                        error = %e,
+                        "Failed to read instance.json, listing instance as broken"
                     );
+                    instances.push(broken_instance(
+                        &dir,
+                        &dir_name,
+                        library.format.clone(),
+                    ));
+                    continue;
+                }
+            };
+
+            match (instance_json, library.format.clone()) {
+                (Some(instance_json), format) => {
+                    let mut instance = instance_json.to_instance_with_format(
+                        dir.to_string_lossy().as_ref(),
+                        format.clone(),
+                    );
+                    if format == InstanceFormat::Minecraft {
+                        // .minecraft: name is always the directory name
+                        instance.name = dir_name.clone();
+                    }
                     instances.push(instance);
                 }
-                InstanceFormat::Minecraft => {
-                    let dir_name = dir
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .map(|s| s.to_string());
-                    let instance_json = match InstanceJson::read_from_dir(&dir) {
+                (None, InstanceFormat::Modrinth) => {
+                    // A Modrinth-format instance without a sidecar has no usable
+                    // metadata at all (game version, loader, …), so it is broken
+                    // rather than merely sparse.
+                    warn!(
+                        dir = ?dir,
+                        "Missing instance.json in a Modrinth library, listing instance as broken"
+                    );
+                    instances.push(broken_instance(
+                        &dir,
+                        &dir_name,
+                        library.format.clone(),
+                    ));
+                }
+                (None, InstanceFormat::Minecraft) => {
+                    // Normal for a plain `.minecraft` install: read the optional
+                    // extras from celestial.json, name from the directory.
+                    let id = instance_id_from_path(dir.to_string_lossy().as_ref());
+                    let celestial = match CelestialJson::read_from_dir(&dir) {
                         Ok(v) => v,
                         Err(e) => {
                             tracing::warn!(
                                 dir = ?dir,
                                 error = %e,
-                                "Failed to parse instance.json, skipping"
+                                "Failed to parse celestial.json, falling back to dir name"
                             );
-                            continue;
+                            None
                         }
                     };
-                    if let Some(instance_json) = instance_json {
-                        let mut instance = instance_json.to_instance_with_format(
-                            dir.to_string_lossy().as_ref(),
-                            library.format.clone(),
-                        );
-                        // .minecraft: name is always the directory name
-                        instance.name = dir_name.clone().unwrap_or_default();
-                        instances.push(instance);
-                    } else {
-                        // No sidecar — read other settings from celestial.json,
-                        // but name always comes from the directory.
-                        let id = instance_id_from_path(dir.to_string_lossy().as_ref());
-                        let celestial = match CelestialJson::read_from_dir(&dir) {
-                            Ok(v) => v,
-                            Err(e) => {
-                                tracing::warn!(
-                                    dir = ?dir,
-                                    error = %e,
-                                    "Failed to parse celestial.json, falling back to dir name"
-                                );
-                                None
-                            }
-                        };
-                        instances.push(Instance {
-                            id,
-                            path: dir.to_string_lossy().to_string(),
-                            applied_content_set_id: None,
-                            install_stage: crate::state::InstanceInstallStage::Installed,
-                            launcher_feature_version:
-                                crate::state::LauncherFeatureVersion::MOST_RECENT,
-                            update_channel: celestial
-                                .as_ref()
-                                .map(|c| c.update_channel.clone())
-                                .unwrap_or_default(),
-                            name: dir_name.clone().unwrap_or_default(),
-                            icon_path: celestial.as_ref().and_then(|c| c.icon_path.clone()),
-                            created: celestial
-                                .as_ref()
-                                .and_then(|c| c.created)
-                                .or_else(|| dir_created_time(&dir))
-                                .unwrap_or_else(Utc::now),
-                            modified: dir_modified_time(&dir)
-                                .unwrap_or_else(Utc::now),
-                            last_played: celestial
-                                .as_ref()
-                                .and_then(|c| c.last_played),
-                            submitted_time_played: celestial
-                                .as_ref()
-                                .map(|c| c.submitted_time_played)
-                                .unwrap_or(0),
-                            recent_time_played: celestial
-                                .as_ref()
-                                .map(|c| c.recent_time_played)
-                                .unwrap_or(0),
-                            library_format: library.format.clone(),
-                        });
-                    }
+                    instances.push(Instance {
+                        id,
+                        path: dir.to_string_lossy().to_string(),
+                        applied_content_set_id: None,
+                        install_stage: crate::state::InstanceInstallStage::Installed,
+                        launcher_feature_version:
+                            crate::state::LauncherFeatureVersion::MOST_RECENT,
+                        update_channel: celestial
+                            .as_ref()
+                            .map(|c| c.update_channel.clone())
+                            .unwrap_or_default(),
+                        name: dir_name.clone(),
+                        icon_path: celestial.as_ref().and_then(|c| c.icon_path.clone()),
+                        created: celestial
+                            .as_ref()
+                            .and_then(|c| c.created)
+                            .or_else(|| dir_created_time(&dir))
+                            .unwrap_or_else(Utc::now),
+                        modified: dir_modified_time(&dir)
+                            .unwrap_or_else(Utc::now),
+                        last_played: celestial
+                            .as_ref()
+                            .and_then(|c| c.last_played),
+                        submitted_time_played: celestial
+                            .as_ref()
+                            .map(|c| c.submitted_time_played)
+                            .unwrap_or(0),
+                        recent_time_played: celestial
+                            .as_ref()
+                            .map(|c| c.recent_time_played)
+                            .unwrap_or(0),
+                        library_format: library.format.clone(),
+                    });
                 }
             }
         }
@@ -1213,16 +1277,31 @@ pub async fn find_json_instance(
             if !dir.is_dir() {
                 continue;
             }
-            let Some(instance_json) =
-                InstanceJson::read_from_dir(&dir)?
-            else {
-                // For .minecraft format, derive instance ID from path and check for a version JSON
-                if library.format == InstanceFormat::Minecraft {
-                    let id = instance_id_from_path(dir.to_string_lossy().as_ref());
-                    if id == instance_id {
-                        return Ok(Some(resolve_instance_dir(state, &dir.to_string_lossy().to_string())));
-                    }
+            // The id is derived from the directory path, so match on it before
+            // touching the sidecar: a damaged instance must still be findable.
+            if instance_id_from_path(dir.to_string_lossy().as_ref())
+                == instance_id
+            {
+                return Ok(Some(resolve_instance_dir(
+                    state,
+                    &dir.to_string_lossy().to_string(),
+                )));
+            }
+            // A broken sidecar in some other directory must not abort the whole
+            // lookup (that used to poison install completion for every instance
+            // in the same library).
+            let instance_json = match InstanceJson::read_from_dir(&dir) {
+                Ok(v) => v,
+                Err(e) => {
+                    warn!(
+                        dir = ?dir,
+                        error = %e,
+                        "Failed to read instance.json while looking up an instance, skipping"
+                    );
+                    continue;
                 }
+            };
+            let Some(instance_json) = instance_json else {
                 continue;
             };
             let instance = instance_json.to_instance_with_format(
@@ -1234,6 +1313,28 @@ pub async fn find_json_instance(
             }
         }
     }
+
+    // Last resort: the legacy DB-era location (`<app dir>/profiles/<name>`).
+    // Instances created before every install was routed through a library live
+    // here and belong to no library, so the loop above can never find them.
+    // Without this they stay stuck at `*_installing` forever.
+    let legacy_root = state.directories.instances_dir();
+    if legacy_root.exists() {
+        if let Ok(entries) = fs::read_dir(&legacy_root) {
+            for entry in entries.flatten() {
+                let dir = entry.path();
+                if !dir.is_dir() {
+                    continue;
+                }
+                if instance_id_from_path(dir.to_string_lossy().as_ref())
+                    == instance_id
+                {
+                    return Ok(Some(dir));
+                }
+            }
+        }
+    }
+
     Ok(None)
 }
 

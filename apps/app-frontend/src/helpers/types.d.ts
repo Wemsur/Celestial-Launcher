@@ -62,6 +62,7 @@ type InstallStage =
 	| 'pack_installed'
 	| 'pack_installing'
 	| 'not_installed'
+	| 'broken'
 
 type InstanceLinkIdentity = {
 	project_id?: ModrinthId | null

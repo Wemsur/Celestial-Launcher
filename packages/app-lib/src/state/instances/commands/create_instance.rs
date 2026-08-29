@@ -39,6 +39,30 @@ pub(crate) async fn create_instance(
 ) -> crate::Result<Instance> {
     trace!("Creating new instance. {}", input.name);
 
+    // Instances are always JSON-backed and always live inside a registered
+    // library — the number of libraries makes no difference. Callers that pass
+    // no library (single-library UIs, older call sites) used to fall through to
+    // the DB path at `config_dir/profiles/<name>`, which lands outside every
+    // library; `find_json_instance` then cannot resolve the instance when the
+    // install job completes, so `install_stage` stays at `*_installing` and the
+    // card spins forever. Resolve the target library here instead.
+    let mut input = input;
+    if input.library_path.is_none() {
+        if let Some((library_path, library_format)) =
+            libraries::resolve_target_library(state).await?
+        {
+            trace!(
+                "No library given for {}, using {library_path}",
+                input.name
+            );
+            if input.instance_format.is_none() {
+                input.instance_format =
+                    Some(<&str>::from(library_format).to_string());
+            }
+            input.library_path = Some(library_path);
+        }
+    }
+
     let (path, full_path) =
         resolve_instance_path(&input.name, input.path.as_deref(), input.library_path.as_deref(), input.instance_format.as_deref())
             .await?;

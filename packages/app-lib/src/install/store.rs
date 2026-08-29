@@ -447,21 +447,68 @@ async fn complete_success_json_backed(
 
     // Update install_stage in the JSON sidecar so the frontend sees 'installed'.
     if let Some(instance_id) = &state.paths.json_backed_instance_id {
-        if let Ok(Some(dir)) =
-            crate::state::libraries::find_json_instance(app_state, instance_id)
-                .await
+        // Prefer the library scan (it also canonicalises the directory), but fall
+        // back to the path the job itself installed into. Failing to resolve the
+        // directory here used to be silent, which left install_stage stuck at
+        // `*_installing` while the job reported success — the card then spun
+        // forever with no trace in the logs.
+        let dir = match crate::state::libraries::find_json_instance(
+            app_state,
+            instance_id,
+        )
+        .await
         {
-            if let Ok(Some(mut json_data)) =
-                crate::state::libraries::InstanceJson::read_from_dir(&dir)
-            {
-                json_data.install_stage =
-                    crate::state::InstanceInstallStage::Installed
-                        .as_str()
-                        .to_string();
-                let _ = json_data.write_to_dir(&dir);
+            Ok(Some(dir)) => Some(dir),
+            Ok(None) => {
+                tracing::error!(
+                    "Install job {id}: instance {instance_id} was not found in any \
+                     library nor in the legacy profiles directory; install_stage \
+                     cannot be advanced to installed"
+                );
+                None
             }
+            Err(error) => {
+                tracing::error!(
+                    "Install job {id}: failed to look up instance {instance_id}: {error}"
+                );
+                None
+            }
+        };
+
+        match dir {
+            Some(dir) => {
+                match crate::state::libraries::InstanceJson::read_from_dir(&dir) {
+                    Ok(Some(mut json_data)) => {
+                        json_data.install_stage =
+                            crate::state::InstanceInstallStage::Installed
+                                .as_str()
+                                .to_string();
+                        if let Err(error) = json_data.write_to_dir(&dir) {
+                            tracing::error!(
+                                "Install job {id}: failed to write install_stage=installed \
+                                 to {}: {error}",
+                                dir.display()
+                            );
+                        }
+                    }
+                    Ok(None) => tracing::error!(
+                        "Install job {id}: no instance.json in {} — install_stage \
+                         cannot be advanced to installed",
+                        dir.display()
+                    ),
+                    Err(error) => tracing::error!(
+                        "Install job {id}: failed to read instance.json in {}: {error}",
+                        dir.display()
+                    ),
+                }
+            }
+            None => tracing::error!(
+                "Install job {id}: could not resolve a directory for instance \
+                 {instance_id}; install_stage stays at its current value"
+            ),
         }
     }
+
 
     let result = sqlx::query(
         "

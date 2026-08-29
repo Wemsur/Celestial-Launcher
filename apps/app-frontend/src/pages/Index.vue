@@ -303,6 +303,9 @@ async function saveLibraryName() {
 async function removeLibrary() {
 	const path = librarySettingsPath.value
 	if (!path) return
+	// Never let the last library go: every install resolves a target library, so
+	// an empty libraries.json would leave nowhere to create instances.
+	if (libraries.value.length <= 1) return
 	// Switch to "all" before removing so activeTab doesn't point to a deleted library
 	if (activeTab.value === path) {
 		activeTab.value = 'all'
@@ -422,8 +425,28 @@ function handlePageOption({ option }: { option: string }) {
 					/>
 					<span v-if="librarySettingsRenameError" class="text-sm text-danger">{{ librarySettingsRenameError }}</span>
 				</div>
+				<div class="flex flex-col gap-1">
+					<span class="text-sm font-medium text-primary">库路径</span>
+					<!-- Read-only: a library's path is its identity (instance IDs are
+					     hashed from it), so it can only be added or removed, never edited. -->
+					<StyledInput
+						:model-value="librarySettingsPath"
+						type="text"
+						wrapper-class="w-full"
+						readonly
+						disabled
+					/>
+					<span class="text-xs text-secondary">路径不可修改，如需更换位置请删除此库后重新添加。</span>
+				</div>
 				<div class="flex justify-between gap-2 pt-2">
-					<Button color="danger" @click="removeLibrary">删除库</Button>
+					<Button
+						color="danger"
+						:disabled="libraries.length <= 1"
+						:title="libraries.length <= 1 ? '至少需要保留一个库' : undefined"
+						@click="removeLibrary"
+					>
+						删除库
+					</Button>
 					<div class="flex gap-2">
 						<Button type="outlined" @click="closeLibrarySettingsModal">取消</Button>
 						<Button type="colored" color="brand" :disabled="!librarySettingsName.trim()" @click="saveLibraryName">保存</Button>
