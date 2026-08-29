@@ -5,7 +5,6 @@ import { listen } from '@tauri-apps/api/event'
 import {
     appUpdateState,
     markAppUpdateActionable,
-    markAppUpdatePopupShown,
 } from '@/providers/app-update'
 
 const REPO_OWNER = 'celestial-launcher'
@@ -102,8 +101,12 @@ export async function downloadAndRunRelease(
         appUpdateState.progress.value = 1
         appUpdateState.downloading.value = false
         appUpdateState.finishedDownloading.value = true
+        // Only record that the "downloaded" stage is now actionable. Marking the
+        // popup as already shown here is what suppressed the restart prompt:
+        // getNextAppUpdatePopupTime() returns null once popupShownAt is set, so
+        // showDelayedUpdatePopup() bailed before ever adding the toast. App.vue
+        // marks it shown after it actually renders the notification.
         markAppUpdateActionable(version, 'downloaded')
-        markAppUpdatePopupShown(version, 'downloaded')
     } catch (e) {
         appUpdateState.downloading.value = false
         appUpdateState.progress.value = 0

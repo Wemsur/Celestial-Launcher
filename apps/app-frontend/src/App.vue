@@ -552,10 +552,13 @@ onMounted(async () => {
         }
     )
     watch(finishedDownloading, (val) => {
-        if (val && downloadingUpdateNotificationId != null) {
+        if (!val) return
+        // Swap the progress toast for the "download complete, restart?" toast.
+        if (downloadingUpdateNotificationId != null) {
             popupNotificationManager.removeNotification(downloadingUpdateNotificationId)
             downloadingUpdateNotificationId = null
         }
+        showUpdateDownloadedPopup()
     })
 })
 
@@ -1601,6 +1604,41 @@ function showDelayedUpdatePopup() {
 	}
 
 	markAppUpdatePopupShown(update.version, stage)
+}
+
+// Fired the moment the installer finishes downloading. Deliberately NOT routed
+// through showDelayedUpdatePopup(): that path is gated on the 24h re-nag timer,
+// so the "restart to install" prompt would never appear right after a download.
+function showUpdateDownloadedPopup() {
+	const version = availableUpdate.value?.version ?? appUpdateDownload.version.value
+	if (!version) {
+		return
+	}
+
+	// A pending delayed "update available" popup is obsolete now.
+	clearDelayedUpdatePopup()
+
+	addPopupNotification({
+		contentType: 'standard',
+		title: formatMessage(updatePopupMessages.downloadComplete),
+		text: formatMessage(updatePopupMessages.downloadedBody, { version }),
+		type: 'success',
+		autoCloseMs: null,
+		buttons: [
+			{
+				label: formatMessage(updatePopupMessages.reload),
+				action: () => installAvailableAppUpdate(),
+				color: 'brand',
+			},
+			{
+				label: formatMessage(updatePopupMessages.changelog),
+				action: () => openAppUpdateChangelog(),
+				keepOpen: true,
+			},
+		],
+	})
+
+	markAppUpdatePopupShown(version, 'downloaded')
 }
 
 async function checkCelestialUpdates() {
