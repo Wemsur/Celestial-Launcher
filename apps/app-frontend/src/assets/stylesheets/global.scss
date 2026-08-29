@@ -428,6 +428,10 @@ body.custom-bg-active:not(.custom-bgblur) .notification-toast {
 	background: none;
 }*/
 
+.bg-surface-1 {
+	background-color: color-mix(in srgb, var(--surface-1) 60%, transparent);
+}
+
 .bg-surface-1\.5 {
 	background-color: color-mix(in srgb, var(--surface-1-5) 70%, transparent);
 }

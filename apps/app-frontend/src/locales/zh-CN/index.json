@@ -776,6 +776,12 @@
   "app.nav.upgrade-to-modrinth-plus": {
     "message": "升级至Modrinth+"
   },
+  "app.navigation.enter-split-view": {
+    "message": "在列表旁打开"
+  },
+  "app.navigation.exit-split-view": {
+    "message": "关闭分屏"
+  },
   "app.news.title": {
     "message": "新闻"
   },

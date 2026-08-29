@@ -58,6 +58,39 @@ export default new createRouter({
 			path: '/browse/:projectType',
 			name: 'Discover content',
 			component: Pages.Browse,
+			// Split view: the project page renders inside Browse's right pane, so the
+			// discover list keeps its state while a project is open.
+			children: [
+				{
+					path: 'p/:id',
+					name: 'DiscoverSplitProject',
+					component: Project.Index,
+					props: true,
+					children: [
+						{
+							path: '',
+							name: 'DiscoverSplitProjectDescription',
+							component: Project.Description,
+						},
+						{
+							path: 'versions',
+							name: 'DiscoverSplitProjectVersions',
+							component: Project.Versions,
+						},
+						{
+							path: 'version/:version',
+							name: 'DiscoverSplitProjectVersion',
+							component: Project.Version,
+							props: true,
+						},
+						{
+							path: 'gallery',
+							name: 'DiscoverSplitProjectGallery',
+							component: Project.Gallery,
+						},
+					],
+				},
+			],
 		},
 		{
 			path: '/skins',
@@ -186,6 +219,12 @@ export default new createRouter({
 	linkActiveClass: 'router-link-active',
 	linkExactActiveClass: 'router-link-exact-active',
 	scrollBehavior(to, from) {
+		const toSplit = to.matched.some((record) => record.name === 'DiscoverSplitProject')
+		if (toSplit) {
+			// The detail pane is its own scroll container; reset it, never the list.
+			document.querySelector('.browse-detail-pane')?.scrollTo(0, 0)
+			if (from.matched.some((record) => record.name === 'DiscoverSplitProject')) return
+		}
 		if (to.path === from.path) return
 		// Sometimes Vue's scroll behavior is not working as expected, so we need to manually scroll to top (especially on Linux)
 		document.querySelector('.app-viewport')?.scrollTo(0, 0)

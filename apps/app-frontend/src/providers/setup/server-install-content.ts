@@ -22,6 +22,8 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { computed, type ComputedRef, nextTick, type Ref, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { browsePathFor } from '@/composables/use-split-view.ts'
+
 type ServerFlowFrom = 'onboarding' | 'reset-server'
 
 type InstallableSearchResult = Labrinth.Search.v3.ResultSearchProject & {
@@ -284,7 +286,8 @@ export function createServerInstallContent(opts: {
 	function enforceSetupModpackRoute(currentProjectType: string | undefined) {
 		if (!isSetupServerContext.value || currentProjectType === 'modpack') return
 		router.replace({
-			path: '/browse/modpack',
+			// Keeps the detail pane when the discover split view is open.
+			path: browsePathFor('modpack', route),
 			query: route.query,
 		})
 	}

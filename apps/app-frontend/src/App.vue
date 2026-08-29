@@ -28,6 +28,7 @@ import {
 	ServerStackIcon,
 	SettingsIcon,
 	ShirtIcon,
+	SquareSplitHorizontalIcon,
 	UserIcon,
 	WorldIcon,
 	XIcon,
@@ -108,6 +109,7 @@ import { useCheckDisableMouseover } from '@/composables/macCssFix.js'
 import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
 import { useError } from '@/composables/use-error.js'
+import { useSplitView } from '@/composables/use-split-view.ts'
 import { useTheme } from '@/composables/use-theme.ts'
 import { config } from '@/config'
 import {
@@ -233,6 +235,12 @@ const forceSidebar = computed(
 		route.path.startsWith('/user'),
 )
 const sidebarVisible = computed(() => sidebarToggled.value || forceSidebar.value)
+const { splitViewActive, canUseSplitView, toggleSplitView } = useSplitView()
+/** Split view keeps the sidebar (it holds the discover filters) but narrows it. */
+const APP_SPLIT_SIDEBAR_WIDTH = 200
+const sidebarWidth = computed(() =>
+	splitViewActive.value ? APP_SPLIT_SIDEBAR_WIDTH : APP_SIDEBAR_WIDTH,
+)
 const hostingRouteActive = computed(() => route.path.startsWith('/hosting'))
 const hostingUpdateRequired = computed(
 	() =>
@@ -335,7 +343,7 @@ providePageContext({
 	showAds: ref(false),
 	floatingActionBarOffsets: {
 		left: ref(APP_LEFT_NAV_WIDTH),
-		right: computed(() => (sidebarVisible.value ? `${APP_SIDEBAR_WIDTH}px` : '0px')),
+		right: computed(() => (sidebarVisible.value ? `${sidebarWidth.value}px` : '0px')),
 	},
 	intercomBubble: hostingIntercom.intercomBubble,
 	featureFlags: {
@@ -584,6 +592,14 @@ const messages = defineMessages({
 	goBack: { id: 'app.navigation.go-back', defaultMessage: 'Go back' },
 	goForward: { id: 'app.navigation.go-forward', defaultMessage: 'Go forward' },
 	nextImage: { id: 'app.navigation.next-image', defaultMessage: 'Next image' },
+	enterSplitView: {
+		id: 'app.navigation.enter-split-view',
+		defaultMessage: 'Open beside the list',
+	},
+	exitSplitView: {
+		id: 'app.navigation.exit-split-view',
+		defaultMessage: 'Close split view',
+	},
 	updateDownloadMissingVersion: {
 		id: 'app.update.download-error.missing-version',
 		defaultMessage: 'Failed to download update: no version available',
@@ -1850,7 +1866,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 	<div
 		v-if="stateInitialized"
 		class="app-grid-layout relative"
-		:class="{ 'disable-advanced-rendering': !appTheme.advancedRendering }"
+		:class="{ 'disable-advanced-rendering': !appTheme.advancedRendering, 'split-view': splitViewActive }"
 	>
 		<Transition name="fade">
 			<div
@@ -2055,6 +2071,17 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			</div>
 			<section data-tauri-drag-region class="flex shrink-0 ml-auto items-center">
 				<IconButton
+					v-if="canUseSplitView"
+					:type="splitViewActive ? 'base' : 'quiet'"
+					:label="
+						formatMessage(splitViewActive ? messages.exitSplitView : messages.enterSplitView)
+					"
+					class="mr-3"
+					@click="toggleSplitView()"
+				>
+					<SquareSplitHorizontalIcon />
+				</IconButton>
+				<IconButton
 					v-if="!forceSidebar && appSettings.toggleSidebar"
 					:type="sidebarToggled ? 'base' : 'quiet'"
 					:label="formatMessage(messages.nextImage)"
@@ -2078,6 +2105,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 		class="app-contents"
 		:class="{
 			'sidebar-enabled': sidebarVisible,
+			'split-view': splitViewActive,
 			'disable-advanced-rendering': !appTheme.advancedRendering,
 		}"
 	>
@@ -2274,6 +2302,13 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 	--right-bar-width: 300px;
 }
 
+// Split view keeps the sidebar (filters live there) but narrows it for the
+// second pane. Declared on both so descendants of either see the same value.
+.app-grid-layout.split-view,
+.app-contents.split-view {
+	--right-bar-width: 200px;
+}
+
 .app-grid-layout {
 	display: grid;
 	grid-template: 'status status' 'nav dummy';
@@ -2318,7 +2353,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 	// transition: grid-template-columns 0.4s ease-in-out;
 
 	&.sidebar-enabled {
-		grid-template-columns: 1fr 300px;
+		grid-template-columns: 1fr var(--right-bar-width);
 	}
 }
 
@@ -2329,7 +2364,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 
 .app-sidebar {
 	overflow: visible;
-	width: 300px;
+	width: var(--right-bar-width);
 	position: relative;
 	height: calc(100vh - var(--top-bar-height));
 	background: var(--brand-gradient-bg);
@@ -2388,6 +2423,17 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 	overflow: auto;
 	overflow-x: hidden;
 	scrollbar-gutter: stable;
+}
+
+// In split view each pane scrolls itself, so the shared viewport must not scroll
+// or reserve a gutter: otherwise the list's scrollbar lands on the far right
+// edge instead of on the divider between the two panes. The column keeps the
+// panes shrinkable when a banner (critical error, auth warning) is stacked above.
+.app-contents.split-view .app-viewport {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	scrollbar-gutter: auto;
 }
 
 .app-contents::before {

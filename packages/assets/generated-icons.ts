@@ -265,6 +265,7 @@ import _SparklesIcon from './icons/sparkles.svg?component'
 import _SpinnerIcon from './icons/spinner.svg?component'
 import _SplitIcon from './icons/split.svg?component'
 import _SquarePlusIcon from './icons/square-plus.svg?component'
+import _SquareSplitHorizontalIcon from './icons/square-split-horizontal.svg?component'
 import _StarIcon from './icons/star.svg?component'
 import _StopCircleIcon from './icons/stop-circle.svg?component'
 import _StoreIcon from './icons/store.svg?component'
@@ -709,6 +710,7 @@ export const SparklesIcon = _SparklesIcon
 export const SpinnerIcon = _SpinnerIcon
 export const SplitIcon = _SplitIcon
 export const SquarePlusIcon = _SquarePlusIcon
+export const SquareSplitHorizontalIcon = _SquareSplitHorizontalIcon
 export const StarIcon = _StarIcon
 export const StopCircleIcon = _StopCircleIcon
 export const StoreIcon = _StoreIcon

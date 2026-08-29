@@ -22,6 +22,7 @@ import {
     getSelectedInstallPreferences,
     getTargetInstallPreferences,
     injectNotificationManager,
+    LoadingIndicator,
     preferencesDiffer,
     provideBrowseManager,
     requestInstall,
@@ -36,12 +37,17 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { Ref } from 'vue'
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import type { LocationQuery } from 'vue-router'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 
 import ContextMenu from '@/components/ui/context-menu/index.vue'
 import { useAppServerBrowse } from '@/composables/browse/use-app-server-browse'
 import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
+import {
+    browseListLocation,
+    browsePathFor,
+    useSplitView,
+} from '@/composables/use-split-view.ts'
 import { get_project, get_search_results_v3, get_version_many } from '@/helpers/cache.js'
 import {
     get_installed_project_ids as getInstalledProjectIds,
@@ -111,6 +117,11 @@ const breadcrumbLabel = computed(() => {
 })
 const appSettings = useAppSettings()
 const browseRouteActive = computed(() => route.path.startsWith('/browse/'))
+const { splitViewActive } = useSplitView()
+/** Detail pane path segment, so tabs and links keep the open project. */
+const splitDetailSuffix = computed(() =>
+    splitViewActive.value ? `/p/${String(route.params.id ?? '')}` : '',
+)
 const serverSetupModalRef = ref<InstanceType<typeof CreationFlowModal> | null>(null)
 const serverInstallContent = createServerInstallContent({ serverSetupModalRef })
 provideServerInstallContent(serverInstallContent)
@@ -224,7 +235,8 @@ const breadcrumbDefinition = {
             displayedBrowseRoute.value.query.from ?? '',
         )}`,
     label: breadcrumbLabel,
-    to: () => displayedBrowseRoute.value.fullPath,
+    // Always the list itself, never the detail pane opened on top of it.
+    to: () => browseListLocation(displayedBrowseRoute.value),
     visual: { type: 'icon', component: CompassIcon },
 } satisfies BreadcrumbDefinition
 
@@ -247,7 +259,20 @@ function syncBreadcrumbs() {
     breadcrumbManager.reset(breadcrumbDefinition)
 }
 
-watch(displayedBrowseRoute, syncBreadcrumbs, { immediate: true, flush: 'sync' })
+watch(
+    // Keyed on what the crumb chain is built from, not on the whole route: a
+    // reset would drop the project crumb the detail pane pushes on top of ours,
+    // and query-only replaces (search, filters, paging) happen constantly.
+    () =>
+        [
+            String(displayedBrowseRoute.value.params.projectType ?? ''),
+            String(displayedBrowseRoute.value.query.i ?? ''),
+            String(displayedBrowseRoute.value.query.sid ?? ''),
+            String(displayedBrowseRoute.value.query.from ?? ''),
+        ].join(':'),
+    syncBreadcrumbs,
+    { immediate: true, flush: 'sync' },
+)
 
 debugLog('fetching tags (categories, loaders, gameVersions)')
 const [categories, loaders, availableGameVersions] = await Promise.all([
@@ -270,7 +295,7 @@ const tags: Ref<Tags> = computed(() => ({
 
 if (isFromWorlds.value && route.params.projectType !== 'server') {
     router.replace({
-        path: '/browse/server',
+        path: browsePathFor('server', route),
         query: route.query,
     })
 }
@@ -697,37 +722,54 @@ const selectableProjectTypes = computed(() => {
 
     const queryString = new URLSearchParams(params as Record<string, string>).toString()
     const suffix = queryString ? `?${queryString}` : ''
+    // Switching list type keeps the detail pane open in split view.
+    const detail = splitDetailSuffix.value
 
     if (isSetupServerContext.value) {
         return [
-            { label: formatMessage(messages.modpacksProjectType), href: `/browse/modpack${suffix}` },
+            {
+                label: formatMessage(messages.modpacksProjectType),
+                href: `/browse/modpack${detail}${suffix}`,
+            },
         ]
     }
 
     if (isFromWorlds.value) {
-        return [{ label: formatMessage(messages.serversProjectType), href: `/browse/server${suffix}` }]
+        return [
+            {
+                label: formatMessage(messages.serversProjectType),
+                href: `/browse/server${detail}${suffix}`,
+            },
+        ]
     }
 
     return [
         {
             label: formatMessage(messages.modpacksProjectType),
-            href: `/browse/modpack${suffix}`,
+            href: `/browse/modpack${detail}${suffix}`,
             shown: modpacks,
         },
-        { label: formatMessage(messages.modsProjectType), href: `/browse/mod${suffix}`, shown: mods },
+        {
+            label: formatMessage(messages.modsProjectType),
+            href: `/browse/mod${detail}${suffix}`,
+            shown: mods,
+        },
         {
             label: formatMessage(messages.resourcePacksProjectType),
-            href: `/browse/resourcepack${suffix}`,
+            href: `/browse/resourcepack${detail}${suffix}`,
         },
         {
             label: formatMessage(messages.dataPacksProjectType),
-            href: `/browse/datapack${suffix}`,
+            href: `/browse/datapack${detail}${suffix}`,
             shown: dataPacks,
         },
-        { label: formatMessage(messages.shadersProjectType), href: `/browse/shader${suffix}` },
+        {
+            label: formatMessage(messages.shadersProjectType),
+            href: `/browse/shader${detail}${suffix}`,
+        },
         {
             label: formatMessage(messages.serversProjectType),
-            href: `/browse/server${suffix}`,
+            href: `/browse/server${detail}${suffix}`,
             shown: !instance.value,
         },
     ]
@@ -1228,6 +1270,23 @@ function getProjectBrowseQuery() {
     }
 }
 
+/**
+ * In split view a card opens the nested detail route, so the list stays mounted
+ * and the URL keeps describing both panes.
+ */
+function getProjectDetailLocation(idOrSlug: string | undefined) {
+    if (splitViewActive.value) {
+        return {
+            path: `/browse/${String(route.params.projectType ?? projectType.value)}/p/${idOrSlug}`,
+            query: browseListLocation(route).query,
+        }
+    }
+    return {
+        path: `/project/${idOrSlug}`,
+        query: getProjectBrowseQuery(),
+    }
+}
+
 const advancedFiltersCollapsed = computed({
     get: () => appSettings.getFeatureFlag('advanced_filters_collapsed'),
     set: (value) => {
@@ -1260,14 +1319,10 @@ provideBrowseManager({
     ...searchState,
     advancedFiltersCollapsed,
     dismissedPhotosensitivityFilterWarning,
-    getProjectLink: (result: Labrinth.Search.v3.ResultSearchProject) => ({
-        path: `/project/${result.project_id ?? result.slug}`,
-        query: getProjectBrowseQuery(),
-    }),
-    getServerProjectLink: (result: Labrinth.Search.v3.ResultSearchProject) => ({
-        path: `/project/${result.slug ?? result.project_id}`,
-        query: getProjectBrowseQuery(),
-    }),
+    getProjectLink: (result: Labrinth.Search.v3.ResultSearchProject) =>
+        getProjectDetailLocation(result.project_id ?? result.slug),
+    getServerProjectLink: (result: Labrinth.Search.v3.ResultSearchProject) =>
+        getProjectDetailLocation(result.slug ?? result.project_id),
     selectableProjectTypes,
     showProjectTypeTabs: computed(() => !isServerContext.value),
     variant: 'app',
@@ -1328,35 +1383,83 @@ provideBrowseManager({
 </script>
 
 <template>
-    <div class="flex flex-col gap-3 p-6">
-        <BrowsePageLayout>
-            <template #after>
-                <ContextMenu ref="contextMenuRef" @option-clicked="handleOptionsClick">
-                    <template #open_link>
-                        <GlobeIcon /> {{ formatMessage(commonMessages.openInModrinthButton) }} <ExternalIcon />
-                    </template>
-                    <template #copy_link>
-                        <ClipboardCopyIcon /> {{ formatMessage(commonMessages.copyLinkButton) }}
-                    </template>
-                </ContextMenu>
-            </template>
-        </BrowsePageLayout>
-        <CreationFlowModal
-            v-if="isServerContext && projectType === 'modpack'"
-            ref="serverSetupModalRef"
-            :type="serverFlowFrom === 'reset-server' ? 'reset-server' : 'server-onboarding'"
-            :available-loaders="['vanilla', 'fabric', 'neoforge', 'forge', 'quilt', 'paper', 'purpur']"
-            :show-snapshot-toggle="true"
-            :on-back="onServerFlowBack"
-            :search-modpacks="searchServerModpacks"
-            :get-project-versions="getServerProjectVersions"
-            :get-loader-manifest="getLoaderManifest"
-            @hide="() => {}"
-            @browse-modpacks="() => {}"
-            @create="handleServerModpackFlowCreate"
-        />
+    <div class="browse-shell" :class="{ 'browse-shell--split': splitViewActive }">
+        <div class="browse-list-pane flex flex-col gap-3 p-6">
+            <BrowsePageLayout>
+                <template #after>
+                    <ContextMenu ref="contextMenuRef" @option-clicked="handleOptionsClick">
+                        <template #open_link>
+                            <GlobeIcon /> {{ formatMessage(commonMessages.openInModrinthButton) }} <ExternalIcon />
+                        </template>
+                        <template #copy_link>
+                            <ClipboardCopyIcon /> {{ formatMessage(commonMessages.copyLinkButton) }}
+                        </template>
+                    </ContextMenu>
+                </template>
+            </BrowsePageLayout>
+            <CreationFlowModal
+                v-if="isServerContext && projectType === 'modpack'"
+                ref="serverSetupModalRef"
+                :type="serverFlowFrom === 'reset-server' ? 'reset-server' : 'server-onboarding'"
+                :available-loaders="['vanilla', 'fabric', 'neoforge', 'forge', 'quilt', 'paper', 'purpur']"
+                :show-snapshot-toggle="true"
+                :on-back="onServerFlowBack"
+                :search-modpacks="searchServerModpacks"
+                :get-project-versions="getServerProjectVersions"
+                :get-loader-manifest="getLoaderManifest"
+                @hide="() => {}"
+                @browse-modpacks="() => {}"
+                @create="handleServerModpackFlowCreate"
+            />
+        </div>
+        <div v-if="splitViewActive" class="browse-detail-pane bg-surface-1">
+            <RouterView v-slot="{ Component }">
+                <template v-if="Component">
+                    <Suspense>
+                        <component :is="Component" />
+                        <template #fallback>
+                            <div class="flex items-center justify-center h-full">
+                                <LoadingIndicator />
+                            </div>
+                        </template>
+                    </Suspense>
+                </template>
+            </RouterView>
+        </div>
         <Teleport v-if="browseRouteActive" to="#sidebar-teleport-target">
             <BrowseSidebar />
         </Teleport>
     </div>
 </template>
+
+<style scoped lang="scss">
+/* Without split view the shell must not exist as far as layout is concerned. */
+.browse-shell {
+    display: contents;
+}
+
+.browse-shell--split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    /* Fills the viewport column (see App.vue) without pushing banners off screen. */
+    flex: 1;
+    min-height: 0;
+
+    /*
+     * Both panes scroll themselves so each scrollbar sits on its own inner edge;
+     * .app-viewport gives up scrolling in split view (see App.vue).
+     */
+    .browse-list-pane,
+    .browse-detail-pane {
+        min-width: 0;
+        height: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        scrollbar-gutter: stable;
+    }
+
+    .browse-detail-pane {
+        border-left: 1px solid var(--brand-gradient-border);
+    }
+}
+</style>

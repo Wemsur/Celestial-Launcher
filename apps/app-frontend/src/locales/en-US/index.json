@@ -1283,6 +1283,12 @@
   "app.nav.upgrade-to-modrinth-plus": {
     "message": "Upgrade to Modrinth+"
   },
+  "app.navigation.enter-split-view": {
+    "message": "Open beside the list"
+  },
+  "app.navigation.exit-split-view": {
+    "message": "Close split view"
+  },
   "app.navigation.go-back": {
     "message": "Go back"
   },

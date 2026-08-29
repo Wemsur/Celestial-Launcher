@@ -1,61 +1,19 @@
 <template>
 	<div v-if="data">
-		<Teleport to="#sidebar-teleport-target">
-			<ProjectSidebarCompatibility
-				v-if="!isServerProject"
-				:project="data"
-				:tags="{ loaders: allLoaders, gameVersions: allGameVersions }"
-				:project-v3="projectV3"
-				class="project-sidebar-section"
-			/>
-			<ProjectSidebarServerInfo
-				v-if="isServerProject"
-				:project-v3="projectV3"
-				:tags="{ loaders: allLoaders, gameVersions: allGameVersions }"
-				:required-content="serverRequiredContent"
-				:recommended-version="serverRecommendedVersion"
-				:supported-versions="serverSupportedVersions"
-				:loaders="serverModpackLoaders"
-				:ping="serverPing"
-				:status-online="serverStatusOnline"
-				class="project-sidebar-section"
-			/>
-			<ProjectSidebarLinks
-				link-target="_blank"
-				:project="data"
-				:project-v3="projectV3"
-				class="project-sidebar-section"
-			/>
-			<ProjectSidebarTags :project="data" class="project-sidebar-section" />
-			<ProjectSidebarCreators
-				:organization="organization"
-				:members="members"
-				:org-link="(slug) => `https://modrinth.com/organization/${slug}`"
-				:user-link="(username) => `/user/${encodeURIComponent(username)}`"
-				link-target="_blank"
-				:user-link-target="null"
-				class="project-sidebar-section"
-			/>
-			<ProjectSidebarDetails
-				:project="data"
-				:has-versions="versions.length > 0"
-				:link-target="`_blank`"
-				:hide-license="isServerProject"
-				:show-followers="isServerProject"
-				class="project-sidebar-section"
-			/>
-		</Teleport>
 		<div class="flex flex-col gap-4 p-6">
 			<div
-				v-if="projectInstallContext"
+				v-if="projectInstallContext && !splitViewActive"
 				class="sticky top-0 z-20 -mx-6 -mt-6 rounded-tl-[--radius-xl] border-0 border-b border-solid bg-surface-1 px-3 py-4 border-surface-5"
 			>
 				<BrowseInstallHeader :install-context="projectInstallContext" />
 			</div>
-			<InstanceIndicator v-if="instance && !projectInstallContext" :instance="instance" />
+			<InstanceIndicator
+				v-if="instance && !projectInstallContext && !splitViewActive"
+				:instance="instance"
+			/>
 			<template v-if="data">
 				<Teleport
-					v-if="appSettings.featureFlags.project_background"
+					v-if="appSettings.featureFlags.project_background && !splitViewActive"
 					to="#background-teleport-target"
 				>
 					<ProjectBackgroundGradient :project="data" />
@@ -191,7 +149,7 @@
 					]"
 				/>
 				<RouterView
-					v-if="route.path.startsWith('/project')"
+					v-if="isProjectDetailRoute(route)"
 					:project="data"
 					:versions="versions"
 					:members="members"
@@ -204,8 +162,60 @@
 			</template>
 			<template v-else>{{ formatMessage(messages.loadError) }}</template>
 		</div>
+		<!--
+			In split view there is no room for a second sidebar, so the project's
+			sections render inline at the bottom of the detail pane instead. The
+			discover filters keep the app sidebar.
+		-->
+		<Teleport to="#sidebar-teleport-target" :disabled="splitViewActive">
+			<div :class="splitViewActive ? 'split-project-sidebar bg-surface-1' : 'contents'">
+				<ProjectSidebarCompatibility
+					v-if="!isServerProject"
+					:project="data"
+					:tags="{ loaders: allLoaders, gameVersions: allGameVersions }"
+					:project-v3="projectV3"
+					class="project-sidebar-section"
+				/>
+				<ProjectSidebarServerInfo
+					v-if="isServerProject"
+					:project-v3="projectV3"
+					:tags="{ loaders: allLoaders, gameVersions: allGameVersions }"
+					:required-content="serverRequiredContent"
+					:recommended-version="serverRecommendedVersion"
+					:supported-versions="serverSupportedVersions"
+					:loaders="serverModpackLoaders"
+					:ping="serverPing"
+					:status-online="serverStatusOnline"
+					class="project-sidebar-section"
+				/>
+				<ProjectSidebarLinks
+					link-target="_blank"
+					:project="data"
+					:project-v3="projectV3"
+					class="project-sidebar-section"
+				/>
+				<ProjectSidebarTags :project="data" class="project-sidebar-section" />
+				<ProjectSidebarCreators
+					:organization="organization"
+					:members="members"
+					:org-link="(slug) => `https://modrinth.com/organization/${slug}`"
+					:user-link="(username) => `/user/${encodeURIComponent(username)}`"
+					link-target="_blank"
+					:user-link-target="null"
+					class="project-sidebar-section"
+				/>
+				<ProjectSidebarDetails
+					:project="data"
+					:has-versions="versions.length > 0"
+					:link-target="`_blank`"
+					:hide-license="isServerProject"
+					:show-followers="isServerProject"
+					class="project-sidebar-section"
+				/>
+			</div>
+		</Teleport>
 		<SelectedProjectsFloatingBar
-			v-if="projectInstallContext"
+			v-if="projectInstallContext && !splitViewActive"
 			:install-context="projectInstallContext"
 		/>
 		<ContextMenu ref="options" @option-clicked="handleOptionsClick">
@@ -296,6 +306,16 @@ import {
 import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
 import {
+	isProjectDetailRoute,
+	isSplitProjectRoute,
+	PLAIN_ROUTE_NAME_BY_SUBPAGE,
+	projectBasePathOf,
+	projectSubpageOf,
+	setBrowseProjectTypeHint,
+	SPLIT_ROUTE_NAME_BY_SUBPAGE,
+	useSplitView,
+} from '@/composables/use-split-view.ts'
+import {
 	get_organization,
 	get_project,
 	get_project_v3,
@@ -329,18 +349,22 @@ const displayedProjectRoute = shallowRef(router.currentRoute.value)
 watch(
 	() => router.currentRoute.value,
 	(nextRoute) => {
-		if (nextRoute.path.startsWith('/project/')) {
+		if (isProjectDetailRoute(nextRoute)) {
 			displayedProjectRoute.value = nextRoute
 		}
 	},
 	{ immediate: true },
 )
+const { splitViewActive } = useSplitView()
 const projectBreadcrumbTo = computed(() => {
 	const currentRoute = displayedProjectRoute.value
-	if (currentRoute.name === 'Version') {
+	if (projectSubpageOf(currentRoute) === 'version') {
+		const split = isSplitProjectRoute(currentRoute)
 		return {
-			name: 'Versions',
-			params: { id: currentRoute.params.id },
+			name: split ? SPLIT_ROUTE_NAME_BY_SUBPAGE.versions : PLAIN_ROUTE_NAME_BY_SUBPAGE.versions,
+			params: split
+				? { projectType: currentRoute.params.projectType, id: currentRoute.params.id }
+				: { id: currentRoute.params.id },
 			query: currentRoute.query,
 		}
 	}
@@ -487,11 +511,13 @@ function buildBrowseHref(path) {
 	return qs ? `${path}?${qs}` : path
 }
 
-const projectDescriptionHref = computed(() => buildProjectHref(`/project/${route.params.id}`))
+/** `/project/<id>` or, in split view, `/browse/<type>/p/<id>`. */
+const projectBasePath = computed(() => projectBasePathOf(route))
+const projectDescriptionHref = computed(() => buildProjectHref(projectBasePath.value))
 const versionsHref = computed(() =>
-	buildProjectHref(`/project/${route.params.id}/versions`, instanceFilters.value),
+	buildProjectHref(`${projectBasePath.value}/versions`, instanceFilters.value),
 )
-const projectGalleryHref = computed(() => buildProjectHref(`/project/${route.params.id}/gallery`))
+const projectGalleryHref = computed(() => buildProjectHref(`${projectBasePath.value}/gallery`))
 
 const projectBrowseBackUrl = computed(() => {
 	const browsePath = route.query.b
@@ -646,8 +672,16 @@ const projectSearchUrl = computed(
 	() => `/browse/${isServerProject.value ? 'server' : data.value?.project_type}`,
 )
 
+// Lets the split view toggle pick a matching discover list when the user got
+// here without one (deep link, instance page, notification, ...).
+watch(
+	() => (isServerProject.value ? 'server' : data.value?.project_type),
+	(projectType) => setBrowseProjectTypeHint(projectType),
+	{ immediate: true },
+)
+
 const showSwitchVersion = computed(() => !!instance.value && installed.value)
-const onVersionsPage = computed(() => route.name === 'Versions')
+const onVersionsPage = computed(() => projectSubpageOf(route) === 'versions')
 
 function goToVersions() {
 	router.push(versionsHref.value)
@@ -847,7 +881,7 @@ useAppEvent('process', (e) => {
 watch(
 	() => route.params.id,
 	async () => {
-		if (route.params.id && route.path.startsWith('/project')) {
+		if (route.params.id && isProjectDetailRoute(route)) {
 			await fetchProjectData()
 		}
 	},
@@ -1117,5 +1151,14 @@ const handleOptionsClick = (args) => {
 
 .project-sidebar-section {
 	@apply p-4 flex flex-col gap-2 border-0 border-b-[1px] border-[--brand-gradient-border] border-solid;
+}
+
+/* Split view: the same sections as a card at the end of the detail pane. */
+.split-project-sidebar {
+	@apply mx-6 mb-6 flex flex-col overflow-hidden rounded-2xl border-[1px] border-solid border-[--brand-gradient-border];
+
+	> :last-child {
+		@apply border-b-0;
+	}
 }
 </style>
