@@ -228,11 +228,13 @@ const importModal = ref(null)
 const unsubscribeSidebarToggle = appSettings.$subscribe(() => {
 	sidebarToggled.value = !appSettings.toggleSidebar
 })
+/*
+ * Discover teleports its filters into the sidebar, but that is no reason to take the
+ * collapse button away: the list, search and sorting all keep working without it, so
+ * the sidebar stays collapsible there like everywhere else.
+ */
 const forceSidebar = computed(
-	() =>
-		route.path.startsWith('/browse') ||
-		route.path.startsWith('/project') ||
-		route.path.startsWith('/user'),
+	() => route.path.startsWith('/project') || route.path.startsWith('/user'),
 )
 const sidebarVisible = computed(() => sidebarToggled.value || forceSidebar.value)
 const { splitViewActive, canUseSplitView, toggleSplitView } = useSplitView()
