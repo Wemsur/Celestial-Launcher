@@ -11,10 +11,26 @@ import {
 	flowTypeHeadingMessages,
 } from '../creation-flow-context'
 
+/**
+ * The library picker is only rendered for the instance flow, and only when the
+ * caller actually handed us libraries. While it is on screen a pick is required:
+ * creating with nothing selected would silently drop the instance into whatever
+ * the backend considers default, which is the opposite of what a multi-library
+ * setup is for.
+ */
+function isLibraryUnset(ctx: CreationFlowContextValue): boolean {
+	return (
+		ctx.flowType === 'instance' &&
+		ctx.availableLibraries.value.length > 0 &&
+		!ctx.selectedLibraryPath.value
+	)
+}
+
 function isForwardBlocked(ctx: CreationFlowContextValue): boolean {
 	if (!ctx.selectedGameVersion.value) return true
 	if (!ctx.hideLoaderChips.value && !ctx.selectedLoader.value) return true
 	if (!ctx.hideLoaderVersion.value && !ctx.selectedLoaderVersion.value) return true
+	if (isLibraryUnset(ctx)) return true
 	return false
 }
 
@@ -41,6 +57,9 @@ export const stageConfig: StageConfigInput<CreationFlowContextValue> = {
 		const disabled = isForwardBlocked(ctx)
 
 		if (isInstance) {
+			// The library gate has its own tooltip: `finishDisabledTooltip` belongs to
+			// the caller and says nothing about the picker.
+			const libraryUnset = isLibraryUnset(ctx)
 			return {
 				label: ctx.formatMessage(creationFlowMessages.createInstanceButton),
 				icon: PlusIcon,
@@ -48,7 +67,11 @@ export const stageConfig: StageConfigInput<CreationFlowContextValue> = {
 				color: 'brand' as const,
 				disabled: disabled || ctx.finishDisabled.value,
 				loading: ctx.loading.value,
-				tooltip: ctx.finishDisabled.value ? ctx.finishDisabledTooltip.value : undefined,
+				tooltip: libraryUnset
+					? ctx.formatMessage(creationFlowMessages.libraryRequired)
+					: ctx.finishDisabled.value
+						? ctx.finishDisabledTooltip.value
+						: undefined,
 				onClick: () => ctx.finish(),
 			}
 		}

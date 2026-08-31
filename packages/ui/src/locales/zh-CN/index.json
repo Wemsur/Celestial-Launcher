@@ -735,7 +735,10 @@
     "defaultMessage": "版本库"
   },
   "creation-flow.modal.custom-setup.library.placeholder": {
-    "defaultMessage": "选择库（可选）"
+    "defaultMessage": "选择库"
+  },
+  "creation-flow.modal.custom-setup.library.required": {
+    "defaultMessage": "请先选择实例要创建到哪个库。"
   },
   "creation-flow.modal.custom-setup.name.label": {
     "defaultMessage": "名称"

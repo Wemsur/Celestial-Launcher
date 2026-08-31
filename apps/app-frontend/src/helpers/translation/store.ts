@@ -17,6 +17,8 @@ export const TRANSLATION_CACHE_MAX_ENTRIES = 8000
 
 export interface TranslationSettings {
 	service: TranslationServiceId
+	/** Turn translation on by itself when the discover pages open. */
+	autoEnable: boolean
 }
 
 export interface TranslationCacheEntry {

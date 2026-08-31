@@ -1556,6 +1556,12 @@
   "app.settings.tabs.resource-management": {
     "message": "Resource management"
   },
+  "app.settings.translation.auto.description": {
+    "message": "Turn translation on by itself when you open the discover pages, instead of pressing the button every time."
+  },
+  "app.settings.translation.auto.title": {
+    "message": "Translate automatically"
+  },
   "app.settings.translation.cache.button": {
     "message": "Clear cache"
   },

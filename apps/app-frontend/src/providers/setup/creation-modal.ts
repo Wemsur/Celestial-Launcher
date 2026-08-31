@@ -63,7 +63,7 @@ export function setupCreationModal(
 			// ignore
 		}
 	}
-	refreshLibraries().catch(() => {})
+	const librariesReady = refreshLibraries().catch(() => {})
 	useAppEvent('library_changed', refreshLibraries, appEvents)
 
 	// ── showCreationModal with preselection ────────────────────────────────
@@ -82,7 +82,9 @@ export function setupCreationModal(
 		if (active && active !== 'all') return active
 		// The picker's option values are library paths, and the default library's
 		// own entry can be `<default>/profiles` while `library_default_path()`
-		// returns `<default>`, so match it the same way the label does.
+		// returns `<default>`, so match it the same way the label does. Only an
+		// entry that is really in the list can be preselected — a bare path the
+		// picker does not offer would show as an empty box.
 		const fallback = defaultLibraryPath.value
 		if (!fallback) return null
 		const normDefault = fallback.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '')
@@ -90,13 +92,17 @@ export function setupCreationModal(
 			const normLib = lib.path.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '')
 			return normLib === normDefault || normLib === `${normDefault}/profiles`
 		})
-		return match?.path ?? fallback
+		return match?.path ?? null
 	}
 
 	const preselectedLibraryPath = ref<string | null>(resolvePreselectedLibraryPath())
 	const lastSelectedLibraryPath = ref<string | null>(preselectedLibraryPath.value)
 
-	provide('showCreationModal', () => {
+	provide('showCreationModal', async () => {
+		// Opening the modal in the first moments after launch must wait for the
+		// library list: with an empty list the picker hides itself, and the create
+		// button would then not be gated on a library at all.
+		await librariesReady
 		// Re-read persisted tab each time so it stays in sync
 		const currentTab = resolvePreselectedLibraryPath()
 		lastSelectedLibraryPath.value = currentTab

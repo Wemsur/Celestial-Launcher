@@ -81,6 +81,10 @@ export const creationFlowMessages = defineMessages({
 		id: 'creation-flow.button.import-instances',
 		defaultMessage: 'Import {count, plural, one {# instance} other {# instances}}',
 	},
+	libraryRequired: {
+		id: 'creation-flow.modal.custom-setup.library.required',
+		defaultMessage: 'Pick the library this instance goes into first.',
+	},
 })
 
 export const flowTypeHeadingMessages: Record<FlowType, MessageDescriptor> = {
@@ -161,7 +165,9 @@ export interface CreationFlowContextValue {
 	initialLoader: string | null
 	initialGameVersion: string | null
 	availableLibraries: Ref<Array<{ path: string; name: string }>>
-	defaultLibraryPath: string | null
+	/** A ref, like the list above: the app resolves it asynchronously, so the
+	 *  value captured when the context was created is usually still null. */
+	defaultLibraryPath: Ref<string | null>
 
 	// State
 	setupType: Ref<SetupType | null>
@@ -302,7 +308,7 @@ export function createCreationFlowContext(
 	const initialLoader = options.initialLoader ?? null
 	const initialGameVersion = options.initialGameVersion ?? null
 	const availableLibraries = ref(options.availableLibraries ?? [])
-	const defaultLibraryPath = options.defaultLibraryPath ?? null
+	const defaultLibraryPath = ref(options.defaultLibraryPath ?? null)
 	const preselectedLibraryPath = options.preselectedLibraryPath ?? null
 	const onBack = options.onBack ?? null
 	const randomizeInstanceIcon = options.randomizeInstanceIcon ?? null

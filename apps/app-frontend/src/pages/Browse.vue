@@ -47,6 +47,7 @@ import { useContentTranslation } from '@/composables/use-content-translation.ts'
 import {
     browseListLocation,
     browsePathFor,
+    openProjectsInSplitView,
     useSplitView,
 } from '@/composables/use-split-view.ts'
 import { get_project, get_search_results_v3, get_version_many } from '@/helpers/cache.js'
@@ -1273,10 +1274,12 @@ function getProjectBrowseQuery() {
 
 /**
  * In split view a card opens the nested detail route, so the list stays mounted
- * and the URL keeps describing both panes.
+ * and the URL keeps describing both panes. The saved switch counts too: on the
+ * full-width list a card click is what turns the split layout on, rather than
+ * the list having to be split before anything is open.
  */
 function getProjectDetailLocation(idOrSlug: string | undefined) {
-    if (splitViewActive.value) {
+    if (splitViewActive.value || openProjectsInSplitView.value) {
         return {
             path: `/browse/${String(route.params.projectType ?? projectType.value)}/p/${idOrSlug}`,
             query: browseListLocation(route).query,

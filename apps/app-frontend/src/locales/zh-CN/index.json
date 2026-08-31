@@ -1013,6 +1013,12 @@
   "app.settings.tabs.resource-management": {
     "message": "资源管理"
   },
+  "app.settings.translation.auto.description": {
+    "message": "打开发现页时自动启用翻译，无需每次手动点击按钮。"
+  },
+  "app.settings.translation.auto.title": {
+    "message": "自动开启翻译"
+  },
   "app.settings.translation.cache.button": {
     "message": "清除缓存"
   },

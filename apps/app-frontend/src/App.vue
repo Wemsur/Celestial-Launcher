@@ -239,7 +239,7 @@ const forceSidebar = computed(
 	() => route.path.startsWith('/project') || route.path.startsWith('/user'),
 )
 const sidebarVisible = computed(() => sidebarToggled.value || forceSidebar.value)
-const { splitViewActive, canUseSplitView, toggleSplitView } = useSplitView()
+const { splitViewActive, splitViewEnabled, canUseSplitView, toggleSplitView } = useSplitView()
 const {
 	enabled: translationEnabled,
 	error: translationError,
@@ -2127,9 +2127,9 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 				</IconButton>
 				<IconButton
 					v-if="canUseSplitView"
-					:type="splitViewActive ? 'base' : 'quiet'"
+					:type="splitViewEnabled ? 'base' : 'quiet'"
 					:label="
-						formatMessage(splitViewActive ? messages.exitSplitView : messages.enterSplitView)
+						formatMessage(splitViewEnabled ? messages.exitSplitView : messages.enterSplitView)
 					"
 					class="mr-3"
 					@click="toggleSplitView()"

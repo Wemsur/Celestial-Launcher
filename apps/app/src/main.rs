@@ -673,6 +673,55 @@ async fn clear_translation_cache(
     Ok(())
 }
 
+// 8. 界面布局状态的独立存储目录：<appdata>/interface/
+//    split-view.json 存 discover 分屏开关。和翻译一样只读写整个文件，
+//    schema 由前端拥有，所以以后加别的布局状态不用改 Rust。
+fn interface_dir(
+    app_handle: &tauri::AppHandle,
+) -> Result<std::path::PathBuf, String> {
+    let mut dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
+
+    dir.push("interface");
+    if !dir.exists() {
+        fs::create_dir_all(&dir)
+            .map_err(|e| format!("创建界面配置目录失败: {}", e))?;
+    }
+
+    Ok(dir)
+}
+
+/// 文件不存在时返回空串，前端据此回退到默认值（关闭）。
+#[tauri::command]
+async fn load_split_view_settings(
+    app_handle: tauri::AppHandle,
+) -> Result<String, String> {
+    let path = interface_dir(&app_handle)?.join("split-view.json");
+    if !path.exists() {
+        return Ok(String::new());
+    }
+
+    fs::read_to_string(&path)
+        .map_err(|e| format!("读取分屏配置失败: {}", e))
+}
+
+/// 先写 .tmp 再改名：写入中途退出也不会留下被截断的坏 JSON。
+#[tauri::command]
+async fn save_split_view_settings(
+    app_handle: tauri::AppHandle,
+    contents: String,
+) -> Result<(), String> {
+    let dir = interface_dir(&app_handle)?;
+    let tmp = dir.join("split-view.json.tmp");
+
+    fs::write(&tmp, contents)
+        .map_err(|e| format!("写入分屏配置失败: {}", e))?;
+    fs::rename(&tmp, dir.join("split-view.json"))
+        .map_err(|e| format!("替换分屏配置失败: {}", e))
+}
+
 #[tauri::command]
 async fn get_background_as_base64(app_handle: tauri::AppHandle) -> Result<String, String> {
     let mut path = app_handle
@@ -1008,6 +1057,8 @@ fn main() {
             load_translation_cache,
             save_translation_cache,
             clear_translation_cache,
+            load_split_view_settings,
+            save_split_view_settings,
             check_for_import,
             import_old_data,
             set_dont_show_import_modal,

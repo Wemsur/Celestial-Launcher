@@ -10,6 +10,16 @@
 			<div class="flex items-center justify-between gap-4">
 				<div>
 					<h3 class="m-0 text-lg font-semibold text-contrast">
+						{{ formatMessage(messages.translationAutoTitle) }}
+					</h3>
+					<p class="m-0 mt-1">{{ formatMessage(messages.translationAutoDescription) }}</p>
+				</div>
+				<Toggle id="translation-auto-enable" v-model="autoEnableTranslation" />
+			</div>
+
+			<div class="flex items-center justify-between gap-4">
+				<div>
+					<h3 class="m-0 text-lg font-semibold text-contrast">
 						{{ formatMessage(messages.translationServiceTitle) }}
 					</h3>
 					<p class="m-0 mt-1">{{ formatMessage(messages.translationServiceDescription) }}</p>
@@ -46,6 +56,7 @@ import {
 	defineMessages,
 	DropdownSelect,
 	LanguageSettings as SharedLanguageSettings,
+	Toggle,
 	useVIntl,
 } from '@modrinth/ui'
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -82,7 +93,7 @@ async function persistLocale(locale: string): Promise<void> {
 
 // The translation settings save themselves the moment they change, so they are
 // deliberately outside the language form's unsaved-changes controller above.
-const { serviceId, setService, clearCache } = useContentTranslation()
+const { serviceId, autoEnable, setService, setAutoEnable, clearCache } = useContentTranslation()
 
 const serviceOptions = TRANSLATION_PROVIDERS.map((provider) => provider.id)
 
@@ -95,6 +106,11 @@ const selectedService = computed<string>({
 	set: (id) => {
 		if (isTranslationServiceId(id)) void setService(id)
 	},
+})
+
+const autoEnableTranslation = computed<boolean>({
+	get: () => autoEnable.value,
+	set: (value) => void setAutoEnable(value),
 })
 
 const clearing = ref(false)
@@ -117,6 +133,15 @@ const messages = defineMessages({
 		id: 'app.settings.translation.description',
 		defaultMessage:
 			'The translate button on the discover and project pages translates content written by authors into the launcher language. All services below are free and need no API key of your own.',
+	},
+	translationAutoTitle: {
+		id: 'app.settings.translation.auto.title',
+		defaultMessage: 'Translate automatically',
+	},
+	translationAutoDescription: {
+		id: 'app.settings.translation.auto.description',
+		defaultMessage:
+			'Turn translation on by itself when you open the discover pages, instead of pressing the button every time.',
 	},
 	translationServiceTitle: {
 		id: 'app.settings.translation.service.title',

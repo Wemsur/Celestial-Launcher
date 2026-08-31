@@ -91,7 +91,10 @@
 
 		<!-- Library selector (instance flow only) -->
 		<div v-if="ctx.flowType === 'instance' && ctx.availableLibraries.value.length > 0" class="flex flex-col gap-2">
-			<span class="font-semibold text-contrast">{{ formatMessage(messages.libraryLabel) }}</span>
+			<span class="font-semibold text-contrast"
+				>{{ formatMessage(messages.libraryLabel) }}
+				<span class="text-red" aria-hidden="true">*</span></span
+			>
 			<Combobox
 				v-model="selectedLibraryPath"
 				:options="libraryOptions"
@@ -296,7 +299,7 @@ const messages = defineMessages({
 	},
 	selectLibrary: {
 		id: 'creation-flow.modal.custom-setup.library.placeholder',
-		defaultMessage: 'Select library (optional)',
+		defaultMessage: 'Select library',
 	},
 	noVersionsAvailable: {
 		id: 'creation-flow.modal.custom-setup.options.no-versions-available',
@@ -398,8 +401,8 @@ const tags = injectTags()
 const libraryOptions = computed(() =>
 	ctx.availableLibraries.value.map((lib) => {
 		const fallbackLabel = lib.name || lib.path.split(/[\\/]/).pop() || lib.path
-		if (ctx.defaultLibraryPath) {
-			const normDefault = ctx.defaultLibraryPath
+		if (ctx.defaultLibraryPath.value) {
+			const normDefault = ctx.defaultLibraryPath.value
 				.replace(/\\/g, '/')
 				.toLowerCase()
 				.replace(/\/+$/, '')

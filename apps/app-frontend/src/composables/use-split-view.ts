@@ -1,6 +1,8 @@
-import { computed, shallowRef } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 import type { LocationQuery, RouteLocationNormalized, RouteLocationNormalizedLoaded } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
+
+import { loadSplitViewEnabled, saveSplitViewEnabled } from '@/helpers/split-view-store'
 
 /**
  * Discover split view: the project detail page rendered as a nested route of
@@ -45,6 +47,45 @@ const lastBrowseList = shallowRef<BrowseTarget | null>(null)
 /** Fallback project type, published by the project page while it is open. */
 const browseProjectTypeHint = shallowRef<string | null>(null)
 let trackingRoute = false
+
+/**
+ * The persisted switch, as opposed to `splitViewActive`, which only describes
+ * the route that happens to be open. This is what makes a card on the discover
+ * list open beside the list instead of full width, and it is why the setting is
+ * meaningful on the list page, where no detail pane exists yet.
+ */
+const splitViewPreferred = ref(false)
+let preferenceLoad: Promise<void> | null = null
+/** Settled by the first read, or by the first click if that lands earlier. */
+let preferenceKnown = false
+
+/** Read once per session; the file is tiny and never changes behind our back. */
+function ensurePreferenceLoaded(): Promise<void> {
+	preferenceLoad ??= loadSplitViewEnabled().then((enabled) => {
+		// A click made while the read was in flight is the newer of the two.
+		if (preferenceKnown) return
+
+		preferenceKnown = true
+		if (enabled !== null) splitViewPreferred.value = enabled
+	})
+
+	return preferenceLoad
+}
+
+function setPreference(enabled: boolean) {
+	// Before the early return: a click that matches the default still has to
+	// outrank whatever an unfinished read is about to say.
+	preferenceKnown = true
+	if (splitViewPreferred.value === enabled) return
+
+	splitViewPreferred.value = enabled
+	void saveSplitViewEnabled(enabled)
+}
+
+/** True on the discover list itself, with or without a detail pane open. */
+export function isBrowseRoute(route: RouteLike): boolean {
+	return route.path.startsWith('/browse')
+}
 
 export function isSplitProjectRoute(route: RouteLike): boolean {
 	return route.matched.some((record) => record.name === SPLIT_PROJECT_ROUTE_NAME)
@@ -164,6 +205,13 @@ export function setBrowseProjectTypeHint(projectType: string | null | undefined)
 	if (projectType) browseProjectTypeHint.value = projectType
 }
 
+/**
+ * Whether a discover card should open into the right pane. Read at click time by
+ * `Browse.vue`; already-open split routes keep their pane regardless, so the
+ * switch can never strand a detail pane in a layout that no longer exists.
+ */
+export const openProjectsInSplitView = computed(() => splitViewPreferred.value)
+
 export function useSplitView() {
 	const route = useRoute()
 	const router = useRouter()
@@ -174,8 +222,24 @@ export function useSplitView() {
 		router.afterEach((to) => rememberBrowseList(to))
 	}
 
+	// Needed before the first card click, which is the only place it is read.
+	void ensurePreferenceLoaded()
+
 	const splitViewActive = computed(() => isSplitProjectRoute(route))
-	const canUseSplitView = computed(() => splitViewActive.value || isPlainProjectRoute(route))
+	/**
+	 * The switch is offered on the discover list too, so it can be armed before
+	 * any project is open — that is the whole point of persisting it.
+	 */
+	const canUseSplitView = computed(
+		() => splitViewActive.value || isPlainProjectRoute(route) || isBrowseRoute(route),
+	)
+	/**
+	 * What the button shows. With a project open the route is the truth; on the
+	 * bare list there is nothing to split yet, so the stored intent stands in.
+	 */
+	const splitViewEnabled = computed(() =>
+		isProjectDetailRoute(route) ? splitViewActive.value : splitViewPreferred.value,
+	)
 
 	function resolveBrowseTarget(current: RouteLike): BrowseTarget {
 		const backLink = current.query.b
@@ -219,15 +283,18 @@ export function useSplitView() {
 	}
 
 	function toggleSplitView() {
-		if (splitViewActive.value) {
+		if (splitViewEnabled.value) {
+			setPreference(false)
 			exitSplitView()
 		} else {
+			setPreference(true)
 			enterSplitView()
 		}
 	}
 
 	return {
 		splitViewActive,
+		splitViewEnabled,
 		canUseSplitView,
 		enterSplitView,
 		exitSplitView,

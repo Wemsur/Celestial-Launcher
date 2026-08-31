@@ -44,6 +44,8 @@ const COOLDOWN_MS = 8000
 
 const enabled = ref(false)
 const serviceId = ref<TranslationServiceId>(DEFAULT_TRANSLATION_SERVICE)
+/** Persisted: turn translation on by itself whenever discover is opened. */
+const autoEnable = ref(false)
 /** key -> translated text. Reactive, so views update as batches land. */
 const translations = ref<Record<string, string>>({})
 /** key -> epoch ms. Mirrors what gets written to disk; not reactive. */
@@ -67,6 +69,14 @@ let errorReported = false
 let trackingRoute = false
 /** Epoch ms until which every worker holds off. */
 let cooldownUntil = 0
+/**
+ * Set when the user switches translation off by hand. Without it, auto-enable
+ * would turn itself straight back on as soon as they clicked a card, since that
+ * is another navigation inside the same scope. Cleared on leaving discover.
+ */
+let turnedOffByUser = false
+/** Whether the route on screen is one where translation applies. */
+let inScope = false
 
 /** cyrb53. 53 bits plus the source length makes collisions negligible, and
  *  keeps the cache file keys short. */
@@ -347,9 +357,15 @@ function ensureCacheLoaded(): Promise<void> {
 function ensureSettingsLoaded(): Promise<void> {
 	settingsLoadPromise ??= loadTranslationSettings().then((settings) => {
 		if (isTranslationServiceId(settings.service)) serviceId.value = settings.service
+		if (typeof settings.autoEnable === 'boolean') autoEnable.value = settings.autoEnable
 	})
 
 	return settingsLoadPromise
+}
+
+/** Always writes the whole file, so one setting cannot drop the other. */
+function persistSettings(): Promise<void> {
+	return saveTranslationSettings({ service: serviceId.value, autoEnable: autoEnable.value })
 }
 
 /**
@@ -367,9 +383,29 @@ async function setService(id: TranslationServiceId): Promise<void> {
 	errorReported = false
 	translationError.value = null
 
-	await saveTranslationSettings({ service: id })
+	await persistSettings()
 
 	if (enabled.value) scheduleDrain()
+}
+
+async function setAutoEnable(value: boolean): Promise<void> {
+	if (autoEnable.value === value) return
+
+	autoEnable.value = value
+	// Switching it off leaves a running translation alone; switching it on applies
+	// right away when discover is already the page behind the settings modal.
+	if (value) turnedOffByUser = false
+
+	await persistSettings()
+	if (value) await maybeAutoEnable()
+}
+
+/** The one place auto-enable is decided; every caller has already navigated. */
+async function maybeAutoEnable(): Promise<void> {
+	await ensureSettingsLoaded()
+	if (!inScope || !autoEnable.value || enabled.value || turnedOffByUser) return
+
+	await enable()
 }
 
 async function enable(): Promise<void> {
@@ -416,8 +452,10 @@ function disable(): void {
 
 function toggle(): void {
 	if (enabled.value) {
+		turnedOffByUser = true
 		disable()
 	} else {
+		turnedOffByUser = false
 		void enable()
 	}
 }
@@ -445,18 +483,32 @@ export function useContentTranslation() {
 
 	if (!trackingRoute) {
 		trackingRoute = true
-		// Leaving discover turns it off; the cached strings survive, the switch does not.
+		inScope = isTranslationScope(router.currentRoute.value)
+
 		router.afterEach((to) => {
-			if (!isTranslationScope(to)) disable()
+			inScope = isTranslationScope(to)
+			if (inScope) {
+				// Entering discover with the setting on turns translation on itself.
+				void maybeAutoEnable()
+			} else {
+				// Leaving turns it off; the cached strings survive, the switch does not.
+				turnedOffByUser = false
+				disable()
+			}
 		})
+
+		// Covers a launch that lands on discover, before any navigation happens.
+		void maybeAutoEnable()
 	}
 
-	// The chosen service is needed before the first click, for the settings page.
+	// The chosen service and the auto switch are needed before the first click,
+	// for the settings page.
 	void ensureSettingsLoaded()
 
 	return {
 		enabled,
 		serviceId,
+		autoEnable,
 		error: translationError,
 		/** Plain text: card summaries, the project header summary. */
 		translate,
@@ -464,6 +516,7 @@ export function useContentTranslation() {
 		translateHtml: (html: string) => (enabled.value ? translateHtml(html, translate) : html),
 		toggle,
 		setService,
+		setAutoEnable,
 		clearCache,
 	}
 }

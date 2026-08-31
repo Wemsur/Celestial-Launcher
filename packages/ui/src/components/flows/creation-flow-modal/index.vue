@@ -110,19 +110,44 @@ provideCreationFlowContext(ctx)
 // When preselectedLibraryPath changes, update selectedLibraryPath immediately
 // so it's correct both while the modal is open and on next show()
 watch(() => props.preselectedLibraryPath, (value) => {
-	ctx.selectedLibraryPath.value = value ?? null
+	ctx.selectedLibraryPath.value = resolveLibraryPath(value)
 })
 
-async function show() {
+// The default library is resolved asynchronously by the caller, so it can land
+// after this component was created; the picker labels it from this ref.
+watch(() => props.defaultLibraryPath, (value) => {
+	ctx.defaultLibraryPath.value = value ?? null
+})
+
+/**
+ * A preselection is only usable if the picker actually offers it: anything else
+ * leaves the box looking empty while counting as a selection, which would let
+ * the create button through with a library that does not exist.
+ *
+ * `'all'` is the home page's "全部实例" tab, i.e. no specific library, not a path.
+ */
+function resolveLibraryPath(path: string | null | undefined): string | null {
+	if (!path || path === 'all') return null
+	return ctx.availableLibraries.value.some((library) => library.path === path) ? path : null
+}
+
+function storedLibraryPath(): string | null {
+	if (typeof window === 'undefined') return null
+	return localStorage.getItem('celestial-library-active-tab')
+}
+
+/** `preselectedLibrary` wins over the prop: the caller resolves it as the user
+ *  clicks, and a prop written in that same tick has not reached us yet. */
+async function show(preselectedLibrary?: string | null) {
 	// Sync the freshest props into ctx BEFORE reset so both the library list
 	// and preselected path are always up-to-date on each open.
 	ctx.availableLibraries.value = props.availableLibraries ?? []
-	// Fall back to localStorage when the caller didn't pass preselectedLibraryPath
-	const preselected =
-		props.preselectedLibraryPath ??
-		(typeof window !== 'undefined'
-			? localStorage.getItem('celestial-library-active-tab') ?? null
-			: null)
+	ctx.defaultLibraryPath.value = props.defaultLibraryPath ?? null
+	const preselected = resolveLibraryPath(
+		preselectedLibrary !== undefined
+			? preselectedLibrary
+			: (props.preselectedLibraryPath ?? storedLibraryPath()),
+	)
 	ctx.selectedLibraryPath.value = preselected
 	await ctx.reset()
 	// `reset()` restores the preselection captured when the context was created,

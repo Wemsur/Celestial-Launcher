@@ -852,7 +852,10 @@
     "defaultMessage": "Library"
   },
   "creation-flow.modal.custom-setup.library.placeholder": {
-    "defaultMessage": "Select library (optional)"
+    "defaultMessage": "Select library"
+  },
+  "creation-flow.modal.custom-setup.library.required": {
+    "defaultMessage": "Pick the library this instance goes into first."
   },
   "creation-flow.modal.custom-setup.loader-version-type.latest": {
     "defaultMessage": "Latest"
