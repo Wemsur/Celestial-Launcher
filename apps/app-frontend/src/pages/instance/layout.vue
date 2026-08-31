@@ -93,6 +93,31 @@
 			</template>
 		</ContextMenu>
 	</div>
+	<!--
+		Shown while the instance summary is still loading. Mirrors PageHeader's DOM
+		so the tabs sit at their final height and do not jump when the real header
+		replaces this. The tabs themselves are real — they only need the id from the
+		route — so navigation between tabs works before the summary arrives.
+	-->
+	<div v-else :class="{ 'flex h-full flex-col': isFixedRender }" aria-busy="true">
+		<div :class="['p-6 pr-2 pb-4', { 'shrink-0': isFixedRender }]">
+			<div class="flex flex-col gap-2">
+				<div class="flex flex-wrap items-start gap-4 max-md:flex-col">
+					<div class="flex min-w-0 flex-1 gap-4">
+						<div class="size-16 shrink-0 animate-pulse rounded-2xl bg-surface-4"></div>
+						<div class="flex min-w-0 flex-1 flex-col justify-center gap-2">
+							<div class="h-6 w-64 max-w-full animate-pulse rounded-lg bg-surface-4"></div>
+							<div class="h-5 w-48 max-w-full animate-pulse rounded-lg bg-surface-4"></div>
+						</div>
+					</div>
+					<div class="h-10 w-40 shrink-0 animate-pulse rounded-2xl bg-surface-4"></div>
+				</div>
+			</div>
+		</div>
+		<div :class="['px-6', { 'shrink-0': isFixedRender }]">
+			<NavTabs :links="tabs" />
+		</div>
+	</div>
 </template>
 <script setup lang="ts">
 import {
@@ -120,7 +145,7 @@ import { useOnline } from '@vueuse/core'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import { computed, type ComputedRef, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import { onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import ContextMenu from '@/components/ui/context-menu/index.vue'
 import ExportModal from '@/components/ui/ExportModal.vue'
@@ -279,26 +304,15 @@ const processesQuery = useQuery(
 )
 const playing = computed(() => (processesQuery.data.value?.length ?? 0) > 0)
 
-async function ensureCriticalInstanceData(targetInstanceId: string) {
-	// Only the instance summary is awaited. The route-level <Suspense> has no
-	// content of its own until this resolves, so anything awaited here is a blank
-	// page: the content list used to be awaited too, which on a cold cache meant
-	// the frame, the title and the play button waited on a full filesystem scan.
-	// Content is now an ordinary query and the content tab renders its own
-	// loading state while it lands.
-	await queryClient.ensureQueryData(instanceDetailQueryOptions(targetInstanceId))
-}
-
-function isUnmanagedInstanceError(error: unknown) {
-	return error instanceof Error && error.message.includes('is not managed')
-}
-
-try {
-	await ensureCriticalInstanceData(instanceId.value)
-} catch (error) {
-	if (isUnmanagedInstanceError(error)) await router.replace('/')
-	else handleError(toError(error))
-}
+// Nothing is awaited at the top level of this component on purpose.
+//
+// A top-level await makes this an async component, and Vue's <Suspense> keeps the
+// *previous* page mounted while an async update resolves. So an await here does
+// not show a fallback — it freezes the library page under the cursor until the
+// data lands, which reads as "the click did nothing". The queries above are
+// ordinary reactive queries instead, the template renders a header placeholder
+// while `instance` is undefined, and `instanceQuery.error` (watched below) is
+// what redirects an unmanaged instance back to the library.
 
 // Let the page paint and the content list land before spending anything on the
 // update check. `requestIdleCallback` is not available in every webview build,
@@ -312,21 +326,6 @@ onMounted(() => {
 		window.requestIdleCallback(allow, { timeout: UPDATE_CHECK_IDLE_DELAY_MS })
 	} else {
 		window.setTimeout(allow, UPDATE_CHECK_IDLE_DELAY_MS)
-	}
-})
-
-onBeforeRouteUpdate(async (to, from) => {
-	const targetInstanceId = String(to.params.id ?? '')
-	const currentInstanceId = String(from.params.id ?? '')
-	if (!targetInstanceId || targetInstanceId === currentInstanceId) return
-
-	try {
-		await ensureCriticalInstanceData(targetInstanceId)
-		instanceId.value = targetInstanceId
-	} catch (error) {
-		if (isUnmanagedInstanceError(error)) return { path: '/' }
-		handleError(toError(error))
-		return false
 	}
 })
 
@@ -485,6 +484,10 @@ const renderMode = computed<'scroll' | 'fixed'>(() =>
 const isFixedRender = computed(() => renderMode.value === 'fixed')
 const currentUserCanUseSharedInstances = sharedInstanceState.currentUserCanUseSharedInstances
 const showShareTab = computed(() => {
+	// Gated on the summary existing so the tab never appears in the loading
+	// placeholder only to vanish once the link type is known.
+	if (!instance.value) return false
+
 	const linkType = instance.value?.link?.type
 
 	return (

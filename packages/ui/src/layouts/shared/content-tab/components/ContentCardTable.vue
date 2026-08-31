@@ -87,13 +87,28 @@ const hasAnyActions = computed(() => {
 })
 
 // Virtualization
+//
+// Below this many rows, render the whole list. Virtualizing a list that fits in
+// two or three screens buys nothing and costs a visible hole whenever a scroll
+// outruns the buffer — a typical modded instance has well under 150 mods.
+const VIRTUALIZE_THRESHOLD = 150
+
+// Rows kept mounted above and below the viewport. At 74px a row this is roughly
+// 900px of runway on each side, which a wheel fling can still outpace but a
+// normal drag or trackpad scroll cannot.
+const VIRTUAL_BUFFER_ROWS = 12
+
+const isVirtualized = computed(
+	() => props.virtualized && props.items.length > VIRTUALIZE_THRESHOLD,
+)
+
 const { listContainer, totalHeight, visibleRange, visibleTop, visibleItems } = useVirtualScroll(
 	toRef(props, 'items'),
 	{
 		itemHeight: 74,
-		bufferSize: 5,
+		bufferSize: VIRTUAL_BUFFER_ROWS,
 		initialItemCount: 20,
-		enabled: toRef(props, 'virtualized'),
+		enabled: isVirtualized,
 	},
 )
 
@@ -255,7 +270,7 @@ function handleSort(column: ContentCardTableSortColumn) {
 		</div>
 
 		<div
-			v-if="items.length > 0 && virtualized"
+			v-if="items.length > 0 && isVirtualized"
 			ref="listContainer"
 			role="rowgroup"
 			class="relative w-full"
