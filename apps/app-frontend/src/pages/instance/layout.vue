@@ -144,7 +144,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useOnline } from '@vueuse/core'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import { computed, type ComputedRef, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { computed, type ComputedRef, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ContextMenu from '@/components/ui/context-menu/index.vue'
@@ -172,6 +172,7 @@ import {
 	type SharedInstanceUnavailableReason,
 } from '@/helpers/install'
 import {
+	type ContentUpdate,
 	get_full_path,
 	getInstanceIconUrl,
 	kill,
@@ -179,6 +180,7 @@ import {
 	remove,
 	run,
 } from '@/helpers/instance'
+import type { InstanceContentData } from '@/helpers/instance-content'
 import { useSharedInstanceErrors } from '@/helpers/shared-instance-errors'
 import type { GameInstance } from '@/helpers/types'
 import { createInstanceShortcut, showInstanceInFolder } from '@/helpers/utils.js'
@@ -253,7 +255,7 @@ const instanceQuery = useQuery(
 		enabled: !!instanceId.value,
 	})),
 )
-useQuery(
+const contentQuery = useQuery(
 	computed(() => ({
 		...instanceContentQueryOptions(instanceId.value, (error) => handleError(toError(error))),
 		enabled: !!instanceId.value,
@@ -262,17 +264,19 @@ useQuery(
 const instance = computed(() => instanceQuery.data.value)
 // The automatic update check is deliberately not part of the first paint: it
 // re-reads every installed file and revalidates against the API, and its result
-// only feeds an "update available" badge. It starts once the page has settled.
+// only feeds an "update available" badge. It starts a short while after the
+// content list has settled — see `scheduleUpdateCheck`.
 const updateCheckAllowed = ref(false)
 useQuery(
 	computed(() => ({
 		queryKey: instanceKeys.contentUpdateCheck(instanceId.value),
 		queryFn: async () => {
 			const targetInstanceId = instanceId.value
-			await refresh_content_updates(targetInstanceId)
-			await queryClient.invalidateQueries({
-				queryKey: instanceKeys.content(targetInstanceId),
-			})
+			const updates = await refresh_content_updates(targetInstanceId)
+			// Patch the flags in place instead of invalidating. The check only
+			// establishes which files have a newer version; invalidating made the
+			// entire content pipeline run a second time and rebuilt every row.
+			applyContentUpdates(targetInstanceId, updates)
 			return targetInstanceId
 		},
 		enabled:
@@ -285,6 +289,32 @@ useQuery(
 		retry: false,
 	})),
 )
+
+function applyContentUpdates(targetInstanceId: string, updates: ContentUpdate[]) {
+	const updateVersionByPath = new Map(
+		updates.map((update) => [update.relative_path, update.update_version_id]),
+	)
+	queryClient.setQueryData<InstanceContentData>(
+		instanceKeys.content(targetInstanceId),
+		(current) => {
+			if (!current?.contentItems) return current
+			let changed = false
+			const contentItems = current.contentItems.map((item) => {
+				const updateVersionId = item.file_path
+					? (updateVersionByPath.get(item.file_path) ?? null)
+					: null
+				if (item.update_version_id === updateVersionId) return item
+				changed = true
+				return {
+					...item,
+					update_version_id: updateVersionId,
+					has_update: updateVersionId !== null,
+				}
+			})
+			return changed ? { ...current, contentItems } : current
+		},
+	)
+}
 const linkedProjectId = computed(
 	() => instance.value?.link?.server_project_id ?? instance.value?.link?.project_id ?? '',
 )
@@ -315,19 +345,40 @@ const playing = computed(() => (processesQuery.data.value?.length ?? 0) > 0)
 // what redirects an unmanaged instance back to the library.
 
 // Let the page paint and the content list land before spending anything on the
-// update check. `requestIdleCallback` is not available in every webview build,
-// so a timeout backs it up.
-const UPDATE_CHECK_IDLE_DELAY_MS = 1_500
-onMounted(() => {
-	const allow = () => {
-		updateCheckAllowed.value = true
+// update check.
+//
+// This used to use `requestIdleCallback(cb, { timeout })`, which was wrong:
+// `timeout` is the *deadline*, not a delay, so the callback fired at the first
+// idle moment — measured at 210ms after mount, right on top of the first paint.
+const UPDATE_CHECK_DELAY_MS = 1_500
+let updateCheckTimer: number | undefined
+
+function cancelUpdateCheckTimer() {
+	if (updateCheckTimer !== undefined) {
+		window.clearTimeout(updateCheckTimer)
+		updateCheckTimer = undefined
 	}
-	if (typeof window.requestIdleCallback === 'function') {
-		window.requestIdleCallback(allow, { timeout: UPDATE_CHECK_IDLE_DELAY_MS })
-	} else {
-		window.setTimeout(allow, UPDATE_CHECK_IDLE_DELAY_MS)
-	}
+}
+
+watch(
+	() => contentQuery.data.value !== undefined && !contentQuery.isFetching.value,
+	(settled) => {
+		if (!settled || updateCheckAllowed.value || updateCheckTimer !== undefined) return
+		updateCheckTimer = window.setTimeout(() => {
+			updateCheckTimer = undefined
+			updateCheckAllowed.value = true
+		}, UPDATE_CHECK_DELAY_MS)
+	},
+	{ immediate: true },
+)
+
+// A different instance starts the wait over: its content has to settle first too.
+watch(instanceId, () => {
+	cancelUpdateCheckTimer()
+	updateCheckAllowed.value = false
 })
+
+onUnmounted(cancelUpdateCheckTimer)
 
 useRootBreadcrumb({
 	slot: 'instance',

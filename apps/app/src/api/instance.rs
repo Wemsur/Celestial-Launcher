@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use theseus::DownloadReason;
 use theseus::data::{
-    AppliedContentSetPatch, ContentItem, Dependency,
+    AppliedContentSetPatch, ContentItem, ContentUpdate, Dependency,
     EditInstance as CoreEditInstance, InstanceInstallCandidate,
     InstanceInstallTarget, InstanceLaunchOverridesPatch,
     InstanceLink as CoreInstanceLink, InstanceMetadata, LinkedModpackInfo,
@@ -36,6 +36,7 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             instance_get_install_candidates,
             instance_content,
             instance_get_content_items,
+            instance_get_content_skeleton,
             instance_refresh_content_updates,
             instance_get_dependencies_as_content_items,
             instance_get_linked_modpack_info,
@@ -627,7 +628,16 @@ pub async fn instance_get_content_items(
 }
 
 #[tauri::command]
-pub async fn instance_refresh_content_updates(instance_id: &str) -> Result<()> {
+pub async fn instance_get_content_skeleton(
+    instance_id: &str,
+) -> Result<Vec<ContentItem>> {
+    Ok(theseus::instance::get_content_skeleton(instance_id).await?)
+}
+
+#[tauri::command]
+pub async fn instance_refresh_content_updates(
+    instance_id: &str,
+) -> Result<Vec<ContentUpdate>> {
     Ok(theseus::instance::refresh_content_updates(instance_id).await?)
 }
 

@@ -2,6 +2,7 @@ import type { ContentItem, ManagedContentProject, ManagedContentVersion } from '
 
 import {
 	get_content_items,
+	get_content_skeleton,
 	get_linked_modpack_info,
 	type LinkedModpackInfo,
 } from '@/helpers/instance'
@@ -11,12 +12,36 @@ export type InstanceContentData = {
 	path: string
 	contentItems: ContentItem[] | null
 	modpack: InstanceContentModpackData | null
+	/**
+	 * True while these rows still carry only local information. The list is safe
+	 * to render, but titles, icons and authors are still on their way.
+	 */
+	partial?: boolean
 }
 
 export type InstanceContentModpackData = {
 	project: ManagedContentProject
 	version: ManagedContentVersion | null
 	updateVersionId: string | null
+}
+
+/**
+ * The cheapest content read there is — no SQLite, no network, no directory walk.
+ *
+ * Used as placeholder data so the content tab paints rows immediately instead of
+ * sitting empty while {@link loadInstanceContentData} resolves metadata. Errors
+ * are swallowed: a placeholder that fails to load is not worth surfacing, the
+ * real query reports its own failures.
+ */
+export async function loadInstanceContentSkeleton(
+	path: string,
+): Promise<InstanceContentData | null> {
+	try {
+		const contentItems = await get_content_skeleton(path)
+		return { path, contentItems, modpack: null, partial: true }
+	} catch {
+		return null
+	}
 }
 
 export async function loadInstanceContentData(

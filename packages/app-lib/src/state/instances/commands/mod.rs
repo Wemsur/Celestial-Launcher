@@ -19,7 +19,7 @@ pub(crate) use self::list_content::{
     dependencies_to_content_items, get_content_projects,
     get_installed_project_ids_for_instance, get_instance_install_candidates,
     get_linked_modpack_info, list_content, list_content_sets,
-    list_linked_modpack_content,
+    list_content_skeleton, list_linked_modpack_content,
 };
 
 mod embedded_content_metadata;
@@ -42,6 +42,7 @@ mod apply_content_install;
 pub(crate) use self::apply_content_install::*;
 
 mod check_content_updates;
+pub use self::check_content_updates::ContentUpdate;
 pub(crate) use self::check_content_updates::refresh_content_updates;
 
 mod apply_content_update;

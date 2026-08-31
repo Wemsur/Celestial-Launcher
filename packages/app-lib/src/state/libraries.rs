@@ -527,6 +527,14 @@ pub async fn list_instances_from_json(
         return Ok(cached);
     }
 
+    // Single-flight. The TTL cache alone only collapses *sequential* callers; an
+    // instance page open fires three of these within the same millisecond, and
+    // all three would miss the cache and walk the directories in parallel.
+    let _scan = INSTANCE_LIST_SCAN_LOCK.lock().await;
+    if let Some(cached) = cached_instance_list() {
+        return Ok(cached);
+    }
+
     let config = get_libraries_config(state).await?;
     let library_count = config.libraries.len();
     let libraries = config.libraries;
@@ -562,6 +570,11 @@ const INSTANCE_LIST_CACHE_TTL: Duration = Duration::from_millis(750);
 static INSTANCE_LIST_CACHE: LazyLock<
     Mutex<Option<(Instant, Vec<Instance>)>>,
 > = LazyLock::new(|| Mutex::new(None));
+
+/// Held across the directory walk so only one caller ever scans; everyone else
+/// waits and then reads the cache the winner just filled.
+static INSTANCE_LIST_SCAN_LOCK: LazyLock<tokio::sync::Mutex<()>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(()));
 
 fn cached_instance_list() -> Option<Vec<Instance>> {
     let cache = INSTANCE_LIST_CACHE.lock().ok()?;

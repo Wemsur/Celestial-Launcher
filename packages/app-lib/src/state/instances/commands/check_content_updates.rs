@@ -13,8 +13,13 @@ use super::sync_content_files::{
     sync_instance_content_files_with_freshness,
 };
 
-#[derive(Clone, Debug)]
-pub(crate) struct ContentUpdate {
+/// One installed file that has a newer version available.
+///
+/// Serialized straight to the frontend so an update check can patch the flags on
+/// the content list it already has, instead of invalidating it and paying for the
+/// whole pipeline again.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ContentUpdate {
     pub relative_path: String,
     pub current_version_id: String,
     pub update_version_id: String,
@@ -52,16 +57,14 @@ pub(crate) async fn check_content_updates(
 pub(crate) async fn refresh_content_updates(
     instance_id: &str,
     state: &State,
-) -> crate::Result<()> {
+) -> crate::Result<Vec<ContentUpdate>> {
     check_content_updates_with_cache_behaviours(
         instance_id,
         None,
         Some(CacheBehaviour::MustRevalidate),
         state,
     )
-    .await?;
-
-    Ok(())
+    .await
 }
 
 async fn check_content_updates_with_cache_behaviours(

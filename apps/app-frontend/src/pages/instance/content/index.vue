@@ -1,5 +1,11 @@
 <template>
-	<ReadyTransition :pending="loading">
+	<!--
+		duration 0: the reveal used to cost ~400ms of dead time. `mode="out-in"`
+		fades the blank shell out for `duration` and only then fades the content in,
+		so a 200ms duration meant 400ms between "data is here" and "list is legible".
+		`loading` never goes back to true, so there is no later transition to keep.
+	-->
+	<ReadyTransition :pending="loading" :duration="0">
 		<ContentPageLayout>
 			<template #modals>
 				<UnknownFileWarningModal
@@ -152,7 +158,11 @@ import { type AppEventPayload, injectAppEvents } from '@/providers/app-events'
 import { injectContentInstall } from '@/providers/content-install'
 
 import { injectInstancePage } from '../instance-context'
-import { instanceContentQueryOptions, instanceKeys } from '../query-options'
+import {
+	instanceContentQueryOptions,
+	instanceContentSkeletonQueryOptions,
+	instanceKeys,
+} from '../query-options'
 import { injectSharedInstance } from '../shared-instance-context'
 
 type InstanceBulkUpdateProgress = AppEventPayload<'instance_bulk_update_progress'>
@@ -255,6 +265,15 @@ const {
 const contentQuery = useQuery(
 	computed(() => ({
 		...instanceContentQueryOptions(instancePage.instanceId.value),
+		enabled: !!instancePage.instanceId.value,
+	})),
+)
+// Runs alongside the real query and almost always wins the race: it reads only
+// the on-disk content cache, so the rows appear while the Modrinth metadata is
+// still being resolved. Superseded the moment `contentQuery` produces data.
+const skeletonQuery = useQuery(
+	computed(() => ({
+		...instanceContentSkeletonQueryOptions(instancePage.instanceId.value),
 		enabled: !!instancePage.instanceId.value,
 	})),
 )
@@ -1563,14 +1582,18 @@ function applyContentData(contentData: InstanceContentData) {
 		has_update: canUpdateProject(item),
 	}))
 
-	if (contentData.modpack) {
-		linkedModpackProject.value = contentData.modpack.project
-		linkedModpackVersion.value = contentData.modpack.version
-		linkedModpackUpdateVersionId.value = contentData.modpack.updateVersionId
-	} else {
-		linkedModpackProject.value = null
-		linkedModpackVersion.value = null
-		linkedModpackUpdateVersionId.value = null
+	// Placeholder rows know nothing about the linked modpack, so leave whatever
+	// the real query already established alone rather than clearing it.
+	if (!contentData.partial) {
+		if (contentData.modpack) {
+			linkedModpackProject.value = contentData.modpack.project
+			linkedModpackVersion.value = contentData.modpack.version
+			linkedModpackUpdateVersionId.value = contentData.modpack.updateVersionId
+		} else {
+			linkedModpackProject.value = null
+			linkedModpackVersion.value = null
+			linkedModpackUpdateVersionId.value = null
+		}
 	}
 
 	loading.value = false
@@ -1703,6 +1726,15 @@ watch(
 	contentQuery.data,
 	(data) => {
 		if (data) applyContentData(data)
+	},
+	{ immediate: true },
+)
+// Only paints while the real query has nothing yet — once it lands, its data is
+// strictly better and the placeholder must not overwrite it.
+watch(
+	skeletonQuery.data,
+	(data) => {
+		if (data && contentQuery.data.value === undefined) applyContentData(data)
 	},
 	{ immediate: true },
 )

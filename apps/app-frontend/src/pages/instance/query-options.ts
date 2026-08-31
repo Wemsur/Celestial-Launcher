@@ -2,7 +2,7 @@ import { queryOptions } from '@tanstack/vue-query'
 
 import { get_project_v3 } from '@/helpers/cache.js'
 import { get as getInstance } from '@/helpers/instance'
-import { loadInstanceContentData } from '@/helpers/instance-content'
+import { loadInstanceContentData, loadInstanceContentSkeleton } from '@/helpers/instance-content'
 import { get_by_instance_id } from '@/helpers/process'
 import { refreshWorlds } from '@/helpers/worlds'
 
@@ -11,6 +11,8 @@ export const instanceKeys = {
 	detail: (instanceId: string) => [...instanceKeys.all, 'summary', instanceId] as const,
 	processes: (instanceId: string) => [...instanceKeys.all, 'processes', instanceId] as const,
 	content: (instanceId: string) => [...instanceKeys.all, 'content', instanceId] as const,
+	contentSkeleton: (instanceId: string) =>
+		[...instanceKeys.all, 'content-skeleton', instanceId] as const,
 	contentUpdateCheck: (instanceId: string) =>
 		[...instanceKeys.all, 'content-update-check', instanceId] as const,
 	rootPath: (instanceId: string) => [...instanceKeys.detail(instanceId), 'root-path'] as const,
@@ -69,6 +71,22 @@ export function instanceContentQueryOptions(
 		queryKey: instanceKeys.content(instanceId),
 		queryFn: () => loadInstanceContentData(instanceId, undefined, onError),
 		staleTime: 30_000,
+	})
+}
+
+/**
+ * Local-only content rows, used to paint the list before the real query resolves.
+ *
+ * Deliberately not cached for long: it exists to fill the first few hundred
+ * milliseconds, and the real content query supersedes it as soon as it lands.
+ */
+export function instanceContentSkeletonQueryOptions(instanceId: string) {
+	return queryOptions({
+		queryKey: instanceKeys.contentSkeleton(instanceId),
+		queryFn: () => loadInstanceContentSkeleton(instanceId),
+		staleTime: 5_000,
+		gcTime: 60_000,
+		retry: false,
 	})
 }
 

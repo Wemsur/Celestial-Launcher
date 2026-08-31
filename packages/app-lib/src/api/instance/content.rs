@@ -1,9 +1,9 @@
 use crate::event::InstancePayloadType;
 use crate::event::emit::emit_instance;
 use crate::state::{
-    CacheBehaviour, ContentFile, ContentItem, ContentSet, Dependency,
-    InstanceInstallCandidate, InstanceInstallTarget, LinkedModpackInfo,
-    ProjectType, State,
+    CacheBehaviour, ContentFile, ContentItem, ContentSet, ContentUpdate,
+    Dependency, InstanceInstallCandidate, InstanceInstallTarget,
+    LinkedModpackInfo, ProjectType, State,
 };
 use dashmap::DashMap;
 use std::sync::LazyLock;
@@ -258,16 +258,39 @@ fn spawn_metadata_completion<F, Fut>(
     });
 }
 
+/// Placeholder rows for the content tab, from local data only.
+///
+/// Always cheap (single-digit milliseconds): the point is that the list can paint
+/// before [`get_content_items`] has finished resolving metadata, so the user sees
+/// their mods appear rather than an empty pane.
 #[tracing::instrument]
-pub async fn refresh_content_updates(instance_id: &str) -> crate::Result<()> {
+pub async fn get_content_skeleton(
+    instance_id: &str,
+) -> crate::Result<Vec<ContentItem>> {
+    let state = State::get().await?;
+    crate::state::list_content_skeleton(instance_id, &state).await
+}
+
+/// Re-check every installed file for a newer version and report what changed.
+///
+/// Returns the updates rather than nothing so the caller can patch the flags on
+/// the content list it is already showing. Invalidating that list instead cost a
+/// full second pass through the pipeline and a visible rebuild of every row.
+#[tracing::instrument]
+pub async fn refresh_content_updates(
+    instance_id: &str,
+) -> crate::Result<Vec<ContentUpdate>> {
     let state = State::get().await?;
     let started = std::time::Instant::now();
     let result =
         crate::state::refresh_content_updates(instance_id, &state).await;
     tracing::info!(
-        "content_timing: TOTAL refresh_content_updates {} ms (ok={}) for instance '{}'",
+        "content_timing: TOTAL refresh_content_updates {} ms ({}) for instance '{}'",
         started.elapsed().as_millis(),
-        result.is_ok(),
+        match &result {
+            Ok(updates) => format!("{} updates", updates.len()),
+            Err(_) => "failed".to_string(),
+        },
         instance_id
     );
     result

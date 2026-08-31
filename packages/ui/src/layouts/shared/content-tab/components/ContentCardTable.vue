@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ChevronDownIcon, ChevronUpIcon } from '@modrinth/assets'
-import { computed, getCurrentInstance, ref, toRef } from 'vue'
+import { computed, getCurrentInstance, onUnmounted, ref, toRef, watch } from 'vue'
 
 import Checkbox from '#ui/components/base/Checkbox.vue'
 import { useVIntl } from '#ui/composables/i18n'
@@ -101,6 +101,58 @@ const VIRTUAL_BUFFER_ROWS = 12
 const isVirtualized = computed(
 	() => props.virtualized && props.items.length > VIRTUALIZE_THRESHOLD,
 )
+
+// Progressive mounting.
+//
+// A ContentCardItem is ~20 child components (avatars, icon buttons, a toggle, an
+// overflow menu), so a 90-row list is ~1800 component instances. Mounting them in
+// one tick blocks the frame for long enough to feel like the page is stuck.
+// Instead the first chunk goes in immediately and the rest follow one chunk per
+// animation frame, so the list fills in visibly rather than arriving all at once.
+const PROGRESSIVE_CHUNK = 30
+const revealedCount = ref(0)
+let revealHandle: number | null = null
+
+const renderedItems = computed(() =>
+	isVirtualized.value ? props.items : props.items.slice(0, revealedCount.value),
+)
+
+function cancelReveal() {
+	if (revealHandle !== null) {
+		cancelAnimationFrame(revealHandle)
+		revealHandle = null
+	}
+}
+
+function pumpReveal() {
+	revealHandle = null
+	if (revealedCount.value >= props.items.length) return
+	revealedCount.value = Math.min(props.items.length, revealedCount.value + PROGRESSIVE_CHUNK)
+	if (revealedCount.value < props.items.length) {
+		revealHandle = requestAnimationFrame(pumpReveal)
+	}
+}
+
+watch(
+	() => [props.items.length, isVirtualized.value] as const,
+	([length, virtualized]) => {
+		cancelReveal()
+		// The virtualized branch has its own windowing, and SSR has no frames.
+		if (virtualized || typeof window === 'undefined') {
+			revealedCount.value = length
+			return
+		}
+		// Only ever grows: a list that is already on screen must not re-reveal
+		// itself when the data behind it is refreshed.
+		revealedCount.value = Math.min(Math.max(revealedCount.value, PROGRESSIVE_CHUNK), length)
+		if (revealedCount.value < length) {
+			revealHandle = requestAnimationFrame(pumpReveal)
+		}
+	},
+	{ immediate: true },
+)
+
+onUnmounted(cancelReveal)
 
 const { listContainer, totalHeight, visibleRange, visibleTop, visibleItems } = useVirtualScroll(
 	toRef(props, 'items'),
@@ -347,7 +399,7 @@ function handleSort(column: ContentCardTableSortColumn) {
 			:class="flat ? '' : 'rounded-b-[20px]'"
 		>
 			<ContentCardItem
-				v-for="(item, index) in items"
+				v-for="(item, index) in renderedItems"
 				:key="item.id"
 				data-content-card-item
 				:project="item.project"

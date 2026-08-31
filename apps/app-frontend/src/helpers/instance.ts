@@ -88,8 +88,30 @@ export async function get_content_items(
 	return adaptContentItems(items)
 }
 
-export async function refresh_content_updates(instanceId: string): Promise<void> {
-	return await invoke('plugin:instance|instance_refresh_content_updates', { instanceId })
+/**
+ * Local-only content rows: file name, size, enabled state and type, with no
+ * Modrinth metadata. Always cheap, so it can be shown while
+ * {@link get_content_items} is still resolving. May in fact come back fully
+ * resolved when the backend's item cache is warm.
+ */
+export async function get_content_skeleton(instanceId: string): Promise<ContentItem[]> {
+	const items = await invoke<ContentItem[]>('plugin:instance|instance_get_content_skeleton', {
+		instanceId,
+	})
+	return adaptContentItems(items)
+}
+
+/** One installed file with a newer version available. */
+export type ContentUpdate = {
+	relative_path: string
+	current_version_id: string
+	update_version_id: string
+}
+
+export async function refresh_content_updates(instanceId: string): Promise<ContentUpdate[]> {
+	return await invoke<ContentUpdate[]>('plugin:instance|instance_refresh_content_updates', {
+		instanceId,
+	})
 }
 
 // Linked modpack info returned from backend
