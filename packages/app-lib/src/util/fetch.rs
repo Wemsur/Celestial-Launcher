@@ -453,11 +453,24 @@ pub async fn fetch_json<T>(
 where
     T: DeserializeOwned,
 {
+    let started = std::time::Instant::now();
     let result = fetch_advanced(
         method, url, sha1, json_body, None, None, None, uri_path, semaphore,
         exec,
     )
-    .await?;
+    .await;
+    // Per-request network timing. On a cold cache this is what keeps the
+    // instance page blank, and one unreachable host costs `connect_timeout`
+    // (15s) per attempt, `FETCH_ATTEMPTS + 1` times.
+    tracing::info!(
+        "content_timing: [net] {} ms (ok={}) {}",
+        started.elapsed().as_millis(),
+        result.is_ok(),
+        // Batched requests put up to 800 ids in the query string; the prefix is
+        // enough to tell the endpoints apart.
+        url.chars().take(140).collect::<String>()
+    );
+    let result = result?;
     let value = serde_json::from_slice(&result)?;
     Ok(value)
 }

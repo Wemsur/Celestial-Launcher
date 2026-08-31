@@ -240,7 +240,11 @@ useQuery(
 		queryKey: instanceKeys.contentUpdateCheck(instanceId.value),
 		queryFn: async () => {
 			const targetInstanceId = instanceId.value
+			const started = performance.now()
 			await refresh_content_updates(targetInstanceId)
+			console.info(
+				`[content_timing] refresh_content_updates ${Math.round(performance.now() - started)} ms (${targetInstanceId}), invalidating content -> the whole pipeline runs again`,
+			)
 			await queryClient.invalidateQueries({
 				queryKey: instanceKeys.content(targetInstanceId),
 			})
@@ -272,16 +276,27 @@ const processesQuery = useQuery(
 const playing = computed(() => (processesQuery.data.value?.length ?? 0) > 0)
 
 async function ensureCriticalContent(targetInstanceId: string) {
+	const started = performance.now()
 	await queryClient.ensureQueryData(
 		instanceContentQueryOptions(targetInstanceId, (error) => handleError(toError(error))),
+	)
+	console.info(
+		`[content_timing] frontend content query ${Math.round(performance.now() - started)} ms (${targetInstanceId})`,
 	)
 }
 
 async function ensureCriticalInstanceData(targetInstanceId: string) {
+	// This await is what keeps the page blank: the route-level <Suspense> has no
+	// fallback, so nothing renders until both queries below resolve. The log is
+	// therefore the wall-clock length of the white screen.
+	const started = performance.now()
 	await Promise.all([
 		queryClient.ensureQueryData(instanceDetailQueryOptions(targetInstanceId)),
 		ensureCriticalContent(targetInstanceId),
 	])
+	console.info(
+		`[content_timing] TOTAL blocking instance page load ${Math.round(performance.now() - started)} ms (${targetInstanceId})`,
+	)
 }
 
 function isUnmanagedInstanceError(error: unknown) {

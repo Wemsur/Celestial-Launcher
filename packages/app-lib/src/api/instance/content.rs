@@ -76,10 +76,21 @@ pub async fn get_content_items(
         instance_id,
         cache_behaviour
     );
+    let started = std::time::Instant::now();
     let result = crate::state::list_content(instance_id, None, cache_behaviour, &state).await;
     match &result {
-        Ok(items) => tracing::info!("get_content_items returned {} items for instance '{}'", items.len(), instance_id),
-        Err(e) => tracing::error!("get_content_items failed for instance '{}': {}", instance_id, e),
+        Ok(items) => tracing::info!(
+            "content_timing: TOTAL get_content_items {} ms ({} items) for instance '{}'",
+            started.elapsed().as_millis(),
+            items.len(),
+            instance_id
+        ),
+        Err(e) => tracing::error!(
+            "content_timing: TOTAL get_content_items FAILED after {} ms for instance '{}': {}",
+            started.elapsed().as_millis(),
+            instance_id,
+            e
+        ),
     }
     result
 }
@@ -87,7 +98,16 @@ pub async fn get_content_items(
 #[tracing::instrument]
 pub async fn refresh_content_updates(instance_id: &str) -> crate::Result<()> {
     let state = State::get().await?;
-    crate::state::refresh_content_updates(instance_id, &state).await
+    let started = std::time::Instant::now();
+    let result =
+        crate::state::refresh_content_updates(instance_id, &state).await;
+    tracing::info!(
+        "content_timing: TOTAL refresh_content_updates {} ms (ok={}) for instance '{}'",
+        started.elapsed().as_millis(),
+        result.is_ok(),
+        instance_id
+    );
+    result
 }
 
 #[tracing::instrument]

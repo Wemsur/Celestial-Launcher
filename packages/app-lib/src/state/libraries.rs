@@ -518,6 +518,7 @@ fn broken_instance(
 pub async fn list_instances_from_json(
     state: &State,
 ) -> crate::Result<Vec<Instance>> {
+    let started = std::time::Instant::now();
     let config = get_libraries_config(state).await?;
     let mut instances = Vec::new();
 
@@ -666,6 +667,13 @@ pub async fn list_instances_from_json(
             }
         }
     }
+
+    tracing::info!(
+        "content_timing: [json] list_instances_from_json {} ms ({} instances in {} libraries)",
+        started.elapsed().as_millis(),
+        instances.len(),
+        config.libraries.len()
+    );
 
     Ok(instances)
 }
