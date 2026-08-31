@@ -258,7 +258,13 @@ const contentQuery = useQuery(
 		enabled: !!instancePage.instanceId.value,
 	})),
 )
-const loading = ref(false)
+// True until the first content data lands, so the page shows its loading shell
+// instead of flashing an empty "no content installed" state. The instance layout
+// no longer blocks on the content list, which means this component can now mount
+// before the list exists — unless a previous visit already cached it.
+const loading = ref(
+	queryClient.getQueryData(instanceKeys.content(instancePage.instanceId.value)) === undefined,
+)
 const projects = ref<ContentItem[]>([])
 
 const installingBuffer = ref<ContentItem[]>([])

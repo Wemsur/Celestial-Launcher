@@ -275,6 +275,9 @@ pub(crate) async fn create_instance(
         let _ = io::remove_dir_all(&full_path).await;
     }
 
+    // Whether the create succeeded or was rolled back, the directory set moved.
+    libraries::invalidate_instance_list_cache();
+
     result
 }
 

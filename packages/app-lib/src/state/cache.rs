@@ -879,6 +879,14 @@ pub enum CacheBehaviour {
     MustRevalidate,
     // Ignore cache- always fetch updated data from origin
     Bypass,
+    /// Never touch the network on the caller's thread: serve whatever is in the
+    /// local cache, expired or not, and fetch everything else in the background.
+    ///
+    /// Unlike `StaleWhileRevalidate*`, this also refuses to block on keys that
+    /// are missing entirely — those are the ones that make a cold cache cost a
+    /// round trip per batch. Callers get a possibly incomplete answer straight
+    /// away and are expected to re-read once the background fetch lands.
+    LocalOnly,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1112,38 +1120,47 @@ impl CachedEntry {
         }
 
         if !remaining_keys.is_empty() {
-            let res = Self::fetch_many(
-                type_,
-                remaining_keys.clone(),
-                fetch_semaphore,
-                pool,
-            )
-            .await;
-
-            if res.is_err()
-                && cache_behaviour
-                    == CacheBehaviour::StaleWhileRevalidateSkipOffline
-            {
+            if cache_behaviour == CacheBehaviour::LocalOnly {
+                // Local-first: hand back what we have and let the background
+                // pass below fetch the rest. This is what keeps a cold metadata
+                // cache from turning the first paint into a network round trip.
                 for key in remaining_keys {
                     expired_keys.insert(key.to_string());
                 }
             } else {
-                let values = res?;
-
-                Self::upsert_many(
-                    &values.iter().map(|x| x.0.clone()).collect::<Vec<_>>(),
+                let res = Self::fetch_many(
+                    type_,
+                    remaining_keys.clone(),
+                    fetch_semaphore,
                     pool,
                 )
-                .await?;
+                .await;
 
-                if !values.is_empty() {
-                    return_vals.append(
-                        &mut values
-                            .into_iter()
-                            .filter(|(_, include)| *include)
-                            .map(|x| x.0)
-                            .collect::<Vec<_>>(),
-                    );
+                if res.is_err()
+                    && cache_behaviour
+                        == CacheBehaviour::StaleWhileRevalidateSkipOffline
+                {
+                    for key in remaining_keys {
+                        expired_keys.insert(key.to_string());
+                    }
+                } else {
+                    let values = res?;
+
+                    Self::upsert_many(
+                        &values.iter().map(|x| x.0.clone()).collect::<Vec<_>>(),
+                        pool,
+                    )
+                    .await?;
+
+                    if !values.is_empty() {
+                        return_vals.append(
+                            &mut values
+                                .into_iter()
+                                .filter(|(_, include)| *include)
+                                .map(|x| x.0)
+                                .collect::<Vec<_>>(),
+                        );
+                    }
                 }
             }
         }
@@ -1151,7 +1168,8 @@ impl CachedEntry {
         if !expired_keys.is_empty()
             && (cache_behaviour == CacheBehaviour::StaleWhileRevalidate
                 || cache_behaviour
-                    == CacheBehaviour::StaleWhileRevalidateSkipOffline)
+                    == CacheBehaviour::StaleWhileRevalidateSkipOffline
+                || cache_behaviour == CacheBehaviour::LocalOnly)
         {
             tokio::task::spawn(async move {
                 // TODO: if possible- find a way to do this without invoking state get
@@ -2215,13 +2233,14 @@ impl CachedEntry {
     /// Get modpack file hashes from cache
     pub async fn get_modpack_files(
         version_id: &str,
+        cache_behaviour: Option<CacheBehaviour>,
         pool: &SqlitePool,
         fetch_semaphore: &FetchSemaphore,
     ) -> crate::Result<Option<CachedModpackFiles>> {
         let entry = Self::get(
             CacheValueType::ModpackFiles,
             version_id,
-            None,
+            cache_behaviour,
             pool,
             fetch_semaphore,
         )

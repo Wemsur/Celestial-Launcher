@@ -1,6 +1,7 @@
 use super::sync_content_files::{
-    ContentSyncFreshness, project_type_for_file,
-    sync_instance_content_files_with_freshness,
+    ContentSyncFreshness, instance_files_fingerprint, load_cached_content_items,
+    project_type_for_file, spawn_content_refresh_for_instance,
+    store_cached_content_items, sync_instance_content_files_with_freshness,
 };
 use crate::State;
 use crate::pack::install_from::{PackFileHash, PackFormat};
@@ -85,13 +86,14 @@ pub(crate) async fn get_content_projects(
         }
     };
 
-    content_projects_for_scope(
+    Ok(content_projects_for_scope(
         &resolved,
         cache_behaviour,
         state,
         ContentFilter::All,
     )
-    .await
+    .await?
+    .projects)
 }
 
 pub(crate) async fn get_installed_project_ids_for_instance(
@@ -265,6 +267,7 @@ pub(crate) async fn list_content(
             Some((_, version_id)) => {
                 get_cached_modpack_identifiers(
                     &version_id,
+                    cache_behaviour,
                     &state.pool,
                     &state.api_semaphore,
                 )
@@ -294,10 +297,32 @@ pub(crate) async fn list_content(
     } else {
         ContentFilter::All
     };
-    let files =
+
+    // Second and later opens: a previous run stored the fully resolved items for
+    // this exact file list, so there is nothing left to ask SQLite or the API.
+    // Only the unfiltered, local-first read may use it — a caller that asked to
+    // revalidate wants the pipeline, and a modpack filter changes what belongs
+    // in the list. The file list still gets revalidated, just off this thread.
+    let unfiltered = matches!(filter, ContentFilter::All);
+    if unfiltered
+        && cache_behaviour == Some(CacheBehaviour::LocalOnly)
+        && let Some(items) =
+            load_cached_content_items(&resolved.instance, state)
+    {
+        tracing::info!(
+            "content_timing: [F] resolved item cache HIT ({} items) for '{}'",
+            items.len(),
+            instance_id
+        );
+        spawn_content_refresh_for_instance(&resolved.instance, state);
+        return Ok(items);
+    }
+
+    let scope_content =
         content_projects_for_scope(&resolved, cache_behaviour, state, filter)
             .await?;
-    let files = files.into_iter().collect::<Vec<_>>();
+    let files_fingerprint = scope_content.files_fingerprint;
+    let files = scope_content.projects.into_iter().collect::<Vec<_>>();
 
     let t_items = std::time::Instant::now();
     let items = content_files_to_content_items(
@@ -314,6 +339,15 @@ pub(crate) async fn list_content(
         files.len(),
         instance_id
     );
+    if unfiltered && let Ok(items) = &items {
+        store_cached_content_items(
+            &resolved.instance,
+            state,
+            files_fingerprint,
+            items.clone(),
+        )
+        .await;
+    }
     items
 }
 
@@ -351,7 +385,8 @@ pub(crate) async fn list_linked_modpack_content(
                     != crate::state::InstanceInstallStage::Installed,
             },
         )
-        .await?;
+        .await?
+        .projects;
         let files = files.into_iter().collect::<Vec<_>>();
 
         return content_files_to_content_items(
@@ -393,7 +428,8 @@ pub(crate) async fn list_linked_modpack_content(
     };
     let files =
         content_projects_for_scope(&resolved, cache_behaviour, state, filter)
-            .await?;
+            .await?
+            .projects;
     let files = files.into_iter().collect::<Vec<_>>();
 
     content_files_to_content_items(
@@ -828,12 +864,21 @@ pub(crate) async fn create_json_content_scope(
     })
 }
 
+/// A scope's content files, plus the identity of the synced file list they came
+/// from. The fingerprint is what lets the resolved items be cached: it says
+/// exactly which file list the items describe, so a later read can tell whether
+/// they still apply without trusting a timestamp.
+struct ScopeContent {
+    projects: DashMap<String, ContentFile>,
+    files_fingerprint: String,
+}
+
 async fn content_projects_for_scope(
     resolved: &ResolvedContentScope,
     cache_behaviour: Option<CacheBehaviour>,
     state: &State,
     filter: ContentFilter<'_>,
-) -> crate::Result<DashMap<String, ContentFile>> {
+) -> crate::Result<ScopeContent> {
     tracing::info!(
         "content_projects_for_scope: starting for instance '{}', content_set='{}'",
         resolved.instance.id,
@@ -852,6 +897,7 @@ async fn content_projects_for_scope(
         files.len(),
         resolved.instance.id
     );
+    let files_fingerprint = instance_files_fingerprint(&files);
     let t_db = std::time::Instant::now();
     let entries = sqlite::content_rows::get_content_entries(
         &resolved.content_set.id,
@@ -1033,7 +1079,10 @@ async fn content_projects_for_scope(
         );
     }
 
-    Ok(output)
+    Ok(ScopeContent {
+        projects: output,
+        files_fingerprint,
+    })
 }
 
 async fn get_installed_update_channels(
@@ -1533,12 +1582,17 @@ impl ModpackIdentifiers {
 
 async fn get_cached_modpack_identifiers(
     version_id: &str,
+    cache_behaviour: Option<CacheBehaviour>,
     pool: &SqlitePool,
     fetch_semaphore: &FetchSemaphore,
 ) -> crate::Result<Option<ModpackIdentifiers>> {
-    let Some(cached) =
-        CachedEntry::get_modpack_files(version_id, pool, fetch_semaphore)
-            .await?
+    let Some(cached) = CachedEntry::get_modpack_files(
+        version_id,
+        cache_behaviour,
+        pool,
+        fetch_semaphore,
+    )
+    .await?
     else {
         return Ok(None);
     };
@@ -1559,9 +1613,13 @@ async fn get_modpack_identifiers(
     pool: &SqlitePool,
     fetch_semaphore: &FetchSemaphore,
 ) -> crate::Result<ModpackIdentifiers> {
-    if let Some(cached) =
-        CachedEntry::get_modpack_files(version_id, pool, fetch_semaphore)
-            .await?
+    if let Some(cached) = CachedEntry::get_modpack_files(
+        version_id,
+        None,
+        pool,
+        fetch_semaphore,
+    )
+    .await?
     {
         if !cached.project_ids.is_empty() {
             return Ok(ModpackIdentifiers {

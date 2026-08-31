@@ -166,6 +166,8 @@ type CacheBehaviour =
 	| 'must_revalidate'
 	// Ignore cache- always fetch updated data from origin
 	| 'bypass'
+	// Never wait on the network: serve local data, fetch the rest in the background
+	| 'local_only'
 
 type MemorySettings = {
 	maximum: number

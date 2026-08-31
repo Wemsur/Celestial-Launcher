@@ -2215,6 +2215,16 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 						<KeepAlive include="LibraryPage">
 							<component :is="Component"></component>
 						</KeepAlive>
+						<!--
+							Without a fallback, a page that awaits anything in <script setup>
+							renders literally nothing while it does. The loading bar driven by
+							onSuspensePending is the only signal the user gets, so give the
+							viewport an empty placeholder of the right size rather than a
+							collapsed layout.
+						-->
+						<template #fallback>
+							<div class="h-full w-full" aria-busy="true"></div>
+						</template>
 					</Suspense>
 				</template>
 			</RouterView>

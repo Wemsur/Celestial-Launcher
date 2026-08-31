@@ -119,7 +119,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useOnline } from '@vueuse/core'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import { computed, type ComputedRef, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { computed, type ComputedRef, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 
 import ContextMenu from '@/components/ui/context-menu/index.vue'
@@ -235,22 +235,26 @@ useQuery(
 	})),
 )
 const instance = computed(() => instanceQuery.data.value)
+// The automatic update check is deliberately not part of the first paint: it
+// re-reads every installed file and revalidates against the API, and its result
+// only feeds an "update available" badge. It starts once the page has settled.
+const updateCheckAllowed = ref(false)
 useQuery(
 	computed(() => ({
 		queryKey: instanceKeys.contentUpdateCheck(instanceId.value),
 		queryFn: async () => {
 			const targetInstanceId = instanceId.value
-			const started = performance.now()
 			await refresh_content_updates(targetInstanceId)
-			console.info(
-				`[content_timing] refresh_content_updates ${Math.round(performance.now() - started)} ms (${targetInstanceId}), invalidating content -> the whole pipeline runs again`,
-			)
 			await queryClient.invalidateQueries({
 				queryKey: instanceKeys.content(targetInstanceId),
 			})
 			return targetInstanceId
 		},
-		enabled: !!instanceId.value && !offline.value && instance.value?.install_stage === 'installed',
+		enabled:
+			updateCheckAllowed.value &&
+			!!instanceId.value &&
+			!offline.value &&
+			instance.value?.install_stage === 'installed',
 		staleTime: 10 * 60_000,
 		gcTime: 30 * 60_000,
 		retry: false,
@@ -275,28 +279,14 @@ const processesQuery = useQuery(
 )
 const playing = computed(() => (processesQuery.data.value?.length ?? 0) > 0)
 
-async function ensureCriticalContent(targetInstanceId: string) {
-	const started = performance.now()
-	await queryClient.ensureQueryData(
-		instanceContentQueryOptions(targetInstanceId, (error) => handleError(toError(error))),
-	)
-	console.info(
-		`[content_timing] frontend content query ${Math.round(performance.now() - started)} ms (${targetInstanceId})`,
-	)
-}
-
 async function ensureCriticalInstanceData(targetInstanceId: string) {
-	// This await is what keeps the page blank: the route-level <Suspense> has no
-	// fallback, so nothing renders until both queries below resolve. The log is
-	// therefore the wall-clock length of the white screen.
-	const started = performance.now()
-	await Promise.all([
-		queryClient.ensureQueryData(instanceDetailQueryOptions(targetInstanceId)),
-		ensureCriticalContent(targetInstanceId),
-	])
-	console.info(
-		`[content_timing] TOTAL blocking instance page load ${Math.round(performance.now() - started)} ms (${targetInstanceId})`,
-	)
+	// Only the instance summary is awaited. The route-level <Suspense> has no
+	// content of its own until this resolves, so anything awaited here is a blank
+	// page: the content list used to be awaited too, which on a cold cache meant
+	// the frame, the title and the play button waited on a full filesystem scan.
+	// Content is now an ordinary query and the content tab renders its own
+	// loading state while it lands.
+	await queryClient.ensureQueryData(instanceDetailQueryOptions(targetInstanceId))
 }
 
 function isUnmanagedInstanceError(error: unknown) {
@@ -309,6 +299,21 @@ try {
 	if (isUnmanagedInstanceError(error)) await router.replace('/')
 	else handleError(toError(error))
 }
+
+// Let the page paint and the content list land before spending anything on the
+// update check. `requestIdleCallback` is not available in every webview build,
+// so a timeout backs it up.
+const UPDATE_CHECK_IDLE_DELAY_MS = 1_500
+onMounted(() => {
+	const allow = () => {
+		updateCheckAllowed.value = true
+	}
+	if (typeof window.requestIdleCallback === 'function') {
+		window.requestIdleCallback(allow, { timeout: UPDATE_CHECK_IDLE_DELAY_MS })
+	} else {
+		window.setTimeout(allow, UPDATE_CHECK_IDLE_DELAY_MS)
+	}
+})
 
 onBeforeRouteUpdate(async (to, from) => {
 	const targetInstanceId = String(to.params.id ?? '')

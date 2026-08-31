@@ -22,6 +22,7 @@ pub(crate) use self::commands::{
     dependencies_to_content_items, get_content_projects,
     get_installed_project_ids_for_instance, get_instance_install_candidates,
     get_linked_modpack_info, list_content, list_content_sets,
-    list_linked_modpack_content, refresh_content_updates, sync_content_files,
+    list_linked_modpack_content, refresh_content_updates,
+    resync_content_files, sync_content_files,
 };
 pub(crate) mod watcher;

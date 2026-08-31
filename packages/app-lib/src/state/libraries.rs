@@ -7,6 +7,8 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex};
+use std::time::{Duration, Instant};
 use tokio::fs as tokio_fs;
 use tracing::{debug, info, warn};
 
@@ -185,6 +187,7 @@ impl InstanceJson {
         let json_path = dir.join("instance.json");
         let content = serde_json::to_string_pretty(self)?;
         fs::write(&json_path, content)?;
+        invalidate_instance_list_cache();
         Ok(())
     }
 
@@ -342,6 +345,7 @@ impl CelestialJson {
         let json_path = dir.join("celestial.json");
         let content = serde_json::to_string_pretty(self)?;
         fs::write(&json_path, content)?;
+        invalidate_instance_list_cache();
         Ok(())
     }
 
@@ -486,6 +490,7 @@ pub async fn save_libraries_config(
     let path = state.directories.settings_dir.join(LIBRARIES_FILE_NAME);
     let content = serde_json::to_string_pretty(config)?;
     fs::write(&path, content)?;
+    invalidate_instance_list_cache();
     Ok(())
 }
 
@@ -518,11 +523,74 @@ fn broken_instance(
 pub async fn list_instances_from_json(
     state: &State,
 ) -> crate::Result<Vec<Instance>> {
-    let started = std::time::Instant::now();
+    if let Some(cached) = cached_instance_list() {
+        return Ok(cached);
+    }
+
     let config = get_libraries_config(state).await?;
+    let library_count = config.libraries.len();
+    let libraries = config.libraries;
+
+    let started = std::time::Instant::now();
+    // The walk is entirely blocking IO — one `read_dir` per library plus a
+    // `read_to_string` per instance — so it must not run on a runtime worker.
+    let instances =
+        tokio::task::spawn_blocking(move || scan_libraries(&libraries)).await?;
+
+    tracing::info!(
+        "content_timing: [json] list_instances_from_json {} ms ({} instances in {} libraries)",
+        started.elapsed().as_millis(),
+        instances.len(),
+        library_count
+    );
+
+    store_instance_list(&instances);
+
+    Ok(instances)
+}
+
+/// How long a listing may be reused before the directories are walked again.
+///
+/// Every writer in this module invalidates the cache explicitly, so this is only
+/// a backstop for changes made outside the launcher (a mod manager dropping in a
+/// folder, the user editing `instance.json` by hand). It is deliberately short:
+/// the point is to collapse the four to six identical listings a single instance
+/// page open fires within a few milliseconds of each other, not to hold the
+/// filesystem state for any length of time.
+const INSTANCE_LIST_CACHE_TTL: Duration = Duration::from_millis(750);
+
+static INSTANCE_LIST_CACHE: LazyLock<
+    Mutex<Option<(Instant, Vec<Instance>)>>,
+> = LazyLock::new(|| Mutex::new(None));
+
+fn cached_instance_list() -> Option<Vec<Instance>> {
+    let cache = INSTANCE_LIST_CACHE.lock().ok()?;
+    let (stored_at, instances) = cache.as_ref()?;
+    (stored_at.elapsed() < INSTANCE_LIST_CACHE_TTL)
+        .then(|| instances.clone())
+}
+
+fn store_instance_list(instances: &[Instance]) {
+    if let Ok(mut cache) = INSTANCE_LIST_CACHE.lock() {
+        *cache = Some((Instant::now(), instances.to_vec()));
+    }
+}
+
+/// Drop the cached instance listing.
+///
+/// Must be called by anything that creates, removes, or rewrites an instance
+/// directory or `libraries.json`; otherwise the next read can serve a listing
+/// from before the write.
+pub(crate) fn invalidate_instance_list_cache() {
+    if let Ok(mut cache) = INSTANCE_LIST_CACHE.lock() {
+        *cache = None;
+    }
+}
+
+fn scan_libraries(libraries: &[LibraryInfo]) -> Vec<Instance> {
     let mut instances = Vec::new();
 
-    for library in &config.libraries {
+    for library in libraries {
         let lib_path = Path::new(&library.path);
         if !lib_path.exists() {
             continue;
@@ -668,14 +736,7 @@ pub async fn list_instances_from_json(
         }
     }
 
-    tracing::info!(
-        "content_timing: [json] list_instances_from_json {} ms ({} instances in {} libraries)",
-        started.elapsed().as_millis(),
-        instances.len(),
-        config.libraries.len()
-    );
-
-    Ok(instances)
+    instances
 }
 
 pub(crate) async fn migrate_instances_from_db(

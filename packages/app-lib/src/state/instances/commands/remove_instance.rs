@@ -42,6 +42,10 @@ pub(crate) async fn remove_instance(
         }
     }
 
+    // The directory is gone; a cached listing taken before this point would
+    // still show it.
+    libraries::invalidate_instance_list_cache();
+
     Ok(())
 }
 

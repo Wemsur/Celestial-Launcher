@@ -42,6 +42,13 @@ pub(crate) async fn check_content_updates(
     .await
 }
 
+/// Re-check every installed file for a newer version.
+///
+/// `MustRevalidate` rather than `Bypass`: this runs automatically when an
+/// instance page is opened, and `Bypass` made that a guaranteed network round
+/// trip per loader/channel group every single time. `MustRevalidate` still
+/// refuses to serve an expired answer, so an actual update is never missed —
+/// it just reuses entries that are still fresh.
 pub(crate) async fn refresh_content_updates(
     instance_id: &str,
     state: &State,
@@ -49,7 +56,7 @@ pub(crate) async fn refresh_content_updates(
     check_content_updates_with_cache_behaviours(
         instance_id,
         None,
-        Some(CacheBehaviour::Bypass),
+        Some(CacheBehaviour::MustRevalidate),
         state,
     )
     .await?;

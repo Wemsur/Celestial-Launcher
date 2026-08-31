@@ -155,7 +155,7 @@ pub async fn init_watcher() -> crate::Result<FileWatcher> {
                                             && let Ok(state) =
                                                 State::get().await
                                             && let Err(error) =
-                                                crate::state::sync_content_files(
+                                                crate::state::resync_content_files(
                                                     &emit_instance_id,
                                                     &state,
                                                 )
