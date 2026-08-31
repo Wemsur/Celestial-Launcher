@@ -1283,6 +1283,12 @@
   "app.nav.upgrade-to-modrinth-plus": {
     "message": "Upgrade to Modrinth+"
   },
+  "app.navigation.disable-translation": {
+    "message": "Show original content"
+  },
+  "app.navigation.enable-translation": {
+    "message": "Translate content"
+  },
   "app.navigation.enter-split-view": {
     "message": "Open beside the list"
   },
@@ -1550,6 +1556,27 @@
   "app.settings.tabs.resource-management": {
     "message": "Resource management"
   },
+  "app.settings.translation.cache.button": {
+    "message": "Clear cache"
+  },
+  "app.settings.translation.cache.description": {
+    "message": "Translations are kept for 7 days so the same text is only fetched once."
+  },
+  "app.settings.translation.cache.title": {
+    "message": "Translation cache"
+  },
+  "app.settings.translation.description": {
+    "message": "The translate button on the discover and project pages translates content written by authors into the launcher language. All services below are free and need no API key of your own."
+  },
+  "app.settings.translation.service.description": {
+    "message": "If one service is unreachable or refuses requests, pick another. Applies immediately."
+  },
+  "app.settings.translation.service.title": {
+    "message": "Translation service"
+  },
+  "app.settings.translation.title": {
+    "message": "Content translation"
+  },
   "app.sidebar.playing-as": {
     "message": "Playing as"
   },
@@ -1729,6 +1756,12 @@
   },
   "app.survey.title": {
     "message": "Hey there Modrinth user!"
+  },
+  "app.translation.failed.text": {
+    "message": "{service} could not be reached: {message}"
+  },
+  "app.translation.failed.title": {
+    "message": "Translation failed"
   },
   "app.update-popup.body.download-complete": {
     "message": "Modrinth App v{version} has finished downloading. Reload to update now, or automatically when you close Modrinth App."

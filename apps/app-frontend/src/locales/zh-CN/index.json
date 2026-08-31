@@ -776,6 +776,12 @@
   "app.nav.upgrade-to-modrinth-plus": {
     "message": "升级至Modrinth+"
   },
+  "app.navigation.disable-translation": {
+    "message": "显示原文"
+  },
+  "app.navigation.enable-translation": {
+    "message": "翻译内容"
+  },
   "app.navigation.enter-split-view": {
     "message": "在列表旁打开"
   },
@@ -1007,6 +1013,27 @@
   "app.settings.tabs.resource-management": {
     "message": "资源管理"
   },
+  "app.settings.translation.cache.button": {
+    "message": "清除缓存"
+  },
+  "app.settings.translation.cache.description": {
+    "message": "译文会保留 7 天，同一段文字只需请求一次。"
+  },
+  "app.settings.translation.cache.title": {
+    "message": "翻译缓存"
+  },
+  "app.settings.translation.description": {
+    "message": "发现页和项目页的翻译按钮会把作者撰写的内容翻译成启动器界面语言。下列服务均为免费服务，无需你自己的 API 密钥。"
+  },
+  "app.settings.translation.service.description": {
+    "message": "若某个服务无法访问或拒绝请求，可换用其他服务。切换后立即生效。"
+  },
+  "app.settings.translation.service.title": {
+    "message": "翻译服务"
+  },
+  "app.settings.translation.title": {
+    "message": "内容翻译"
+  },
   "app.sidebar.playing-as": {
     "message": "游玩账户"
   },
@@ -1174,6 +1201,12 @@
   },
   "app.survey.title": {
     "message": "嗨，Modrinth用户！"
+  },
+  "app.translation.failed.text": {
+    "message": "无法访问 {service}：{message}"
+  },
+  "app.translation.failed.title": {
+    "message": "翻译失败"
   },
   "app.update-popup.body.download-complete": {
     "message": "Celestial Launcher v{version} 更新已下载完成！立即重启更新，或退出时自动安装。"

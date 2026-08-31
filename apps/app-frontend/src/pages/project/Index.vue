@@ -20,7 +20,7 @@
 				</Teleport>
 				<ProjectPageHeader
 					v-else
-					:project="data"
+					:project="headerProject"
 					:project-v3="projectV3"
 					:show-status-badge="data.status !== 'approved'"
 					stack-actions-when-narrow
@@ -306,6 +306,7 @@ import {
 } from '@/composables/instances/use-server-status-query'
 import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
+import { useContentTranslation } from '@/composables/use-content-translation.ts'
 import {
 	isProjectDetailRoute,
 	isSplitProjectRoute,
@@ -408,6 +409,17 @@ const { installingServerProjects, playServerProject, showAddServerToInstanceModa
 	injectServerInstall()
 const installing = ref(false)
 const data = shallowRef(null)
+
+const { translate: translateContent } = useContentTranslation()
+
+/*
+ * Only the header summary is cloned here (`description` is the summary in the v2
+ * shape). Everything else keeps the original object, and the description card
+ * translates its own rendered HTML.
+ */
+const headerProject = computed(() =>
+	data.value ? { ...data.value, description: translateContent(data.value.description ?? '') } : null,
+)
 
 function getProjectBreadcrumbSummary(projectId) {
 	const identifier = Array.isArray(projectId) ? projectId[0] : projectId

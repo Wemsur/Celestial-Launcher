@@ -15,6 +15,7 @@ import {
 	CompassIcon,
 	ExternalIcon,
 	HomeIcon,
+	LanguagesIcon,
 	LeftArrowIcon,
 	LibraryIcon,
 	LogInIcon,
@@ -108,6 +109,7 @@ import WindowControls from '@/components/ui/WindowControls.vue'
 import { useCheckDisableMouseover } from '@/composables/macCssFix.js'
 import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
+import { isTranslationScope, useContentTranslation } from '@/composables/use-content-translation.ts'
 import { useError } from '@/composables/use-error.js'
 import { useSplitView } from '@/composables/use-split-view.ts'
 import { useTheme } from '@/composables/use-theme.ts'
@@ -238,6 +240,13 @@ const forceSidebar = computed(
 )
 const sidebarVisible = computed(() => sidebarToggled.value || forceSidebar.value)
 const { splitViewActive, canUseSplitView, toggleSplitView } = useSplitView()
+const {
+	enabled: translationEnabled,
+	error: translationError,
+	toggle: toggleTranslation,
+} = useContentTranslation()
+/** Only shown where there is content to translate; leaving turns it off again. */
+const canTranslateContent = computed(() => isTranslationScope(route))
 /** Split view keeps the sidebar (it holds the discover filters) but narrows it. */
 const APP_SPLIT_SIDEBAR_WIDTH = 200
 const sidebarWidth = computed(() =>
@@ -602,6 +611,22 @@ const messages = defineMessages({
 		id: 'app.navigation.exit-split-view',
 		defaultMessage: 'Close split view',
 	},
+	enableTranslation: {
+		id: 'app.navigation.enable-translation',
+		defaultMessage: 'Translate content',
+	},
+	disableTranslation: {
+		id: 'app.navigation.disable-translation',
+		defaultMessage: 'Show original content',
+	},
+	translationFailedTitle: {
+		id: 'app.translation.failed.title',
+		defaultMessage: 'Translation failed',
+	},
+	translationFailedText: {
+		id: 'app.translation.failed.text',
+		defaultMessage: '{service} could not be reached: {message}',
+	},
 	updateDownloadMissingVersion: {
 		id: 'app.update.download-error.missing-version',
 		defaultMessage: 'Failed to download update: no version available',
@@ -692,6 +717,21 @@ const messages = defineMessages({
 		id: 'app.sidebar.playing-as',
 		defaultMessage: 'Playing as',
 	},
+})
+
+// A free translation endpoint that is blocked or out of quota is reported once,
+// so the user knows to pick another service instead of seeing nothing happen.
+watch(translationError, (error) => {
+	if (!error) return
+
+	addNotification({
+		title: formatMessage(messages.translationFailedTitle),
+		text: formatMessage(messages.translationFailedText, {
+			service: error.service,
+			message: error.message,
+		}),
+		type: 'error',
+	})
 })
 
 function handleAdsConsentRequired(required) {
@@ -2072,6 +2112,19 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 				<Breadcrumbs />
 			</div>
 			<section data-tauri-drag-region class="flex shrink-0 ml-auto items-center">
+				<IconButton
+					v-if="canTranslateContent"
+					:type="translationEnabled ? 'base' : 'quiet'"
+					:label="
+						formatMessage(
+							translationEnabled ? messages.disableTranslation : messages.enableTranslation,
+						)
+					"
+					class="mr-3"
+					@click="toggleTranslation()"
+				>
+					<LanguagesIcon />
+				</IconButton>
 				<IconButton
 					v-if="canUseSplitView"
 					:type="splitViewActive ? 'base' : 'quiet'"

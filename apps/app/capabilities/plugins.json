@@ -53,6 +53,27 @@
 				},
 				{
 					"url": "https://*.taila228c5.ts.net/*"
+				},
+				{
+					"url": "https://edge.microsoft.com/*"
+				},
+				{
+					"url": "https://api-edge.cognitive.microsofttranslator.com/*"
+				},
+				{
+					"url": "https://www.bing.com/*"
+				},
+				{
+					"url": "https://cn.bing.com/*"
+				},
+				{
+					"url": "https://transmart.qq.com/*"
+				},
+				{
+					"url": "https://translate.googleapis.com/*"
+				},
+				{
+					"url": "https://api.mymemory.translated.net/*"
 				}
 			]
 		},

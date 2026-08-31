@@ -580,6 +580,99 @@ async fn load_library_sort_directions(
     Ok(directions)
 }
 
+// 7. 翻译功能的独立存储目录：<appdata>/translation/
+//    settings.json 存翻译服务选择，cache.json 存译文缓存。
+//    这里只负责读写整个文件，schema 和 7 天过期清理都由前端负责，
+//    这样以后加字段不用改 Rust。
+fn translation_dir(
+    app_handle: &tauri::AppHandle,
+) -> Result<std::path::PathBuf, String> {
+    let mut dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
+
+    dir.push("translation");
+    if !dir.exists() {
+        fs::create_dir_all(&dir)
+            .map_err(|e| format!("创建翻译目录失败: {}", e))?;
+    }
+
+    Ok(dir)
+}
+
+/// 文件不存在时返回空串，前端据此回退到默认值。
+fn read_translation_file(
+    app_handle: &tauri::AppHandle,
+    name: &str,
+) -> Result<String, String> {
+    let path = translation_dir(app_handle)?.join(name);
+    if !path.exists() {
+        return Ok(String::new());
+    }
+
+    fs::read_to_string(&path)
+        .map_err(|e| format!("读取 {} 失败: {}", name, e))
+}
+
+/// 先写 .tmp 再改名：写入中途退出也不会留下被截断的坏 JSON。
+fn write_translation_file(
+    app_handle: &tauri::AppHandle,
+    name: &str,
+    contents: &str,
+) -> Result<(), String> {
+    let dir = translation_dir(app_handle)?;
+    let tmp = dir.join(format!("{}.tmp", name));
+
+    fs::write(&tmp, contents)
+        .map_err(|e| format!("写入 {} 失败: {}", name, e))?;
+    fs::rename(&tmp, dir.join(name))
+        .map_err(|e| format!("替换 {} 失败: {}", name, e))
+}
+
+#[tauri::command]
+async fn load_translation_settings(
+    app_handle: tauri::AppHandle,
+) -> Result<String, String> {
+    read_translation_file(&app_handle, "settings.json")
+}
+
+#[tauri::command]
+async fn save_translation_settings(
+    app_handle: tauri::AppHandle,
+    contents: String,
+) -> Result<(), String> {
+    write_translation_file(&app_handle, "settings.json", &contents)
+}
+
+#[tauri::command]
+async fn load_translation_cache(
+    app_handle: tauri::AppHandle,
+) -> Result<String, String> {
+    read_translation_file(&app_handle, "cache.json")
+}
+
+#[tauri::command]
+async fn save_translation_cache(
+    app_handle: tauri::AppHandle,
+    contents: String,
+) -> Result<(), String> {
+    write_translation_file(&app_handle, "cache.json", &contents)
+}
+
+#[tauri::command]
+async fn clear_translation_cache(
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let path = translation_dir(&app_handle)?.join("cache.json");
+    if path.exists() {
+        fs::remove_file(&path)
+            .map_err(|e| format!("删除翻译缓存失败: {}", e))?;
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 async fn get_background_as_base64(app_handle: tauri::AppHandle) -> Result<String, String> {
     let mut path = app_handle
@@ -910,6 +1003,11 @@ fn main() {
             load_hue_value,
             save_library_sort_directions,
             load_library_sort_directions,
+            load_translation_settings,
+            save_translation_settings,
+            load_translation_cache,
+            save_translation_cache,
+            clear_translation_cache,
             check_for_import,
             import_old_data,
             set_dont_show_import_modal,

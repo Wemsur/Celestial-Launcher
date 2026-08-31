@@ -43,6 +43,7 @@ import ContextMenu from '@/components/ui/context-menu/index.vue'
 import { useAppServerBrowse } from '@/composables/browse/use-app-server-browse'
 import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
+import { useContentTranslation } from '@/composables/use-content-translation.ts'
 import {
     browseListLocation,
     browsePathFor,
@@ -1313,10 +1314,32 @@ const dismissedPhotosensitivityFilterWarning = computed({
     },
 })
 
+const { translate: translateContent } = useContentTranslation()
+
+/*
+ * Card summaries are translated here instead of inside `packages/ui`: the shared
+ * layout renders whatever `projectHits` holds, and keys written after the
+ * `...searchState` spread below override it, so the shared package stays untouched.
+ * The clones are shallow and keep every id, so install and selection still match.
+ */
+function withTranslatedSummary<T extends { summary?: string | null }>(hit: T): T {
+    if (!hit.summary) return hit
+
+    const summary = translateContent(hit.summary)
+    return summary === hit.summary ? hit : { ...hit, summary }
+}
+
+const translatedProjectHits = computed(() =>
+    searchState.projectHits.value.map(withTranslatedSummary),
+)
+const translatedServerHits = computed(() => searchState.serverHits.value.map(withTranslatedSummary))
+
 provideBrowseManager({
     tags,
     projectType,
     ...searchState,
+    projectHits: translatedProjectHits,
+    serverHits: translatedServerHits,
     advancedFiltersCollapsed,
     dismissedPhotosensitivityFilterWarning,
     getProjectLink: (result: Labrinth.Search.v3.ResultSearchProject) =>
