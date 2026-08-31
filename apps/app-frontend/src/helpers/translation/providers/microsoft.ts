@@ -15,11 +15,13 @@
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 
 import {
+	type Attempted,
 	bcp47Target,
 	BROWSER_USER_AGENT,
 	describeFailure,
-	isTransientTranslationError,
-	sleep,
+	mapWithPool,
+	settle,
+	TransientTranslationError,
 	type TranslationProvider,
 	withRetry,
 } from '../shared'
@@ -33,16 +35,27 @@ const BING_TRANSLATE_URL = 'https://www.bing.com/ttranslatev3'
 const TOKEN_TTL_MS = 9 * 60 * 1000
 /** The Bing page token lives roughly an hour. */
 const BING_SESSION_TTL_MS = 25 * 60 * 1000
-/** Spacing between the Bing single-text requests. */
-const BING_REQUEST_GAP_MS = 120
+/** Bing takes one text per request, so a few go out at once. */
+const BING_CONCURRENCY = 3
 
 let token: { value: string; expiresAt: number } | null = null
+let tokenPromise: Promise<string> | null = null
 let edgeAuthBroken = false
 let bingSession: BingSession | null = null
+let bingSessionPromise: Promise<BingSession> | null = null
 
-async function getToken(force = false): Promise<string> {
-	if (!force && token && token.expiresAt > Date.now()) return token.value
+/** Shared between workers: several batches must not each fetch a token. */
+function getToken(force = false): Promise<string> {
+	if (!force && token && token.expiresAt > Date.now()) return Promise.resolve(token.value)
 
+	tokenPromise ??= fetchToken().finally(() => {
+		tokenPromise = null
+	})
+
+	return tokenPromise
+}
+
+async function fetchToken(): Promise<string> {
 	const response = await tauriFetch(AUTH_URL, {
 		method: 'GET',
 		headers: {
@@ -104,9 +117,20 @@ interface BingSession {
 	expiresAt: number
 }
 
-async function getBingSession(force = false): Promise<BingSession> {
-	if (!force && bingSession && bingSession.expiresAt > Date.now()) return bingSession
+/** Shared between workers: six parallel texts must not scrape the page six times. */
+function getBingSession(force = false): Promise<BingSession> {
+	if (!force && bingSession && bingSession.expiresAt > Date.now()) {
+		return Promise.resolve(bingSession)
+	}
 
+	bingSessionPromise ??= fetchBingSession().finally(() => {
+		bingSessionPromise = null
+	})
+
+	return bingSessionPromise
+}
+
+async function fetchBingSession(): Promise<BingSession> {
 	const response = await tauriFetch(BING_PAGE_URL, {
 		method: 'GET',
 		headers: {
@@ -137,7 +161,10 @@ async function getBingSession(force = false): Promise<BingSession> {
 	return session
 }
 
-type BingResponse = { translations?: { text?: string }[] }[]
+type BingResponse =
+	| { translations?: { text?: string }[] }[]
+	/** Bing reports its own errors with HTTP 200 and this shape. */
+	| { statusCode?: number; errorMessage?: string }
 
 async function bingPost(text: string, target: string, session: BingSession): Promise<Response> {
 	const url = `${BING_TRANSLATE_URL}?isVertical=1&&IG=${session.ig}&IID=${session.iid}`
@@ -162,53 +189,66 @@ async function bingPost(text: string, target: string, session: BingSession): Pro
 }
 
 async function translateOneViaBing(text: string, target: string): Promise<string> {
-	let response = await bingPost(text, target, await getBingSession())
+	// Two passes: a token that went stale mid-session is worth one refresh.
+	for (let attempt = 0; attempt < 2; attempt++) {
+		const response = await bingPost(text, target, await getBingSession(attempt > 0))
 
-	// A stale anti-abuse token comes back as 400/401, not as a JSON error.
-	if (response.status === 400 || response.status === 401) {
-		response = await bingPost(text, target, await getBingSession(true))
+		if (response.status === 400 || response.status === 401) continue
+		if (!response.ok) throw await describeFailure(response, 'Bing translator failed')
+
+		const payload = (await response.json()) as BingResponse
+
+		if (Array.isArray(payload)) {
+			const translated = payload[0]?.translations?.[0]?.text
+			if (typeof translated === 'string') return translated
+
+			throw new Error(
+				`Bing translator returned an unexpected payload: ${JSON.stringify(payload).slice(0, 180)}`,
+			)
+		}
+
+		// Bing reports a rejected token as HTTP 200 with the status in the body.
+		if (payload?.statusCode === 400 || payload?.statusCode === 401) continue
+
+		const reason = payload?.errorMessage ?? JSON.stringify(payload).slice(0, 180)
+		throw new Error(`Bing translator refused the request: ${reason}`)
 	}
 
-	if (!response.ok) throw await describeFailure(response, 'Bing translator failed')
-
-	const payload = (await response.json()) as BingResponse
-	const translated = Array.isArray(payload) ? payload[0]?.translations?.[0]?.text : undefined
-	if (typeof translated !== 'string') {
-		throw new Error(
-			`Bing translator returned an unexpected payload: ${JSON.stringify(payload).slice(0, 180)}`,
-		)
-	}
-
-	return translated
+	throw new TransientTranslationError('Bing translator rejected its own session token twice')
 }
 
-async function translateViaBing(texts: string[], target: string): Promise<string[]> {
-	const results: string[] = []
+async function translateViaBing(texts: string[], target: string): Promise<(string | null)[]> {
+	const results = await mapWithPool<string, Attempted>(texts, BING_CONCURRENCY, async (text) => {
+		try {
+			return { text: await withRetry(() => translateOneViaBing(text, target)) }
+		} catch (error) {
+			// One bad text must not throw away the ones that worked.
+			return { error }
+		}
+	})
 
-	for (const [index, text] of texts.entries()) {
-		if (index > 0) await sleep(BING_REQUEST_GAP_MS)
-		results.push(await withRetry(() => translateOneViaBing(text, target)))
-	}
-
-	return results
+	return settle(results)
 }
 
 export const microsoftProvider: TranslationProvider = {
 	id: 'microsoft',
 	label: 'Microsoft (Edge / Bing)',
 	// Sized for the Bing fallback: a batch this big is a single Edge request but
-	// a dozen sequential Bing ones, and anything larger feels stuck.
+	// a handful of Bing round trips, and anything larger feels stuck.
 	maxItems: 12,
 	maxChars: 3000,
 	targetLang: bcp47Target,
 	async translate(texts, target) {
 		if (!edgeAuthBroken) {
 			try {
-				return await withRetry(() => translateViaEdge(texts, target))
+				// One attempt only: route 1 is a bonus, and making the first batch of a
+				// page wait through retries on a dead endpoint is what made translations
+				// show up minutes late.
+				return await translateViaEdge(texts, target)
 			} catch (error) {
-				// Throttling is not a reason to abandon the good route.
-				if (isTransientTranslationError(error)) throw error
-
+				// Any failure of route 1 — including a throttled one — hands the rest
+				// of the session to Bing. Keeping the batch waiting on the route that
+				// just failed is what made the first request of a page never arrive.
 				edgeAuthBroken = true
 				console.warn('Edge translator unavailable, falling back to Bing Translator:', error)
 			}

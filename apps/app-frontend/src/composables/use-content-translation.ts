@@ -14,6 +14,7 @@ import {
 	DEFAULT_TRANSLATION_SERVICE,
 	getTranslationProvider,
 	isTranslationServiceId,
+	TRANSLATION_PROVIDERS,
 	type TranslationServiceId,
 } from '@/helpers/translation/services'
 import { isTransientTranslationError, sleep } from '@/helpers/translation/shared'
@@ -237,7 +238,12 @@ async function runBatch(batch: Batch): Promise<void> {
 
 		batch.keys.forEach((key, index) => {
 			const translated = results[index]
-			if (typeof translated !== 'string' || !translated) return
+			// `null` is the provider saying it could not do this one while the rest
+			// of the batch went through. Remember it, or the next render re-queues it.
+			if (typeof translated !== 'string' || !translated) {
+				failed.add(key)
+				return
+			}
 
 			next[key] = translated
 			timestamps.set(key, now)
@@ -376,7 +382,27 @@ async function enable(): Promise<void> {
 	errorReported = false
 
 	await ensureSettingsLoaded()
+	await ensureUsableService()
 	await ensureCacheLoaded()
+}
+
+/**
+ * Not every service covers every launcher language — TranSmart, the default,
+ * offers seventeen. A service that cannot handle the current one would translate
+ * nothing at all and say nothing about it, so switch to one that can.
+ */
+async function ensureUsableService(): Promise<void> {
+	if (targetLang.value) return
+
+	const usable = TRANSLATION_PROVIDERS.find((provider) => {
+		try {
+			return Boolean(provider.targetLang(targetLocale.value))
+		} catch {
+			return false
+		}
+	})
+
+	if (usable && isTranslationServiceId(usable.id)) await setService(usable.id)
 }
 
 function disable(): void {

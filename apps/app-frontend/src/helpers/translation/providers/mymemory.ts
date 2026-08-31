@@ -9,9 +9,12 @@
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 
 import {
+	type Attempted,
 	BROWSER_USER_AGENT,
 	describeFailure,
+	mapWithPool,
 	regionTarget,
+	settle,
 	splitByBytes,
 	TransientTranslationError,
 	type TranslationProvider,
@@ -22,6 +25,8 @@ const TRANSLATE_URL = 'https://api.mymemory.translated.net/get'
 const SOURCE_LANG = 'en'
 /** The documented cap is 500 bytes; leave room for the delimiter handling. */
 const MAX_BYTES_PER_REQUEST = 450
+/** Requests in flight. Its free quota is small, so this stays low. */
+const CONCURRENCY = 2
 
 interface MyMemoryResponse {
 	responseData?: { translatedText?: string }
@@ -78,20 +83,24 @@ async function translateOne(text: string, target: string): Promise<string> {
 export const myMemoryProvider: TranslationProvider = {
 	id: 'mymemory',
 	label: 'MyMemory',
-	maxItems: 1,
-	maxChars: MAX_BYTES_PER_REQUEST,
+	// One request per text (or per 450-byte piece of it), so batches stay small.
+	maxItems: 4,
+	maxChars: 1800,
 	targetLang: regionTarget,
 	async translate(texts, target) {
-		const results: string[] = []
-
-		for (const text of texts) {
-			const translated: string[] = []
-			for (const chunk of splitByBytes(text, MAX_BYTES_PER_REQUEST)) {
-				translated.push(await withRetry(() => translateOne(chunk, target)))
+		const results = await mapWithPool<string, Attempted>(texts, CONCURRENCY, async (text) => {
+			try {
+				const translated: string[] = []
+				for (const chunk of splitByBytes(text, MAX_BYTES_PER_REQUEST)) {
+					translated.push(await withRetry(() => translateOne(chunk, target)))
+				}
+				return { text: translated.join(' ') }
+			} catch (error) {
+				// One refused text must not throw away the ones that worked.
+				return { error }
 			}
-			results.push(translated.join(' '))
-		}
+		})
 
-		return results
+		return settle(results)
 	},
 }

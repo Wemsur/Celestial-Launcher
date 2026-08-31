@@ -12,8 +12,8 @@ import type { TranslationProvider } from './shared'
 export type { TranslationProvider } from './shared'
 
 export const TRANSLATION_PROVIDERS = [
-	microsoftProvider,
 	transmartProvider,
+	microsoftProvider,
 	googleProvider,
 	myMemoryProvider,
 ] as const
@@ -22,8 +22,12 @@ export const TRANSLATION_PROVIDERS = [
 // `TranslationProvider`, so their `id` widens to `string`.
 export type TranslationServiceId = 'microsoft' | 'transmart' | 'google' | 'mymemory'
 
-/** Batches, handles Chinese scripts properly, and reachable from most networks. */
-export const DEFAULT_TRANSLATION_SERVICE: TranslationServiceId = 'microsoft'
+/**
+ * Takes 30 texts in a single request, needs no token handshake at all, and is
+ * the one option reachable from mainland China without a proxy — so a fresh
+ * install starts here. Only affects first run; the choice is persisted.
+ */
+export const DEFAULT_TRANSLATION_SERVICE: TranslationServiceId = 'transmart'
 
 export function getTranslationProvider(id: string): TranslationProvider {
 	return (

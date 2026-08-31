@@ -73,6 +73,9 @@
 					"url": "https://translate.googleapis.com/*"
 				},
 				{
+					"url": "https://clients5.google.com/*"
+				},
+				{
 					"url": "https://api.mymemory.translated.net/*"
 				}
 			]

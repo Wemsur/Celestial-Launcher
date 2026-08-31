@@ -19,8 +19,56 @@ export interface TranslationProvider {
 	maxChars: number
 	/** Maps a launcher locale such as `zh-CN` to the provider's own code. */
 	targetLang: (locale: string) => string
-	/** Returns exactly one translation per input, in the same order. */
-	translate: (texts: string[], target: string) => Promise<string[]>
+	/**
+	 * Returns one entry per input, in the same order. `null` means "this one
+	 * could not be done" — providers that send one request per text use it so a
+	 * single bad text does not throw away the whole batch. Throwing is reserved
+	 * for a failure that hit every text.
+	 */
+	translate: (texts: string[], target: string) => Promise<(string | null)[]>
+}
+
+/**
+ * Runs `task` over every item with a bounded number of requests in flight.
+ * Used by the providers that cannot batch server-side; results stay in order.
+ */
+export async function mapWithPool<T, R>(
+	items: T[],
+	limit: number,
+	task: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+	const results = new Array<R>(items.length)
+	let cursor = 0
+
+	const worker = async () => {
+		for (;;) {
+			const index = cursor++
+			if (index >= items.length) return
+			results[index] = await task(items[index], index)
+		}
+	}
+
+	await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+	return results
+}
+
+/**
+ * The per-text outcome of a provider that sends one request per text: either a
+ * translation or the error that stopped it. Providers turn this into `null`
+ * entries, or rethrow when nothing at all got through.
+ */
+export type Attempted = { text: string } | { error: unknown }
+
+export function settle(results: Attempted[]): (string | null)[] {
+	const done = results.filter((result): result is { text: string } => 'text' in result)
+	if (done.length === 0) {
+		// Nothing got through: let the caller see the real error (and retry it if
+		// it was a transient one) instead of silently returning untranslated text.
+		const first = results.find((result): result is { error: unknown } => 'error' in result)
+		throw first?.error ?? new Error('Translation produced no results')
+	}
+
+	return results.map((result) => ('text' in result ? result.text : null))
 }
 
 /**
@@ -48,18 +96,38 @@ export function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+export async function readBody(response: Response): Promise<string> {
+	try {
+		return await response.text()
+	} catch {
+		// The body is a nicety; the status is the part that always exists.
+		return ''
+	}
+}
+
+/** An anti-abuse interstitial is a whole HTML page; the markup itself is noise. */
+export function looksLikeHtml(body: string): boolean {
+	return /^\s*<(!doctype|html)/i.test(body)
+}
+
+function summarize(body: string): string {
+	if (!looksLikeHtml(body)) return body.trim().replace(/\s+/g, ' ').slice(0, 180)
+
+	const title = /<title[^>]*>([^<]*)<\/title>/i.exec(body)?.[1]?.trim()
+	return title ? `HTML page "${title}"` : 'HTML page'
+}
+
 /**
  * Builds an error message that includes what the server actually said. These
  * endpoints are undocumented, so the response body is the only way to tell a
- * changed request shape from a block.
+ * changed request shape from a block. Pass `body` when it has already been read.
  */
-export async function describeFailure(response: Response, what: string): Promise<Error> {
-	let detail = ''
-	try {
-		detail = (await response.text()).trim().replace(/\s+/g, ' ').slice(0, 180)
-	} catch {
-		// The body is a nicety; the status is the part that always exists.
-	}
+export async function describeFailure(
+	response: Response,
+	what: string,
+	body?: string,
+): Promise<Error> {
+	const detail = summarize(body ?? (await readBody(response)))
 
 	const message = detail ? `${what} (${response.status}): ${detail}` : `${what} (${response.status})`
 	return isTransientStatus(response.status)
