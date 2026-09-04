@@ -351,6 +351,7 @@ const messages = defineMessages({
 					type="colored"
 					color="red"
 					size="sm"
+					icon-only
 					@click="emit('stop')"
 				>
 					<StopCircleIcon aria-hidden="true" />
@@ -387,6 +388,7 @@ const messages = defineMessages({
 					type="colored"
 					color="brand"
 					size="sm"
+					icon-only
 					@click="emit('play')"
 				>
 					<SpinnerIcon v-if="startingInstance && playingWorld" class="animate-spin" />

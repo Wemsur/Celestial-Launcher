@@ -114,7 +114,7 @@ import { useAppSettings } from '@/composables/use-app-settings.ts'
 import { isTranslationScope, useContentTranslation } from '@/composables/use-content-translation.ts'
 import { useError } from '@/composables/use-error.js'
 import { useSplitView } from '@/composables/use-split-view.ts'
-import { useUiPreferences } from '@/composables/use-ui-preferences.ts'
+import { ensureUiPreferencesLoaded, useUiPreferences } from '@/composables/use-ui-preferences.ts'
 import { useTheme } from '@/composables/use-theme.ts'
 import { config } from '@/config'
 import {
@@ -135,6 +135,7 @@ import { can_current_user_use_shared_instances, get as getInstance, list, run } 
 import { cancelLogin, get as getCreds, login, logout } from '@/helpers/mr_auth.ts'
 import { mergeUrlQuery, parseModrinthLink } from '@/helpers/project-links.ts'
 import { get as getSettings, set as setSettings } from '@/helpers/settings.ts'
+import { UI_PREFERENCE_DEFAULTS } from '@/helpers/ui-preferences-store'
 import { get_opening_command, initialize_state } from '@/helpers/state'
 import { checkForUpdate, downloadAndRunRelease } from '@/helpers/update'
 import { hasActivePride26Midas, hasMidasBadge } from '@/helpers/user-campaigns.ts'
@@ -222,18 +223,31 @@ const INTERCOM_BUBBLE_DEFAULT_PADDING = 20
 const PRIDE_FUNDRAISER_END_DATE = new Date('2026-07-01T00:00:00Z').getTime()
 const credentials = ref()
 let credentialsRefreshId = 0
-const sidebarToggled = ref(true)
-watch(
-	() => appSettings.toggleSidebar,
-	(toggleSidebar) => {
-		sidebarToggled.value = !toggleSidebar
-	},
-)
-const importModal = ref(null)
+/**
+ * Whether the right sidebar is currently open.
+ *
+ * The collapse button is always offered; only its starting position is
+ * configurable, through `uiPreferences.sidebarVisibleOnStartup`. That preference
+ * describes launch and nothing else — a later click is not written back to it.
+ *
+ * The DB's `toggle_sidebar` used to gate both the button and the launch state.
+ * Nothing reads it any more (the column stays, untouched), so the button is
+ * unconditional.
+ */
+const sidebarToggled = ref(UI_PREFERENCE_DEFAULTS.sidebarVisibleOnStartup)
+/** Set by the first click, so a slow file read cannot undo a deliberate toggle. */
+let sidebarTouched = false
 
-const unsubscribeSidebarToggle = appSettings.$subscribe(() => {
-	sidebarToggled.value = !appSettings.toggleSidebar
+function setSidebarToggled(visible) {
+	sidebarTouched = true
+	sidebarToggled.value = visible
+}
+
+void ensureUiPreferencesLoaded().then(() => {
+	if (!sidebarTouched) sidebarToggled.value = uiPreferences.sidebarVisibleOnStartup
 })
+
+const importModal = ref(null)
 /*
  * Discover teleports its filters into the sidebar, but that is no reason to take the
  * collapse button away: the list, search and sorting all keep working without it, so
@@ -857,7 +871,6 @@ async function setupApp() {
         advanced_rendering,
         onboarded,
         default_page,
-        toggle_sidebar,
         developer_mode,
         feature_flags,
         pending_update_toast_for_version
@@ -878,7 +891,6 @@ async function setupApp() {
 	appTheme.preferred = theme
 	appTheme.advancedRendering = advanced_rendering
 	appSettings.hideNametagSkinsPage = hide_nametag_skins_page
-	appSettings.toggleSidebar = toggle_sidebar
 	appSettings.devMode = developer_mode
 	Object.assign(appSettings.featureFlags, feature_flags)
 	stateInitialized.value = true
@@ -2175,12 +2187,12 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 					<SquareSplitHorizontalIcon />
 				</IconButton>
 				<IconButton
-					v-if="!forceSidebar && appSettings.toggleSidebar"
+					v-if="!forceSidebar"
 					:type="sidebarToggled ? 'base' : 'quiet'"
 					:label="formatMessage(messages.nextImage)"
 					class="mr-3 transition-transform"
 					:class="{ 'rotate-180': !sidebarToggled }"
-					@click="sidebarToggled = !sidebarToggled"
+					@click="setSidebarToggled(!sidebarToggled)"
 				>
 					<RightArrowIcon />
 				</IconButton>

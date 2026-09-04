@@ -194,6 +194,7 @@ onMounted(() => {
 					type="colored"
 					color="red"
 					size="sm"
+					icon-only
 					@click="stop"
 				>
 					<StopCircleIcon aria-hidden="true" />
@@ -212,6 +213,7 @@ onMounted(() => {
 					type="colored"
 					color="green"
 					size="sm"
+					icon-only
 					@click="play"
 				>
 					<SpinnerIcon v-if="loading" class="animate-spin" />

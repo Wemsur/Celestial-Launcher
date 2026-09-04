@@ -6557,6 +6557,12 @@
   "app.appearance-settings.toggle-sidebar.description": {
     "defaultMessage": "默认隐藏右侧边栏，并添加一个显示或隐藏它的按钮。"
   },
+  "app.behavior-settings.sidebar-on-startup.title": {
+    "defaultMessage": "默认显示右侧边栏"
+  },
+  "app.behavior-settings.sidebar-on-startup.description": {
+    "defaultMessage": "启动应用时右侧边栏是否已经展开。"
+  },
   "app.appearance-settings.skip-non-essential-warnings.title": {
     "defaultMessage": "跳过非必要警告"
   },

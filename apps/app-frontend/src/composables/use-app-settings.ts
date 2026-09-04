@@ -45,7 +45,6 @@ function notifySubscribers() {
 const appSettings = reactive({
 
 	hideNametagSkinsPage: false,
-	toggleSidebar: false,
 	devMode: false,
 	featureFlags,
 
@@ -59,7 +58,6 @@ const appSettings = reactive({
 // Watch any change on appSettings and notify subscribers
 watch(
 	() => ({
-		toggleSidebar: appSettings.toggleSidebar,
 		hideNametagSkinsPage: appSettings.hideNametagSkinsPage,
 		devMode: appSettings.devMode,
 	}),

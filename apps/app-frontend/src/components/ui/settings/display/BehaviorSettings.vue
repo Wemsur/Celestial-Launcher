@@ -51,13 +51,13 @@ const messages = defineMessages({
 		id: 'app.appearance-settings.minimize-launcher.description',
 		defaultMessage: 'Minimize Modrinth App when Minecraft starts.',
 	},
-	toggleSidebarTitle: {
-		id: 'app.appearance-settings.toggle-sidebar.title',
-		defaultMessage: 'Hide right sidebar',
+	sidebarOnStartupTitle: {
+		id: 'app.behavior-settings.sidebar-on-startup.title',
+		defaultMessage: 'Show the right sidebar on startup',
 	},
-	toggleSidebarDescription: {
-		id: 'app.appearance-settings.toggle-sidebar.description',
-		defaultMessage: 'Hide the right sidebar by default and add a button to show or hide it.',
+	sidebarOnStartupDescription: {
+		id: 'app.behavior-settings.sidebar-on-startup.description',
+		defaultMessage: 'Whether the right sidebar is already open when the app launches.',
 	},
 	jumpBackIntoWorldsTitle: {
 		id: 'app.appearance-settings.jump-back-into-worlds.title',
@@ -123,7 +123,8 @@ const messages = defineMessages({
 
 type BehaviorSettingsState = {
 	minimizeApp: boolean
-	hideRightSidebar: boolean
+	/** File-backed: the sidebar's state at launch, nothing more. */
+	showSidebarOnStartup: boolean
 	showJumpIn: boolean
 	showJumpInSidebar: boolean
 	compactInstanceCards: boolean
@@ -144,7 +145,7 @@ await ensureUiPreferencesLoaded()
 function getBehaviorSettingsState(settings: AppSettings): BehaviorSettingsState {
 	return {
 		minimizeApp: settings.hide_on_process_start,
-		hideRightSidebar: settings.toggle_sidebar,
+		showSidebarOnStartup: uiPreferences.sidebarVisibleOnStartup,
 		showJumpIn: settings.feature_flags[worldsInHomeFlag] ?? DEFAULT_FEATURE_FLAGS[worldsInHomeFlag],
 		showJumpInSidebar: uiPreferences.jumpBackInSidebar,
 		compactInstanceCards:
@@ -171,7 +172,6 @@ const { saved, current, changes, saving, hasChanges, reset, save } = useSavable(
 		const nextSettings: AppSettings = {
 			...persistedSettings.value,
 			hide_on_process_start: value.minimizeApp,
-			toggle_sidebar: value.hideRightSidebar,
 			hide_nametag_skins_page: value.hideNametag,
 			feature_flags: {
 				...persistedSettings.value.feature_flags,
@@ -184,9 +184,11 @@ const { saved, current, changes, saving, hasChanges, reset, save } = useSavable(
 		}
 
 		await set(nextSettings)
-		await setUiPreferences({ jumpBackInSidebar: value.showJumpInSidebar })
+		await setUiPreferences({
+			jumpBackInSidebar: value.showJumpInSidebar,
+			sidebarVisibleOnStartup: value.showSidebarOnStartup,
+		})
 		persistedSettings.value = nextSettings
-		appSettings.toggleSidebar = value.hideRightSidebar
 		appSettings.hideNametagSkinsPage = value.hideNametag
 		appSettings.featureFlags[worldsInHomeFlag] = value.showJumpIn
 		appSettings.featureFlags[compactInstanceCardsFlag] = value.compactInstanceCards
@@ -240,11 +242,11 @@ onBeforeUnmount(() => {
 			<div class="flex items-center justify-between gap-4">
 				<div>
 					<h3 class="m-0 text-lg font-semibold text-contrast">
-						{{ formatMessage(messages.toggleSidebarTitle) }}
+						{{ formatMessage(messages.sidebarOnStartupTitle) }}
 					</h3>
-					<p class="m-0 mt-1">{{ formatMessage(messages.toggleSidebarDescription) }}</p>
+					<p class="m-0 mt-1">{{ formatMessage(messages.sidebarOnStartupDescription) }}</p>
 				</div>
-				<Toggle id="toggle-sidebar" v-model="current.hideRightSidebar" />
+				<Toggle id="sidebar-on-startup" v-model="current.showSidebarOnStartup" />
 			</div>
 		</div>
 	</section>

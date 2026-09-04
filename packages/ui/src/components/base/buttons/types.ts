@@ -55,6 +55,8 @@ export interface ButtonProps {
 	nativeType?: ButtonNativeType
 	disabled?: boolean
 	loading?: boolean
+	/** Square: drops the horizontal padding so width matches the size's height. */
+	iconOnly?: boolean
 }
 
 export type ButtonLinkDestination =

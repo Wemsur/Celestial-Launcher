@@ -18,10 +18,17 @@ export interface UiPreferencesFile {
 	version: 1
 	/** Compact "Jump in" list at the top of the right sidebar, above the play account. */
 	jumpBackInSidebar: boolean
+	/**
+	 * Whether the right sidebar starts open. Only the *initial* state — clicking the
+	 * collapse button afterwards is not written back, so the setting stays a
+	 * statement about launch rather than a live mirror of the sidebar.
+	 */
+	sidebarVisibleOnStartup: boolean
 }
 
 export const UI_PREFERENCE_DEFAULTS: Omit<UiPreferencesFile, 'version'> = {
 	jumpBackInSidebar: true,
+	sidebarVisibleOnStartup: true,
 }
 
 /** `null` when nothing has been saved yet, so the caller keeps its defaults. */

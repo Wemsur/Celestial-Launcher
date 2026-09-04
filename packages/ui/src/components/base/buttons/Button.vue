@@ -25,6 +25,7 @@ defineExpose({ element })
 		:type="props.type"
 		:color="props.color"
 		:size="props.size"
+		:icon-only="props.iconOnly"
 		:interaction="props.interaction"
 		:native-type="props.nativeType"
 		:disabled="props.disabled || props.loading"
