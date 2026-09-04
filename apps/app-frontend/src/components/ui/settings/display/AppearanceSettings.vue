@@ -217,7 +217,7 @@ const delete_background = async() => {
                         <h2 class="m-0 text-lg font-semibold text-contrast">实例卡片图标底纹</h2>
                         <p class="m-0 mt-1">
                             用实例图标的高度模糊版本作为卡片背景，并让卡片半透明。没有图标的实例改用图标那个按 ID
-                            生成的底色。关闭「高级渲染」时自动退回纯色。
+                            生成的底色。
                         </p>
                     </div>
                     <Toggle
