@@ -486,7 +486,7 @@ async fn save_instance_card_icon_bg(
     Ok(())
 }
 
-/// 文件或键缺失时返回 false —— 新效果默认关闭，不打扰已有用户。
+/// 文件或键缺失时返回 true —— 这个底纹是默认外观，没写过配置的用户也该看到。
 #[tauri::command]
 async fn load_instance_card_icon_bg(
     app_handle: tauri::AppHandle,
@@ -500,7 +500,7 @@ async fn load_instance_card_icon_bg(
     config_path.push("celestial_settings.json");
 
     if !config_path.exists() {
-        return Ok(false);
+        return Ok(true);
     }
 
     let content = fs::read_to_string(&config_path)
@@ -512,7 +512,7 @@ async fn load_instance_card_icon_bg(
     Ok(json
         .get("instance_card_icon_bg")
         .and_then(|v| v.as_bool())
-        .unwrap_or(false))
+        .unwrap_or(true))
 }
 
 // 3. 保存色相值

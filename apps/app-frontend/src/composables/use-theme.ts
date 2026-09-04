@@ -102,11 +102,11 @@ async function toggleBgBlur(enabled: boolean): Promise<void> {
  * `custom_backgrounds/celestial_settings.json`, with localStorage as a
  * first-paint cache so cards do not visibly change style a moment after load.
  *
- * Off by default: it is a decorative change to every card in the library, so
- * existing users keep the flat cards until they ask for this.
+ * On by default — this is how instance cards are meant to look; the toggle exists
+ * for people who want the flat ones back.
  */
 const INSTANCE_CARD_ICON_BG_STORAGE_KEY = 'celestial_instance_card_icon_bg'
-const INSTANCE_CARD_ICON_BG_DEFAULT = false
+const INSTANCE_CARD_ICON_BG_DEFAULT = true
 
 function cachedInstanceCardIconBg(): boolean {
 	const saved = localStorage.getItem(INSTANCE_CARD_ICON_BG_STORAGE_KEY)
