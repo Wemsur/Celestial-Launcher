@@ -722,6 +722,42 @@ async fn save_split_view_settings(
         .map_err(|e| format!("替换分屏配置失败: {}", e))
 }
 
+// 界面偏好：<appdata>/interface/ui-preferences.json
+//
+// 刻意不放进 app.db 的 settings.feature_flags：那个字段在 Rust 侧是
+// HashMap<FeatureFlag, bool>，FeatureFlag 是个严格枚举，出现未知 key 会让整个 map
+// 反序列化失败并被 unwrap_or_default() 静默清空——等于把用户所有开关一起丢掉。
+// 和 split-view.json 一样只读写整个文件、schema 由前端拥有，所以以后再加界面偏好
+// 不需要动 Rust，也永远不会牵动数据库。
+/// 文件不存在时返回空串，前端据此回退到默认值。
+#[tauri::command]
+async fn load_ui_preferences(
+    app_handle: tauri::AppHandle,
+) -> Result<String, String> {
+    let path = interface_dir(&app_handle)?.join("ui-preferences.json");
+    if !path.exists() {
+        return Ok(String::new());
+    }
+
+    fs::read_to_string(&path)
+        .map_err(|e| format!("读取界面偏好失败: {}", e))
+}
+
+/// 先写 .tmp 再改名，理由同上。
+#[tauri::command]
+async fn save_ui_preferences(
+    app_handle: tauri::AppHandle,
+    contents: String,
+) -> Result<(), String> {
+    let dir = interface_dir(&app_handle)?;
+    let tmp = dir.join("ui-preferences.json.tmp");
+
+    fs::write(&tmp, contents)
+        .map_err(|e| format!("写入界面偏好失败: {}", e))?;
+    fs::rename(&tmp, dir.join("ui-preferences.json"))
+        .map_err(|e| format!("替换界面偏好失败: {}", e))
+}
+
 #[tauri::command]
 async fn get_background_as_base64(app_handle: tauri::AppHandle) -> Result<String, String> {
     let mut path = app_handle
@@ -1059,6 +1095,8 @@ fn main() {
             clear_translation_cache,
             load_split_view_settings,
             save_split_view_settings,
+            load_ui_preferences,
+            save_ui_preferences,
             check_for_import,
             import_old_data,
             set_dont_show_import_modal,

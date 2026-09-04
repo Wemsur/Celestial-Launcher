@@ -39,7 +39,11 @@ export async function loadInstanceContentSkeleton(
 	try {
 		const contentItems = await get_content_skeleton(path)
 		return { path, contentItems, modpack: null, partial: true }
-	} catch {
+	} catch (error) {
+		// Not surfaced to the user — the real query reports its own failures — but
+		// not silent either: a rejected invoke here (a missing Tauri permission, say)
+		// would otherwise look exactly like "the placeholder just never helps".
+		console.debug('[content] skeleton placeholder unavailable', error)
 		return null
 	}
 }

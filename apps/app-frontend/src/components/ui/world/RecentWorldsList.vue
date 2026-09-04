@@ -16,7 +16,6 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import InstanceItem from '@/components/ui/world/InstanceItem.vue'
 import WorldItem from '@/components/ui/world/WorldItem.vue'
 import { useAppEvent } from '@/composables/use-app-event'
-import { useAppSettings } from '@/composables/use-app-settings.ts'
 import { handleSevereError } from '@/composables/use-error.js'
 import { trackEvent } from '@/helpers/analytics'
 import { kill, run } from '@/helpers/instance'
@@ -47,9 +46,12 @@ const messages = defineMessages({
 
 const props = defineProps<{
 	recentInstances: GameInstance[]
+	/**
+	 * Sidebar presentation: always one column, short rows, smaller heading. The
+	 * wide home-page layout is the non-compact default.
+	 */
+	compact?: boolean
 }>()
-
-const appSettings = useAppSettings()
 
 const jumpBackInItems = ref<JumpBackInItem[]>([])
 const loading = ref(true)
@@ -62,7 +64,12 @@ const MAX_JUMP_BACK_IN = 5
 const MAX_NEW_INSTANCES = 3
 const MAX_LINUX_POPULATES = 3
 const ITEM_DRAG_DISTANCE = 92
+const COMPACT_ITEM_DRAG_DISTANCE = 56
 const STORAGE_KEY = 'modrinth-jump-back-in-count'
+
+const itemDragDistance = computed(() =>
+	props.compact ? COMPACT_ITEM_DRAG_DISTANCE : ITEM_DRAG_DISTANCE,
+)
 
 const storedVisibleCount = Number.parseInt(localStorage.getItem(STORAGE_KEY) ?? '', 10)
 const visibleItemLimit = ref(
@@ -135,7 +142,7 @@ function onResizePointerDown(event: PointerEvent) {
 
 function onResizePointerMove(event: PointerEvent) {
 	if (!resizing.value) return
-	const target = dragStartCount + Math.round((event.clientY - dragStartY) / ITEM_DRAG_DISTANCE)
+	const target = dragStartCount + Math.round((event.clientY - dragStartY) / itemDragDistance.value)
 	const isOverdragging = target < 1 || target > maxVisibleItems.value
 	if (isOverdragging && !wasOverdragging) {
 		flashOverdrag()
@@ -177,7 +184,11 @@ type WorldJumpBackInItem = BaseJumpBackInItem & {
 
 type JumpBackInItem = InstanceJumpBackInItem | WorldJumpBackInItem
 
-const showWorlds = computed(() => appSettings.getFeatureFlag('worlds_in_home'))
+// Worlds are always part of "jump back in" now. Visibility is decided per
+// location instead — `worlds_in_home` gates the home page, the file-backed
+// `jumpBackInSidebar` preference gates the sidebar — so reading either one here
+// would mean turning one place off silently stripped world rows out of the other.
+const showWorlds = computed(() => true)
 
 watch([() => props.recentInstances, () => showWorlds.value], async () => {
 	await populateJumpBackIn().catch(() => {
@@ -388,25 +399,41 @@ onUnmounted(() => {
 	<Accordion
 		v-if="loading || jumpBackInItems.length > 0"
 		open-by-default
-		button-class="group mt-1 mb-3 flex w-fit cursor-pointer items-center border-0 bg-transparent p-0 text-left"
+		:button-class="
+			compact
+				? 'group mb-2 flex w-fit cursor-pointer items-center border-0 bg-transparent p-0 text-left'
+				: 'group mt-1 mb-3 flex w-fit cursor-pointer items-center border-0 bg-transparent p-0 text-left'
+		"
 	>
 		<template #title>
-			<span class="flex items-center gap-1 text-2xl font-semibold leading-none text-contrast mr-1">
+			<span
+				class="flex items-center gap-1 leading-none text-contrast mr-1"
+				:class="compact ? 'text-base font-medium text-primary' : 'text-2xl font-semibold'"
+			>
 				{{ formatMessage(messages.jumpIn) }}
 			</span>
 		</template>
-		<div v-if="loading" class="text-center py-4">
-			<LoaderCircleIcon class="mx-auto size-8 animate-spin text-contrast" />
+		<div v-if="loading" :class="compact ? 'py-2 text-center' : 'text-center py-4'">
+			<LoaderCircleIcon
+				class="mx-auto animate-spin text-contrast"
+				:class="compact ? 'size-5' : 'size-8'"
+			/>
 		</div>
-		<div v-else class="grid-when-huge relative flex w-full flex-col gap-3">
+		<div
+			v-else
+			class="relative flex w-full flex-col"
+			:class="compact ? 'gap-2' : 'grid-when-huge gap-3'"
+		>
 			<TransitionGroup name="jump-back-in-item">
 				<div
 					v-for="item in visibleJumpBackInItems"
 					:key="`${item.instance.id}-${item.type === 'world' ? getWorldIdentifier(item.world) : 'instance'}`"
-					class="jump-back-in-item min-w-0"
+					class="min-w-0"
+					:class="compact ? 'jump-back-in-item-compact' : 'jump-back-in-item'"
 				>
 					<WorldItem
 						v-if="item.type === 'world'"
+						:compact="compact"
 						:world="item.world"
 						:playing-instance="runningInstances.includes(item.instance.id)"
 						:playing-world="
@@ -465,6 +492,7 @@ onUnmounted(() => {
 					/>
 					<InstanceItem
 						v-else
+						:compact="compact"
 						:instance="item.instance"
 						:last_played="item.sort_time"
 						:newly-added="item.newly_added"
@@ -482,7 +510,8 @@ onUnmounted(() => {
 				:aria-valuemin="1"
 				:aria-valuemax="maxVisibleItems"
 				:aria-valuenow="visibleItemCount"
-				class="group/resize relative inset-x-0 bottom-0 flex h-6 -mt-3 w-1/3 mx-auto cursor-ns-resize touch-none select-none items-center justify-center"
+				class="group/resize relative inset-x-0 bottom-0 mx-auto flex w-1/3 cursor-ns-resize touch-none select-none items-center justify-center"
+				:class="compact ? 'h-4 -mt-2' : 'h-6 -mt-3'"
 				@pointerdown="onResizePointerDown"
 				@pointermove="onResizePointerMove"
 				@pointerup="endResize"
@@ -517,6 +546,11 @@ onUnmounted(() => {
 	overflow: hidden;
 }
 
+.jump-back-in-item-compact {
+	height: 3rem;
+	overflow: hidden;
+}
+
 .jump-back-in-item-enter-active,
 .jump-back-in-item-leave-active {
 	transition:
@@ -543,6 +577,11 @@ onUnmounted(() => {
 		opacity: 1;
 		transform: none;
 		height: 5rem;
+	}
+
+	.jump-back-in-item-compact.jump-back-in-item-enter-from,
+	.jump-back-in-item-compact.jump-back-in-item-leave-to {
+		height: 3rem;
 	}
 }
 </style>

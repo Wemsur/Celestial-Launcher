@@ -53,6 +53,12 @@ const props = defineProps<{
 	instance: GameInstance
 	last_played: Dayjs
 	newlyAdded?: boolean
+	/**
+	 * Single-line row for the narrow sidebar (~268px usable): icon, name, and one
+	 * icon-only action. Everything secondary moves into the row's tooltip, since
+	 * the wide layout's four-column grid cannot fit there.
+	 */
+	compact?: boolean
 }>()
 
 const messages = defineMessages({
@@ -96,6 +102,17 @@ const loader = computed(() => {
 
 const loading = ref(false)
 const playing = ref(false)
+
+/** Secondary details, folded into a tooltip when the row has no space for them. */
+const compactTooltip = computed(() => {
+	const parts = [`${loader.value} ${props.instance.game_version ?? ''}`.trim()]
+	if (props.newlyAdded || !props.last_played) {
+		parts.push(formatMessage(messages.neverPlayed))
+	} else {
+		parts.push(formatDateTime(props.last_played.toDate()))
+	}
+	return parts.filter(Boolean).join(' · ')
+})
 
 const play = async (event: MouseEvent) => {
 	event?.stopPropagation()
@@ -154,6 +171,56 @@ onMounted(() => {
 			/>
 		</template>
 		<div
+			v-if="compact"
+			v-tooltip="compactTooltip"
+			class="clickable-card light-sense flex items-center gap-2 border border-surface-4 rounded-2xl smart-clickable:highlight-on-hover transition-[filter] ease-out [--hover-brightness:1.1] min-h-12 p-2"
+			:class="newlyAdded ? 'border-dashed bg-surface-2' : 'bg-bg-raised border-solid'"
+		>
+			<Avatar
+				:src="getInstanceIconUrl(instanceIcon)"
+				:tint-by="instance.id"
+				no-shadow
+				class="!rounded-lg shrink-0"
+				size="32px"
+			/>
+			<div class="min-w-0 flex-1 truncate text-sm font-semibold text-contrast">
+				{{ instance.name }}
+			</div>
+			<div data-no-card-click class="shrink-0 smart-clickable:allow-pointer-events">
+				<Button
+					v-if="playing && !loading"
+					v-tooltip="formatMessage(commonMessages.stopButton)"
+					:aria-label="formatMessage(commonMessages.stopButton)"
+					type="colored"
+					color="red"
+					size="sm"
+					@click="stop"
+				>
+					<StopCircleIcon aria-hidden="true" />
+				</Button>
+				<Button
+					v-else
+					v-tooltip="
+						instance.quarantined
+							? formatMessage(messages.lockedTooltip)
+							: playing
+								? formatMessage(messages.alreadyOpenTooltip)
+								: formatMessage(commonMessages.playButton)
+					"
+					:aria-label="formatMessage(commonMessages.playButton)"
+					:disabled="instance.quarantined || playing || loading"
+					type="colored"
+					color="green"
+					size="sm"
+					@click="play"
+				>
+					<SpinnerIcon v-if="loading" class="animate-spin" />
+					<PlayIcon v-else aria-hidden="true" />
+				</Button>
+			</div>
+		</div>
+		<div
+			v-else
 			class="clickable-card light-sense grid grid-cols-[auto_minmax(0,3fr)_minmax(0,4fr)_auto] items-center gap-2 border border-surface-4 rounded-[20px] smart-clickable:highlight-on-hover transition-[filter] ease-out [--hover-brightness:1.1] min-h-20 p-3"
 			:class="newlyAdded ? 'border-dashed bg-surface-2' : 'bg-bg-raised border-solid'"
 		>

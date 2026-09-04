@@ -8,8 +8,7 @@ import {
 } from '@modrinth/ui'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
-import { computed, inject, onActivated, onUnmounted, provide, ref, shallowRef, watch, watchEffect } from 'vue'
-import dayjs from 'dayjs'
+import { computed, inject, onActivated, onUnmounted, provide, type Ref, ref, shallowRef, watch, watchEffect } from 'vue'
 
 import ContextMenu from '@/components/ui/context-menu/index.vue'
 import LibrarySection from '@/components/ui/library/index.vue'
@@ -35,6 +34,13 @@ const { hasCreatedInstance, isReady } = injectOnboardingChecklist()
 const showCreationModal = inject<() => void>('showCreationModal')
 const pageOptions = ref<InstanceType<typeof ContextMenu>>()
 const appSettings = useAppSettings()
+
+// Unfiltered and sorted most-recently-played first, provided by App.vue so the
+// home page and the sidebar copy of "jump back in" share one `list()` call.
+// "Jump in" is about the whole launcher, so it deliberately ignores the library
+// tab in view.
+const recentInstances = inject<Ref<GameInstance[]>>('recentInstances', ref([]))
+const showJumpBackInHome = computed(() => appSettings.getFeatureFlag('worlds_in_home'))
 
 const messages = defineMessages({
 	home: {
@@ -62,19 +68,6 @@ onActivated(homeBreadcrumb.reset)
 const instances = ref<GameInstance[]>([])
 let latestInstanceFetch = 0
 
-// "Jump in" is about the whole launcher, not the selected library tab, so it
-// gets its own unfiltered list. Sharing the tab-filtered one made the row
-// unmount/remount (it is an async-setup component behind a `v-if`) on every
-// library switch, which read as a flash.
-const allInstances = ref<GameInstance[]>([])
-let latestAllInstanceFetch = 0
-
-const recentInstances = computed(() =>
-	allInstances.value
-		.slice()
-		.sort((a, b) => dayjs(b.last_played ?? b.created).diff(dayjs(a.last_played ?? a.created))),
-)
-
 async function fetchInstances(filter?: string) {
 	const fetchId = ++latestInstanceFetch
 	try {
@@ -89,21 +82,12 @@ async function fetchInstances(filter?: string) {
 	}
 }
 
-async function fetchAllInstances() {
-	const fetchId = ++latestAllInstanceFetch
-	const nextInstances = await list().catch(() => [])
-	if (fetchId === latestAllInstanceFetch) {
-		allInstances.value = nextInstances
-	}
-}
-
 if (hasCreatedInstance.value) {
-	await Promise.all([fetchInstances(), fetchAllInstances()])
+	await fetchInstances()
 }
 
 useAppEvent('instance', () => {
 	fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value)
-	fetchAllInstances()
 })
 useAppEvent('instance_groups_changed', () => fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value))
 
@@ -123,7 +107,6 @@ async function refreshInstances() {
 			activeTab.value = 'all'
 		}
 		await fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value)
-		await fetchAllInstances()
 	} finally {
 		isRefreshingInstances.value = false
 	}
@@ -259,7 +242,6 @@ async function addLibrary() {
 		addLibraryName.value = ''
 		await loadLibraries()
 		fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value)
-		fetchAllInstances()
 	} catch (e) {
 		handleError(e instanceof Error ? e : new Error(String(e)))
 	}
@@ -316,7 +298,6 @@ async function removeLibrary() {
 		closeLibrarySettingsModal()
 		await loadLibraries()
 		fetchInstances('all')
-		fetchAllInstances()
 	} catch (e) {
 		handleError(e instanceof Error ? e : new Error(String(e)))
 	}
@@ -455,7 +436,7 @@ function handlePageOption({ option }: { option: string }) {
 			</div>
 		</Modal>
 		<RecentWorldsList
-			v-if="recentInstances?.length > 0 && appSettings.getFeatureFlag('worlds_in_home')"
+			v-if="showJumpBackInHome && recentInstances.length > 0"
 			:recent-instances="recentInstances"
 		/>
 

@@ -71,6 +71,7 @@ import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { type } from '@tauri-apps/plugin-os'
 import { saveWindowState, StateFlags } from '@tauri-apps/plugin-window-state'
+import dayjs from 'dayjs'
 import { $fetch } from 'ofetch'
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
@@ -106,12 +107,14 @@ import SharedInstanceInviteHandler from '@/components/ui/shared-instances/shared
 import SplashScreen from '@/components/ui/SplashScreen.vue'
 import SurveyPopup from '@/components/ui/SurveyPopup.vue'
 import WindowControls from '@/components/ui/WindowControls.vue'
+import RecentWorldsList from '@/components/ui/world/RecentWorldsList.vue'
 import { useCheckDisableMouseover } from '@/composables/macCssFix.js'
 import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
 import { isTranslationScope, useContentTranslation } from '@/composables/use-content-translation.ts'
 import { useError } from '@/composables/use-error.js'
 import { useSplitView } from '@/composables/use-split-view.ts'
+import { useUiPreferences } from '@/composables/use-ui-preferences.ts'
 import { useTheme } from '@/composables/use-theme.ts'
 import { config } from '@/config'
 import {
@@ -176,6 +179,7 @@ import { AppPopupNotificationManager } from './providers/app-popup-notifications
 import { appSettingsModalOpenProfileKey } from './providers/app-settings-modal'
 
 const appSettings = useAppSettings()
+const uiPreferences = useUiPreferences()
 const appTheme = useTheme()
 const router = useRouter()
 const route = useRoute()
@@ -239,6 +243,37 @@ const forceSidebar = computed(
 	() => route.path.startsWith('/project') || route.path.startsWith('/user'),
 )
 const sidebarVisible = computed(() => sidebarToggled.value || forceSidebar.value)
+
+/**
+ * Instances for the sidebar's "jump back in" list, most recently played first.
+ *
+ * Fetched here rather than passed up from the home page because the list now
+ * lives in the sidebar and has to survive navigation. Kept unfiltered on purpose:
+ * jumping back in is about the whole launcher, not the library tab in view.
+ */
+const sidebarRecentInstances = ref([])
+
+async function refreshSidebarRecentInstances() {
+	const instances = await list().catch(() => [])
+	sidebarRecentInstances.value = instances
+		.slice()
+		.sort((a, b) => dayjs(b.last_played ?? b.created).diff(dayjs(a.last_played ?? a.created)))
+}
+
+// `list()` needs the Rust state, which is only ready later in setup, so the first
+// fetch is driven by `stateInitialized` (see the watcher further down) rather than
+// fired here.
+useAppEvent('instance', () => void refreshSidebarRecentInstances(), appEvents)
+
+// The home page has its own toggle (`worlds_in_home`, DB-backed); this one lives
+// in `<appdata>/interface/ui-preferences.json` so the two places can be turned on
+// and off independently without adding anything to the settings database.
+const showJumpBackInSidebar = computed(() => uiPreferences.jumpBackInSidebar)
+
+// The home page's "jump back in" list reads the same data. Sharing it keeps
+// `list()` — which re-walks every library on disk — to one call per instance
+// event instead of two.
+provide('recentInstances', sidebarRecentInstances)
 const { splitViewActive, splitViewEnabled, canUseSplitView, toggleSplitView } = useSplitView()
 const {
 	enabled: translationEnabled,
@@ -997,6 +1032,8 @@ const queryClient = useQueryClient()
 
 watch(stateInitialized, (ready) => {
 	if (ready) {
+		void refreshSidebarRecentInstances()
+
 		if (initialLoadToken) {
 			loading.end(initialLoadToken)
 			initialLoadToken = null
@@ -2241,6 +2278,14 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			>
 				<div id="sidebar-teleport-target" class="sidebar-teleport-content"></div>
 				<div class="sidebar-default-content" :class="{ 'sidebar-enabled': sidebarVisible }">
+					<div
+						v-if="showJumpBackInSidebar && sidebarRecentInstances.length > 0"
+						class="p-4 border-0 border-b-[1px] border-[--brand-gradient-border] border-solid"
+					>
+						<suspense>
+							<RecentWorldsList compact :recent-instances="sidebarRecentInstances" />
+						</suspense>
+					</div>
 					<div
 						class="p-4 border-0 border-b-[1px] border-[--brand-gradient-border] border-solid"
 					>

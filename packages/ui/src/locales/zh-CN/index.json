@@ -6533,6 +6533,12 @@
   "app.appearance-settings.jump-back-into-worlds.description": {
     "defaultMessage": "在首页的“快速返回”区域显示最近游玩的世界或实例。"
   },
+  "app.appearance-settings.jump-back-in-sidebar.title": {
+    "defaultMessage": "侧边栏显示快速返回"
+  },
+  "app.appearance-settings.jump-back-in-sidebar.description": {
+    "defaultMessage": "在右侧边栏顶部、“游玩账户”上方显示紧凑版的“快速返回”列表。"
+  },
   "app.appearance-settings.minimize-launcher.title": {
     "defaultMessage": "最小化启动器"
   },

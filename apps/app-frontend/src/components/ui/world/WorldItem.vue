@@ -100,6 +100,12 @@ const props = withDefaults(
 		instanceName?: string
 		instanceIcon?: string
 		shortcutInstanceId?: string
+		/**
+		 * Single-line row for the narrow sidebar (~268px usable): icon, world name,
+		 * a status dot and one icon-only action. MOTD, ping and player counts do not
+		 * fit at that width, so they move into the row's tooltip.
+		 */
+		compact?: boolean
 	}>(),
 	{
 		playingInstance: false,
@@ -121,6 +127,7 @@ const props = withDefaults(
 		instanceName: undefined,
 		instanceIcon: undefined,
 		shortcutInstanceId: undefined,
+		compact: false,
 	},
 )
 
@@ -140,6 +147,49 @@ const serverIncompatible = computed(
 const locked = computed(() => props.world.type === 'singleplayer' && props.world.locked)
 const managed = computed(() => props.managed)
 const shortcutInstanceId = computed(() => props.shortcutInstanceId ?? props.instanceId)
+
+/**
+ * Reachability as a single colour, for the compact row's status dot.
+ * `null` means "nothing to say" — singleplayer worlds are always reachable.
+ */
+const compactStatusColor = computed(() => {
+	if (props.world.type !== 'server') return null
+	if (props.refreshing) return null
+	if (!props.serverStatus) return 'bg-red'
+	return serverIncompatible.value ? 'bg-orange' : 'bg-green'
+})
+
+/** Everything the wide row shows inline and the compact row has no space for. */
+const compactTooltip = computed(() => {
+	const parts: string[] = [props.world.name]
+	if (props.instanceName) parts.push(props.instanceName)
+	if (props.world.type === 'server') {
+		if (props.refreshing) {
+			parts.push(formatMessage(commonMessages.loadingLabel))
+		} else if (!props.serverStatus) {
+			parts.push(formatMessage(messages.offline))
+		} else if (serverIncompatible.value) {
+			parts.push(
+				formatMessage(messages.incompatibleVersion, {
+					version: props.serverStatus.version?.name,
+				}),
+			)
+		} else {
+			parts.push(
+				formatMessage(messages.playersOnline, {
+					count: formatNumber(props.serverStatus.players?.online ?? 0),
+				}),
+			)
+			if (props.serverStatus.ping !== undefined) parts.push(`${props.serverStatus.ping}ms`)
+		}
+	} else {
+		parts.push(formatMessage(commonMessages.singleplayerLabel))
+	}
+	if (props.world.last_played) {
+		parts.push(formatRelativeTime(dayjs(props.world.last_played).toISOString()))
+	}
+	return parts.filter(Boolean).join(' · ')
+})
 
 async function createShortcut() {
 	if (!shortcutInstanceId.value || props.quarantined) return
@@ -268,6 +318,84 @@ const messages = defineMessages({
 			/>
 		</template>
 		<div
+			v-if="compact"
+			v-tooltip="compactTooltip"
+			class="clickable-card light-sense flex items-center gap-2 p-2 bg-bg-raised border border-solid border-surface-4 smart-clickable:highlight-on-hover rounded-2xl transition-[filter] ease-out [--hover-brightness:1.25] min-h-12"
+			:class="{ 'world-item-highlighted': highlighted }"
+		>
+			<Avatar
+				:src="
+					world.type === 'server' && serverStatus
+						? (serverStatus.favicon ?? world.icon)
+						: world.icon
+				"
+				size="32px"
+				no-shadow
+				class="!rounded-lg shrink-0"
+			/>
+			<div class="flex min-w-0 flex-1 items-center gap-1.5">
+				<SpinnerIcon v-if="refreshing" aria-hidden="true" class="shrink-0 animate-spin" />
+				<span
+					v-else-if="compactStatusColor"
+					aria-hidden="true"
+					class="size-2 shrink-0 rounded-full"
+					:class="compactStatusColor"
+				/>
+				<span class="truncate text-sm font-semibold text-contrast">{{ world.name }}</span>
+			</div>
+			<div class="shrink-0 smart-clickable:allow-pointer-events">
+				<Button
+					v-if="(playingWorld || (locked && playingInstance)) && !startingInstance"
+					v-tooltip="formatMessage(commonMessages.stopButton)"
+					:aria-label="formatMessage(commonMessages.stopButton)"
+					type="colored"
+					color="red"
+					size="sm"
+					@click="emit('stop')"
+				>
+					<StopCircleIcon aria-hidden="true" />
+				</Button>
+				<Button
+					v-else
+					v-tooltip="
+						quarantined
+							? formatMessage(messages.instanceLocked)
+							: world.type === 'server'
+								? !supportsServerQuickPlay
+									? formatMessage(messages.noServerQuickPlay)
+									: playingOtherWorld
+										? formatMessage(messages.gameAlreadyOpen)
+										: !serverStatus
+											? formatMessage(messages.noContact)
+											: serverIncompatible
+												? formatMessage(messages.incompatibleServer)
+												: formatMessage(commonMessages.playButton)
+								: !supportsWorldQuickPlay
+									? formatMessage(messages.noSingleplayerQuickPlay)
+									: playingOtherWorld || locked
+										? formatMessage(messages.gameAlreadyOpen)
+										: formatMessage(commonMessages.playButton)
+					"
+					:aria-label="formatMessage(commonMessages.playButton)"
+					:disabled="
+						quarantined ||
+						playingOtherWorld ||
+						startingInstance ||
+						(world.type == 'server' && !supportsServerQuickPlay) ||
+						(world.type == 'singleplayer' && !supportsWorldQuickPlay)
+					"
+					type="colored"
+					color="brand"
+					size="sm"
+					@click="emit('play')"
+				>
+					<SpinnerIcon v-if="startingInstance && playingWorld" class="animate-spin" />
+					<PlayIcon v-else aria-hidden="true" />
+				</Button>
+			</div>
+		</div>
+		<div
+			v-else
 			class="clickable-card light-sense grid grid-cols-[auto_minmax(0,3fr)_minmax(0,4fr)_auto] items-center gap-2 p-3 bg-bg-raised border border-solid border-surface-4 smart-clickable:highlight-on-hover rounded-[20px] transition-[filter] ease-out [--hover-brightness:1.25] min-h-20"
 			:class="{
 				'world-item-highlighted': highlighted,

@@ -12,6 +12,11 @@ import {
 	type FeatureFlag,
 	useAppSettings,
 } from '@/composables/use-app-settings.ts'
+import {
+	ensureUiPreferencesLoaded,
+	setUiPreferences,
+	useUiPreferences,
+} from '@/composables/use-ui-preferences.ts'
 import { type AppSettings, get, set } from '@/helpers/settings.ts'
 import { appSettingsModalContextKey } from '@/providers/app-settings-modal'
 
@@ -63,6 +68,15 @@ const messages = defineMessages({
 		defaultMessage:
 			'Show recently played worlds or instances in the "Jump in" section on the Home page.',
 	},
+	jumpBackInSidebarTitle: {
+		id: 'app.appearance-settings.jump-back-in-sidebar.title',
+		defaultMessage: 'Jump in on the sidebar',
+	},
+	jumpBackInSidebarDescription: {
+		id: 'app.appearance-settings.jump-back-in-sidebar.description',
+		defaultMessage:
+			'Show a compact "Jump in" list at the top of the right sidebar, above your play account.',
+	},
 	compactModeTitle: {
 		id: 'app.appearance-settings.compact-mode.title',
 		defaultMessage: 'Compact mode',
@@ -111,6 +125,7 @@ type BehaviorSettingsState = {
 	minimizeApp: boolean
 	hideRightSidebar: boolean
 	showJumpIn: boolean
+	showJumpInSidebar: boolean
 	compactInstanceCards: boolean
 	showPlayTime: boolean
 	hideNametag: boolean
@@ -120,11 +135,18 @@ type BehaviorSettingsState = {
 
 const persistedSettings = ref(await get())
 
+// File-backed, not part of `AppSettings`: it lives in
+// `<appdata>/interface/ui-preferences.json` so no interface preference has to be
+// added to the settings database. Awaited here so `saved` starts out correct.
+const uiPreferences = useUiPreferences()
+await ensureUiPreferencesLoaded()
+
 function getBehaviorSettingsState(settings: AppSettings): BehaviorSettingsState {
 	return {
 		minimizeApp: settings.hide_on_process_start,
 		hideRightSidebar: settings.toggle_sidebar,
 		showJumpIn: settings.feature_flags[worldsInHomeFlag] ?? DEFAULT_FEATURE_FLAGS[worldsInHomeFlag],
+		showJumpInSidebar: uiPreferences.jumpBackInSidebar,
 		compactInstanceCards:
 			settings.feature_flags[compactInstanceCardsFlag] ??
 			DEFAULT_FEATURE_FLAGS[compactInstanceCardsFlag],
@@ -162,6 +184,7 @@ const { saved, current, changes, saving, hasChanges, reset, save } = useSavable(
 		}
 
 		await set(nextSettings)
+		await setUiPreferences({ jumpBackInSidebar: value.showJumpInSidebar })
 		persistedSettings.value = nextSettings
 		appSettings.toggleSidebar = value.hideRightSidebar
 		appSettings.hideNametagSkinsPage = value.hideNametag
@@ -241,6 +264,18 @@ onBeforeUnmount(() => {
 					</p>
 				</div>
 				<Toggle id="jump-back-into-worlds" v-model="current.showJumpIn" />
+			</div>
+
+			<div class="flex items-center justify-between gap-4">
+				<div>
+					<h3 class="m-0 text-lg font-semibold text-contrast">
+						{{ formatMessage(messages.jumpBackInSidebarTitle) }}
+					</h3>
+					<p class="m-0 mt-1">
+						{{ formatMessage(messages.jumpBackInSidebarDescription) }}
+					</p>
+				</div>
+				<Toggle id="jump-back-in-sidebar" v-model="current.showJumpInSidebar" />
 			</div>
 
 			<div class="flex items-center justify-between gap-4">
