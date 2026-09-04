@@ -537,6 +537,7 @@ onMounted(async () => {
 	await useCheckDisableMouseover()
     await appTheme.loadHueValue()
     await appTheme.loadBgBlur()
+    await appTheme.loadInstanceCardIconBg()
 
 	document.querySelector('body').addEventListener('click', handleClick)
 	document.querySelector('body').addEventListener('auxclick', handleAuxClick)

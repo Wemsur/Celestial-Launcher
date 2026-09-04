@@ -444,6 +444,77 @@ async fn load_bg_blur_status(app_handle: tauri::AppHandle) -> Result<bool, Strin
     Ok(json.get("blur_enabled").and_then(|v| v.as_bool()).unwrap_or(true))
 }
 
+// 实例卡片背景：把图标做成卡片底纹。和 blur_enabled 一样存在
+// custom_backgrounds/celestial_settings.json 里，键名 instance_card_icon_bg。
+// 读写整个文件再改一个键，沿用本文件里其它设置项的做法。
+#[tauri::command(rename_all = "camelCase")]
+async fn save_instance_card_icon_bg(
+    app_handle: tauri::AppHandle,
+    is_active: bool,
+) -> Result<(), String> {
+    let mut config_path = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
+
+    config_path.push("custom_backgrounds");
+    if !config_path.exists() {
+        fs::create_dir_all(&config_path)
+            .map_err(|e| format!("创建配置文件夹失败: {}", e))?;
+    }
+
+    config_path.push("celestial_settings.json");
+
+    let existing = if config_path.exists() {
+        let content = fs::read_to_string(&config_path).unwrap_or_else(|_| "{}".to_string());
+        serde_json::from_str::<serde_json::Value>(&content)
+            .unwrap_or_else(|_| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    let mut updated = existing.clone();
+    updated["instance_card_icon_bg"] = serde_json::json!(is_active);
+
+    fs::write(
+        &config_path,
+        serde_json::to_string_pretty(&updated)
+            .map_err(|e| format!("序列化失败: {}", e))?,
+    )
+    .map_err(|e| format!("写入配置文件失败: {}", e))?;
+
+    Ok(())
+}
+
+/// 文件或键缺失时返回 false —— 新效果默认关闭，不打扰已有用户。
+#[tauri::command]
+async fn load_instance_card_icon_bg(
+    app_handle: tauri::AppHandle,
+) -> Result<bool, String> {
+    let mut config_path = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
+
+    config_path.push("custom_backgrounds");
+    config_path.push("celestial_settings.json");
+
+    if !config_path.exists() {
+        return Ok(false);
+    }
+
+    let content = fs::read_to_string(&config_path)
+        .map_err(|e| format!("读取配置文件失败: {}", e))?;
+
+    let json: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("JSON解析失败: {}", e))?;
+
+    Ok(json
+        .get("instance_card_icon_bg")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false))
+}
+
 // 3. 保存色相值
 #[tauri::command]
 async fn save_hue_value(app_handle: tauri::AppHandle, hue_value: u32) -> Result<(), String> {
@@ -1084,6 +1155,8 @@ fn main() {
             delete_background,
             save_bg_blur_status,
             load_bg_blur_status,
+            save_instance_card_icon_bg,
+            load_instance_card_icon_bg,
             save_hue_value,
             load_hue_value,
             save_library_sort_directions,

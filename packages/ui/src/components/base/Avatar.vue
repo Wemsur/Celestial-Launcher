@@ -50,6 +50,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 
+import { avatarTintHue } from '#ui/utils/avatar-tint'
+
 const pixelated = ref(false)
 const hasTransparentCorners = ref(false)
 const hasDetectedCorners = ref(false)
@@ -247,21 +249,11 @@ function detectTransparentCorners(image: HTMLImageElement): boolean | null {
 
 const tint = computed(() => {
 	if (props.tintBy) {
-		return hash(props.tintBy) % 360
+		return avatarTintHue(props.tintBy)
 	} else {
 		return null
 	}
 })
-
-function hash(str: string): number {
-	let hash = 0
-	for (let i = 0, len = str.length; i < len; i++) {
-		const chr = str.charCodeAt(i)
-		hash = (hash << 5) - hash + chr
-		hash |= 0
-	}
-	return hash
-}
 </script>
 
 <style lang="scss" scoped>

@@ -96,6 +96,47 @@ async function toggleBgBlur(enabled: boolean): Promise<void> {
 	}
 }
 
+/**
+ * Instance cards using their own icon as a blurred backdrop. Same storage as the
+ * background blur above — `instance_card_icon_bg` in
+ * `custom_backgrounds/celestial_settings.json`, with localStorage as a
+ * first-paint cache so cards do not visibly change style a moment after load.
+ *
+ * Off by default: it is a decorative change to every card in the library, so
+ * existing users keep the flat cards until they ask for this.
+ */
+const INSTANCE_CARD_ICON_BG_STORAGE_KEY = 'celestial_instance_card_icon_bg'
+const INSTANCE_CARD_ICON_BG_DEFAULT = false
+
+function cachedInstanceCardIconBg(): boolean {
+	const saved = localStorage.getItem(INSTANCE_CARD_ICON_BG_STORAGE_KEY)
+	return saved === null ? INSTANCE_CARD_ICON_BG_DEFAULT : saved === 'true'
+}
+
+const instanceCardIconBg = ref<boolean>(cachedInstanceCardIconBg())
+
+function applyInstanceCardIconBg(enabled: boolean): void {
+	instanceCardIconBg.value = enabled
+	localStorage.setItem(INSTANCE_CARD_ICON_BG_STORAGE_KEY, String(enabled))
+}
+
+async function loadInstanceCardIconBg(): Promise<void> {
+	try {
+		applyInstanceCardIconBg(await invoke<boolean>('load_instance_card_icon_bg'))
+	} catch (error) {
+		console.error('Failed to load instance card icon background setting:', error)
+	}
+}
+
+async function toggleInstanceCardIconBg(enabled: boolean): Promise<void> {
+	applyInstanceCardIconBg(enabled)
+	try {
+		await invoke('save_instance_card_icon_bg', { isActive: enabled })
+	} catch (error) {
+		console.error('Failed to save instance card icon background setting:', error)
+	}
+}
+
 const theme = reactive({
 	preferred,
 	preview,
@@ -105,11 +146,14 @@ const theme = reactive({
 	advancedRendering,
 	hueValue,
 	customBgBlur,
+	instanceCardIconBg,
 	options: THEME_OPTIONS,
 	loadHueValue,
 	saveHueValue,
 	loadBgBlur,
 	toggleBgBlur,
+	loadInstanceCardIconBg,
+	toggleInstanceCardIconBg,
 })
 
 export function useTheme() {

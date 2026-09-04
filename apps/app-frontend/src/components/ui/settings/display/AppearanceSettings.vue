@@ -209,6 +209,24 @@ const delete_background = async() => {
                     />
                 </div>
             </section>
+
+            <!-- 实例卡片图标底纹 -->
+            <section class="mt-8 border-0 border-t border-solid border-divider pt-6">
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <h2 class="m-0 text-lg font-semibold text-contrast">实例卡片图标底纹</h2>
+                        <p class="m-0 mt-1">
+                            用实例图标的高度模糊版本作为卡片背景，并让卡片半透明。没有图标的实例改用图标那个按 ID
+                            生成的底色。关闭「高级渲染」时自动退回纯色。
+                        </p>
+                    </div>
+                    <Toggle
+                        id="instance-card-icon-bg"
+                        :model-value="theme.instanceCardIconBg"
+                        @update:model-value="(v) => theme.toggleInstanceCardIconBg(v)"
+                    />
+                </div>
+            </section>
         </template>
     </AppearanceSettingsLayout>
 </template>
