@@ -4,6 +4,7 @@ import Fuse from 'fuse.js/dist/fuse.basic'
 import { computed, onMounted, ref } from 'vue'
 
 import Button from '#ui/components/base/buttons/Button.vue'
+import DropdownSelect from '#ui/components/base/DropdownSelect.vue'
 import StyledInput from '#ui/components/base/StyledInput.vue'
 import {
 	buildLocaleMessages,
@@ -25,6 +26,12 @@ const props = defineProps<{
 	onLocaleChange: (locale: string) => void | Promise<void>
 	isChanging?: boolean
 	coverageByLocale?: Record<string, LanguageCoverageStats>
+	/**
+	 * `'list'` renders a search field over one button per language — right for a
+	 * full settings page. `'dropdown'` collapses the same languages into a single
+	 * select, for the app's settings modal where a dozen rows dominate the pane.
+	 */
+	variant?: 'list' | 'dropdown'
 }>()
 
 const messages = defineMessages({
@@ -244,10 +251,74 @@ function getCategoryName(category: Category): string {
 	}
 	return formatMessage(messages.standardLanguages)
 }
+
+// ── Dropdown variant ────────────────────────────────────────────────────────
+//
+// Same languages, same order (best coverage first) and the same three pieces of
+// information as a list row; only the flag is dropped, because DropdownSelect
+// renders option labels as plain text. The selected row keeps its flag.
+
+const $localeByTag = computed(
+	() => new Map($locales.value.map((loc) => [loc.tag, loc] as const)),
+)
+
+const $localeOptions = computed(() => $locales.value.map((loc) => loc.tag))
+
+function localeOptionLabel(tag: string): string {
+	const loc = $localeByTag.value.get(tag)
+	if (!loc) return tag
+
+	const parts = [loc.displayName]
+	if (showBrowserDisplayName(loc)) parts.push(`(${loc.browserDisplayName})`)
+	if (loc.coverage) parts.push(`· ${loc.coverage.percentage}%`)
+	return parts.join(' ')
+}
+
+const $selectedLocale = computed<string>({
+	get: () => $activeLocale.value,
+	set: (tag) => {
+		if (isChangingLocale()) return
+		changeLocale(tag)
+	},
+})
+
+const $activeFlagUrl = computed(() => $localeByTag.value.get($activeLocale.value)?.flagUrl)
 </script>
 
 <template>
-	<div class="flex flex-col gap-4">
+	<!--
+		Inline style, not a `!w-full` utility: DropdownSelect hard-codes
+		`width: 20rem` in its own scoped block, and a scoped rule carries the
+		`[data-v-…]` attribute selector, so it outranks a plain utility class. An
+		inline style beats any non-`!important` rule outright, and needs nothing
+		from the Tailwind scanner to have picked this file up.
+	-->
+	<DropdownSelect
+		v-if="variant === 'dropdown'"
+		v-model="$selectedLocale"
+		name="language"
+		:options="$localeOptions"
+		:display-name="localeOptionLabel"
+		:disabled="isChangingLocale()"
+		:max-visible-options="8"
+		style="display: block; width: 100%"
+	>
+		<template #default="{ selected }">
+			<span class="flex min-w-0 items-center gap-2">
+				<img
+					v-if="$activeFlagUrl"
+					:src="$activeFlagUrl"
+					alt=""
+					aria-hidden="true"
+					class="h-4 w-6 shrink-0 rounded-sm object-cover"
+					loading="lazy"
+				/>
+				<span class="truncate">{{ selected }}</span>
+			</span>
+		</template>
+	</DropdownSelect>
+
+	<div v-else class="flex flex-col gap-4">
 		<div v-if="$locales.length > 1" class="-mb-4">
 			<StyledInput
 				id="language-search"

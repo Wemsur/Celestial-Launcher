@@ -28,6 +28,7 @@
 			:on-locale-change="onLocaleChange"
 			:is-changing="saving"
 			:coverage-by-locale="languageCoverage[product]"
+			:variant="selector"
 		/>
 	</div>
 </template>
@@ -43,10 +44,18 @@ import { commonSettingsMessages, languageSelectorMessages, useSavable } from '#u
 import { languageCoverage } from './language-settings-coverage.generated'
 import LanguageSettingsSelector from './language-settings-selector.vue'
 
-const props = defineProps<{
-	product: 'app' | 'website'
-	persistLocale?: (locale: string) => void | Promise<void>
-}>()
+const props = withDefaults(
+	defineProps<{
+		product: 'app' | 'website'
+		persistLocale?: (locale: string) => void | Promise<void>
+		/** How the language picker renders — see `language-settings-selector.vue`. */
+		selector?: 'list' | 'dropdown'
+	}>(),
+	{
+		persistLocale: undefined,
+		selector: 'list',
+	},
+)
 
 const { formatMessage } = useVIntl()
 const { locale, setLocale } = injectI18n()

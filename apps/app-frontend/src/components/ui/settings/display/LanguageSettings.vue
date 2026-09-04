@@ -1,5 +1,10 @@
 <template>
-	<SharedLanguageSettings ref="languageSettings" product="app" :persist-locale="persistLocale" />
+	<SharedLanguageSettings
+		ref="languageSettings"
+		product="app"
+		selector="dropdown"
+		:persist-locale="persistLocale"
+	/>
 
 	<section class="mt-8 border-0 border-t border-solid border-divider pt-6">
 		<h2 class="m-0 text-xl font-semibold text-contrast">
