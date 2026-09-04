@@ -199,7 +199,7 @@ const delete_background = async() => {
             <section class="mt-8 border-0 border-t border-solid border-divider pt-6">
                 <div class="flex items-center justify-between gap-4">
                     <div>
-                        <h2 class="m-0 text-lg font-semibold text-contrast">Background Blur</h2>
+                        <h2 class="m-0 text-lg font-semibold text-contrast">背景模糊</h2>
                         <p class="m-0 mt-1">启用背景模糊效果（仅在设置了自定义背景时生效）</p>
                     </div>
                     <Toggle
