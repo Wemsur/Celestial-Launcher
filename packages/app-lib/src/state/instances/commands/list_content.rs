@@ -1,7 +1,8 @@
 use super::sync_content_files::{
-    ContentSyncFreshness, instance_files_fingerprint, load_cached_content_items,
-    project_type_for_file, spawn_content_refresh_for_instance,
-    store_cached_content_items, sync_instance_content_files_with_freshness,
+    ContentSyncFreshness, cached_content_hashes, instance_files_fingerprint,
+    load_cached_content_items, project_type_for_file,
+    spawn_content_refresh_for_instance, store_cached_content_items,
+    sync_instance_content_files_with_freshness,
 };
 use crate::State;
 use crate::pack::install_from::{PackFileHash, PackFormat};
@@ -9,6 +10,7 @@ use crate::state::instances::adapters::sqlite;
 use crate::state::instances::{
     ContentEntry, ContentSet, ContentSetStatus, ContentSourceKind, Instance,
     InstanceInstallCandidate, InstanceInstallTarget, InstanceLink,
+    InstanceMetadata,
 };
 use crate::state::{
     CacheBehaviour, CachedEntry, CachedFile, ContentFile, ContentItem,
@@ -124,15 +126,137 @@ struct InstanceInstallCandidateRow {
     installed: i64,
 }
 
+/// Instances the frontend may offer as install targets for a project.
+///
+/// Sourced from [`crate::api::instance::list`] rather than the `instances` table:
+/// instances are JSON-backed now (`libraries.json` plus a per-instance
+/// `instance.json`), and creating one through a library never writes a DB row. The
+/// old DB-only query therefore returned nothing at all for them, which the install
+/// dialog reported as "0 compatible instances" for every project type.
 pub(crate) async fn get_instance_install_candidates(
     project_id: &str,
     project_type: ProjectType,
     targets: &[InstanceInstallTarget],
-    pool: &SqlitePool,
+    state: &State,
 ) -> crate::Result<Vec<InstanceInstallCandidate>> {
-    let rows = sqlx::query_as!(
-        InstanceInstallCandidateRow,
-        r#"
+    let mut instances = crate::api::instance::list(None).await?;
+    // Server projects manage their own content; they were excluded by the old
+    // query's `link_kind NOT IN (...)` and stay excluded here.
+    instances.retain(|meta| {
+        !matches!(
+            meta.link,
+            InstanceLink::ServerProject { .. }
+                | InstanceLink::ServerProjectModpack { .. }
+        )
+    });
+    instances.sort_by(|left, right| {
+        left.instance
+            .name
+            .to_lowercase()
+            .cmp(&right.instance.name.to_lowercase())
+            .then_with(|| left.instance.name.cmp(&right.instance.name))
+    });
+
+    let installed =
+        installed_instance_ids(project_id, &instances, state).await?;
+
+    Ok(instances
+        .into_iter()
+        .map(|meta| {
+            let loader = meta.applied_content_set.loader;
+            let game_version = meta.applied_content_set.game_version;
+            InstanceInstallCandidate {
+                compatible: instance_matches_targets(
+                    project_type,
+                    &game_version,
+                    loader.as_str(),
+                    targets,
+                ),
+                installed: installed.contains(&meta.instance.id),
+                id: meta.instance.id,
+                name: meta.instance.name,
+                icon_path: meta.instance.icon_path,
+                game_version,
+                loader,
+            }
+        })
+        .collect())
+}
+
+/// Which of `instances` already have `project_id` installed.
+///
+/// Deliberately cheap: this runs while an install dialog is opening, so it reads
+/// what is already on disk instead of syncing or hashing anything, and never waits
+/// on the network. An instance whose content has never been resolved simply reports
+/// "not installed" — the flag only greys out a row, and it corrects itself once the
+/// instance's content tab has been opened.
+async fn installed_instance_ids(
+    project_id: &str,
+    instances: &[InstanceMetadata],
+    state: &State,
+) -> crate::Result<HashSet<String>> {
+    let mut installed = HashSet::new();
+    let mut pending_hashes: Vec<(String, Vec<String>)> = Vec::new();
+
+    for meta in instances {
+        if !meta.instance.is_json_backed() {
+            continue;
+        }
+
+        // Resolved items carry project ids directly, so when they are cached this
+        // needs neither SQL nor a hash lookup.
+        if let Some(items) = load_cached_content_items(&meta.instance, state) {
+            if items.iter().any(|item| {
+                item.project
+                    .as_ref()
+                    .is_some_and(|project| project.id == project_id)
+            }) {
+                installed.insert(meta.instance.id.clone());
+            }
+            continue;
+        }
+
+        if let Some(hashes) = cached_content_hashes(&meta.instance, state) {
+            pending_hashes.push((meta.instance.id.clone(), hashes));
+        }
+    }
+
+    if !pending_hashes.is_empty() {
+        let unique = pending_hashes
+            .iter()
+            .flat_map(|(_, hashes)| hashes.iter().map(String::as_str))
+            .collect::<HashSet<_>>();
+        let hash_refs = unique.into_iter().collect::<Vec<_>>();
+        // `LocalOnly`: an install dialog must not block on the API to decide
+        // whether a row is greyed out. Missing hashes are fetched in the
+        // background, so the next open is accurate.
+        let files = CachedEntry::get_file_many(
+            &hash_refs,
+            Some(CacheBehaviour::LocalOnly),
+            &state.pool,
+            &state.api_semaphore,
+        )
+        .await?;
+        let matching = files
+            .into_iter()
+            .filter(|file| file.project_id == project_id)
+            .map(|file| file.hash)
+            .collect::<HashSet<_>>();
+
+        for (instance_id, hashes) in pending_hashes {
+            if hashes.iter().any(|hash| matching.contains(hash)) {
+                installed.insert(instance_id);
+            }
+        }
+    }
+
+    // DB-backed instances still keep their files in `instance_content_entries`.
+    // The query below is the original candidate query, reused untouched purely for
+    // its `installed` column, and only when such an instance is actually present.
+    if instances.iter().any(|meta| !meta.instance.is_json_backed()) {
+        let rows = sqlx::query_as!(
+            InstanceInstallCandidateRow,
+            r#"
 		SELECT
 			i.id,
 			i.name,
@@ -163,33 +287,19 @@ pub(crate) async fn get_instance_install_candidates(
 		)
 		ORDER BY i.name ASC
 		"#,
-        project_id,
-    )
-    .fetch_all(pool)
-    .await?;
+            project_id,
+        )
+        .fetch_all(&state.pool)
+        .await?;
 
-    Ok(rows
-        .into_iter()
-        .map(|row| {
-            let loader = ModLoader::from_string(&row.loader);
-            let compatible = instance_matches_targets(
-                project_type,
-                &row.game_version,
-                loader.as_str(),
-                targets,
-            );
-
-            InstanceInstallCandidate {
-                id: row.id,
-                name: row.name,
-                icon_path: row.icon_path,
-                game_version: row.game_version,
-                loader,
-                installed: row.installed != 0,
-                compatible,
+        for row in rows {
+            if row.installed != 0 {
+                installed.insert(row.id);
             }
-        })
-        .collect())
+        }
+    }
+
+    Ok(installed)
 }
 
 fn instance_matches_targets(

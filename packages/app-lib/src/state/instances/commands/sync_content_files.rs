@@ -298,6 +298,24 @@ pub(crate) fn load_cached_content_items(
         .then_some(items.items)
 }
 
+/// Content SHA1s straight from the on-disk cache — no scan, no hashing, no SQL.
+///
+/// `None` for DB-backed instances (their files live in `instance_files`) and when
+/// no cache has been written yet. A stale cache is still returned: for questions
+/// like "is this project already installed here" a slightly old file list beats no
+/// answer, and the alternative is a full rescan of every instance.
+pub(crate) fn cached_content_hashes(
+    instance: &Instance,
+    state: &State,
+) -> Option<Vec<String>> {
+    if !instance.is_json_backed() {
+        return None;
+    }
+    let cache =
+        load_content_cache(&content_cache_path(instance, state)).ok()??;
+    Some(cache.files.into_iter().map(|entry| entry.sha1).collect())
+}
+
 /// Store resolved items against the file list they were derived from.
 ///
 /// Awaited rather than fire-and-forget: a background completion pass notifies the

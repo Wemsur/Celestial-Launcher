@@ -64,7 +64,7 @@ pub async fn get_install_candidates(
         project_id,
         project_type,
         &targets,
-        &state.pool,
+        &state,
     )
     .await
 }
