@@ -878,7 +878,6 @@ pub(crate) async fn dependencies_to_content_items(
                 date_added: None,
                 source_kind: None,
                 embedded_metadata: None,
-                synced_pack: None,
             })
         })
         .collect::<Vec<_>>();
