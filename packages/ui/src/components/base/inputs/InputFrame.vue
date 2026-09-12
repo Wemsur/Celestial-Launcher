@@ -1,7 +1,7 @@
 <template>
 	<div
 		v-bind="$attrs"
-		class="group/input min-w-0 touch-manipulation border border-solid font-medium text-primary shadow-none transition-[background-color,border-color,box-shadow,color] focus-within:text-contrast focus-within:ring-4 focus-within:ring-brand-shadow"
+		class="group/input light-sense min-w-0 touch-manipulation border border-solid font-medium text-primary shadow-none transition-[background-color,border-color,box-shadow,color] focus-within:text-contrast focus-within:ring-4 focus-within:ring-brand-shadow"
 		:class="[
 			multiline ? 'flex w-full items-start gap-2 rounded-xl px-3 py-2' : sizeClass,
 			appearanceClass,

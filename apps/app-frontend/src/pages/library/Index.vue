@@ -6,7 +6,7 @@ import {
     injectNotificationManager,
     NavTabs,
     NewModal as Modal,
-    StyledInput,
+    Input,
 } from '@modrinth/ui'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
@@ -225,19 +225,19 @@ function closeAddLibraryModal() {
                     <h2 class="m-0 text-lg font-semibold text-contrast">
                         库名称（可选）
                     </h2>
-                    <StyledInput
+                    <Input
                         id="appDir"
                         v-model="addLibraryName"
                         placeholder="留空则使用文件夹名"
                         type="text"
                         wrapper-class="w-full"
                     >
-                    </StyledInput>
+                    </Input>
 				</div>
                 <h2 class="m-0 text-lg font-semibold text-contrast">
                     库位置
                 </h2>
-                <StyledInput
+                <Input
                     id="appDir"
                     v-model="addLibraryPath"
                     placeholder="选择文件夹或输入路径"
@@ -250,7 +250,7 @@ function closeAddLibraryModal() {
                             <FolderSearchIcon aria-hidden="true" />
                         </Button>
                     </template>
-                </StyledInput>
+                </Input>
 				<div class="flex flex-col gap-1">
 					<span class="text-sm font-medium text-primary">格式</span>
 					<DropdownSelect

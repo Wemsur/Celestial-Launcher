@@ -9,7 +9,7 @@
             </p>
 
             <div class="mt-4 flex gap-2">
-                <StyledInput
+                <Input
                     :model-value="newOfflineUsername"
                     wrapper-class="flex-1 w-full"
 
@@ -143,7 +143,7 @@
 
 <script setup lang="ts">
 import type { Labrinth } from '@modrinth/api-client'
-import {AccountProfileSettings, Avatar, injectAuth, injectNotificationManager,StyledInput} from '@modrinth/ui'
+import {AccountProfileSettings, Avatar, injectAuth, injectNotificationManager,Input} from '@modrinth/ui'
 import { inject, onBeforeUnmount, onMounted, onUnmounted,ref } from 'vue'
 
 import {

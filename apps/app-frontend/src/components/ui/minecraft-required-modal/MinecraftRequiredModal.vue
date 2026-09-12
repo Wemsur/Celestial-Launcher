@@ -64,7 +64,7 @@
 		<form class="space-y-6 min-w-[400px]" @submit.prevent="handleCreateOffline">
 			<label class="flex flex-col gap-2">
 				<span class="font-semibold text-contrast">用户名</span>
-				<StyledInput
+				<Input
 					ref="offlineInputRef"
 					v-model="offlineUsername"
 					wrapper-class="w-full"
@@ -99,7 +99,7 @@ import {
 	defineMessages,
 	injectNotificationManager,
 	NewModal,
-	StyledInput,
+	Input,
 	useVIntl,
 } from '@modrinth/ui'
 import { inject, type Ref, ref } from 'vue'
@@ -159,7 +159,7 @@ const loadingSignIn = ref(false)
 
 // 离线账户弹窗
 const offlineModalRef = ref<InstanceType<typeof NewModal>>()
-const offlineInputRef = ref<InstanceType<typeof StyledInput>>()
+const offlineInputRef = ref<InstanceType<typeof Input>>()
 const offlineUsername = ref('')
 const offlineSubmitting = ref(false)
 const offlineError = ref('')

@@ -9,7 +9,7 @@
             </p>
 
             <div class="mt-4 flex gap-2">
-                <StyledInput
+                <Input
                     :model-value="newOfflineUsername"
                     wrapper-class="flex-1 w-full"
 
@@ -133,7 +133,7 @@
 </template>
 
 <script setup lang="ts">
-import {Avatar, injectNotificationManager, StyledInput} from '@modrinth/ui'
+import {Avatar, injectNotificationManager, Input} from '@modrinth/ui'
 import { inject, onMounted, onUnmounted,ref } from 'vue'
 
 import {

@@ -1,10 +1,6 @@
 {
   "db_name": "SQLite",
-<<<<<<<< HEAD:packages/app-lib/.sqlx/query-f587560689e38f6a095d76099b2ae604695f82f7656c94201a7000afb1bac6b5.json
-  "query": "\n            SELECT\n                max_concurrent_writes, max_concurrent_downloads,\n                theme, locale, default_page, collapsed_navigation, hide_nametag_skins_page, advanced_rendering, native_decorations,\n                discord_rpc, developer_mode, telemetry, personalized_ads,\n                json(extra_launch_args) extra_launch_args, json(custom_env_vars) custom_env_vars,\n                mc_memory_max, mc_force_fullscreen, mc_game_resolution_x, mc_game_resolution_y, hide_on_process_start,\n                hook_pre_launch, hook_wrapper, hook_post_exit,\n                custom_dir, prev_custom_dir, migrated, json(feature_flags) feature_flags, toggle_sidebar,\n                skipped_update, pending_update_toast_for_version, auto_download_updates,\n                sync_theme_across_devices,\n                version\n            FROM settings\n            ",
-========
   "query": "\n            SELECT\n                max_concurrent_writes, max_concurrent_downloads,\n                theme, locale, default_page, collapsed_navigation, hide_nametag_skins_page, advanced_rendering, native_decorations,\n                discord_rpc, developer_mode, telemetry, personalized_ads,\n                json(extra_launch_args) extra_launch_args, json(custom_env_vars) custom_env_vars,\n                mc_memory_max, mc_force_fullscreen, mc_game_resolution_x, mc_game_resolution_y, hide_on_process_start,\n                hook_pre_launch, hook_wrapper, hook_post_exit,\n                custom_dir, prev_custom_dir, migrated, json(feature_flags) feature_flags, toggle_sidebar,\n                skipped_update, pending_update_toast_for_version, auto_download_updates,\n\t\t\t\tsync_theme_across_devices, sync_behavior_across_devices, sync_features_across_devices,\n\t\t\t\tshow_files_tab_in_instances, show_worlds_tab_in_instances,\n\t\t\t\tshow_screenshots_tab_in_instances, show_skin_selector_in_sidebar,\n                version\n            FROM settings\n            ",
->>>>>>>> upstream/main:packages/app-lib/.sqlx/query-a37f3c9cc8c1d8aa620f83569633db30d98573c1ac04705da186d0cf88b20ca7.json
   "describe": {
     "columns": [
       {
@@ -168,10 +164,6 @@
         "type_info": "Integer"
       },
       {
-<<<<<<<< HEAD:packages/app-lib/.sqlx/query-f587560689e38f6a095d76099b2ae604695f82f7656c94201a7000afb1bac6b5.json
-        "name": "version",
-        "ordinal": 32,
-========
         "name": "sync_behavior_across_devices",
         "ordinal": 32,
         "type_info": "Integer"
@@ -179,7 +171,6 @@
       {
         "name": "sync_features_across_devices",
         "ordinal": 33,
->>>>>>>> upstream/main:packages/app-lib/.sqlx/query-a37f3c9cc8c1d8aa620f83569633db30d98573c1ac04705da186d0cf88b20ca7.json
         "type_info": "Integer"
       },
       {
@@ -244,12 +235,6 @@
       true,
       true,
       false,
-<<<<<<<< HEAD:packages/app-lib/.sqlx/query-f587560689e38f6a095d76099b2ae604695f82f7656c94201a7000afb1bac6b5.json
-      false
-    ]
-  },
-  "hash": "f587560689e38f6a095d76099b2ae604695f82f7656c94201a7000afb1bac6b5"
-========
       false,
       false,
       false,
@@ -260,5 +245,4 @@
     ]
   },
   "hash": "a37f3c9cc8c1d8aa620f83569633db30d98573c1ac04705da186d0cf88b20ca7"
->>>>>>>> upstream/main:packages/app-lib/.sqlx/query-a37f3c9cc8c1d8aa620f83569633db30d98573c1ac04705da186d0cf88b20ca7.json
 }
