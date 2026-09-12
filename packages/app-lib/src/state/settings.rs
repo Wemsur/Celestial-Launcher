@@ -376,6 +376,11 @@ pub enum Theme {
     Dark,
     Light,
     Oled,
+    Elegant,
+    Customdark,
+    Customlight,
+    #[serde(rename = "antiquedark")] // 告诉 Serde：当前端传包进 "antiquedark" 字符串时，映射到此处的枚举
+    AntiqueDark,
     Retro,
     System,
 }
@@ -386,6 +391,10 @@ impl Theme {
             Theme::Dark => "dark",
             Theme::Light => "light",
             Theme::Oled => "oled",
+            Theme::Elegant => "elegant",
+            Theme::AntiqueDark => "antiquedark",
+            Theme::Customdark => "customdark",
+            Theme::Customlight => "customlight",
             Theme::Retro => "retro",
             Theme::System => "system",
         }
@@ -397,6 +406,10 @@ impl Theme {
             "light" => Theme::Light,
             "oled" => Theme::Oled,
             "retro" => Theme::Retro,
+            "elegant" => Theme::Elegant,
+            "antiquedark" => Theme::AntiqueDark,
+            "customdark" => Theme::Customdark,
+            "customlight" => Theme::Customlight,
             "system" => Theme::System,
             _ => Theme::Dark,
         }
@@ -430,6 +443,7 @@ pub struct Hooks {
 pub enum DefaultPage {
     Home,
     Library,
+    Worlds,
 }
 
 impl DefaultPage {
@@ -437,6 +451,7 @@ impl DefaultPage {
         match self {
             DefaultPage::Home => "home",
             DefaultPage::Library => "library",
+            DefaultPage::Worlds => "Worlds",
         }
     }
 
@@ -444,6 +459,7 @@ impl DefaultPage {
         match string {
             "home" => Self::Home,
             "library" => Self::Library,
+            "Worlds" => Self::Worlds,
             _ => Self::Home,
         }
     }

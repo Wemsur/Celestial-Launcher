@@ -271,16 +271,18 @@ async fn fingerprint(
     metadata: &InstanceMetadata,
     state: &State,
 ) -> crate::Result<Vec<(String, String)>> {
-    let instance_dir = crate::state::libraries::resolve_instance_dir(
+    // Named `scan_root`, not `instance_dir`: the latter would shadow the
+    // `instance_dir()` helper of the same name used further down.
+    let scan_root = crate::state::libraries::resolve_instance_dir(
         state,
         &metadata.instance.path,
     );
     let shared_dirs = crate::state::libraries::shared_content_dirs(
-        &instance_dir,
+        &scan_root,
         &metadata.instance.library_format,
     );
     let mut files = tokio::task::spawn_blocking(move || {
-        filesystem::scan_content_files(&instance_dir, &shared_dirs)
+        filesystem::scan_content_files(&scan_root, &shared_dirs)
     })
     .await??
     .into_iter()

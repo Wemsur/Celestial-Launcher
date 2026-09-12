@@ -287,6 +287,7 @@ impl InstanceJson {
                 force_fullscreen: data.force_fullscreen,
                 game_resolution: data.game_resolution,
                 hooks: data.hooks.clone(),
+                visible_tabs: data.visible_tabs,
             },
             None => crate::state::InstanceLaunchOverrides::empty(instance_id.to_string()),
         }
@@ -369,6 +370,7 @@ impl CelestialJson {
                 force_fullscreen: data.force_fullscreen,
                 game_resolution: data.game_resolution,
                 hooks: data.hooks.clone(),
+                visible_tabs: data.visible_tabs,
             },
             None => crate::state::InstanceLaunchOverrides::empty(
                 instance_id.to_string(),

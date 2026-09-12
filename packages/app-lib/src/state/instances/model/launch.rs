@@ -86,6 +86,7 @@ impl InstanceLaunchOverridesData {
             force_fullscreen: None,
             game_resolution: None,
             hooks: Hooks::default(),
+            visible_tabs: InstanceTabVisibility::default(),
         }
     }
 

@@ -761,7 +761,7 @@ pub async fn set_instance_option(
         pending::cancel(option, Some(instance_id), &state).await?;
     }
 
-    persist_sync_preference(instance_id, option, enabled, state)
+    persist_sync_preference(instance_id, option, enabled, &state)
     .await?;
     if can_reconcile {
         let result = if enabled {
@@ -772,7 +772,7 @@ pub async fn set_instance_option(
         if let Err(error) = result {
             if option == SyncedOption::GameOptions
                 && let Err(rollback_error) =
-                    persist_sync_preference(instance_id, option, previous_enabled, state)
+                    persist_sync_preference(instance_id, option, previous_enabled, &state)
                     .await
             {
                 tracing::error!(
