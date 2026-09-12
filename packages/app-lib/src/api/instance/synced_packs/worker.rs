@@ -236,10 +236,7 @@ impl<'a> Preparation<'a> {
     }
 
     async fn validate_metadata(&self) -> crate::Result<()> {
-        let current = crate::state::get_instance(
-            &self.metadata.instance.id,
-            &self.state.pool,
-        )
+        let current = crate::api::instance::get_by_id(&self.metadata.instance.id)
         .await?;
         if current.as_ref().is_none_or(|current| {
             metadata_key(current) != metadata_key(self.metadata)
@@ -274,10 +271,16 @@ async fn fingerprint(
     metadata: &InstanceMetadata,
     state: &State,
 ) -> crate::Result<Vec<(String, String)>> {
-    let directory = state.directories.instances_dir();
-    let instance_path = metadata.instance.path.clone();
+    let instance_dir = crate::state::libraries::resolve_instance_dir(
+        state,
+        &metadata.instance.path,
+    );
+    let shared_dirs = crate::state::libraries::shared_content_dirs(
+        &instance_dir,
+        &metadata.instance.library_format,
+    );
     let mut files = tokio::task::spawn_blocking(move || {
-        filesystem::scan_content_files(&directory, &instance_path)
+        filesystem::scan_content_files(&instance_dir, &shared_dirs)
     })
     .await??
     .into_iter()

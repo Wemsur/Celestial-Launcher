@@ -68,12 +68,13 @@ async fn run_credentials(
                 "Tried to run a nonexistent instance {instance_id}!"
             ))
         })?;
-    let instance_sync_preferences =
-        crate::state::instances::adapters::sqlite::instance_rows::get_instance_sync_preferences(
-            instance_id,
-            &state.pool,
-        )
-        .await?;
+    // Read through the instance metadata rather than the DB table directly: the
+    // metadata carries `synced_options` for JSON-backed instances too, which have
+    // no row in `instance_sync_preferences`.
+    let instance_sync_preferences = crate::api::instance::get_by_id(instance_id)
+        .await?
+        .map(|metadata| metadata.synced_options)
+        .unwrap_or_default();
     let fullscreen_is_shared = game_options_sync_is_enabled(&state.pool)
         .await?
         && instance_sync_preferences.game_options

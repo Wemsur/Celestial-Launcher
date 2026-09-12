@@ -58,10 +58,9 @@ pub(in crate::api::instance) fn instance_dir(
     metadata: &InstanceMetadata,
     state: &State,
 ) -> PathBuf {
-    state
-        .directories
-        .instances_dir()
-        .join(&metadata.instance.path)
+    // Resolves both shapes: a DB instance's relative path is joined to the
+    // instances directory, while a JSON instance's absolute path is used as-is.
+    crate::state::libraries::resolve_instance_dir(state, &metadata.instance.path)
 }
 
 pub(in crate::api::instance) fn sync_files_are_protected(

@@ -659,7 +659,7 @@ pub(super) async fn run_queued(
     state: &State,
 ) -> crate::Result<()> {
     let Some(metadata) =
-        crate::state::get_instance(instance_id, &state.pool).await?
+        crate::api::instance::get_by_id(instance_id).await?
     else {
         return Ok(());
     };
@@ -1011,7 +1011,7 @@ pub(in crate::api::instance) async fn reconcile(
 
 async fn capture_after_change(instance_id: &str) -> crate::Result<()> {
     let state = State::get().await?;
-    let metadata = crate::state::get_instance(instance_id, &state.pool)
+    let metadata = crate::api::instance::get_by_id(instance_id)
         .await?
         .ok_or_else(|| {
             crate::ErrorKind::InputError("Unknown instance".to_owned())
@@ -1201,7 +1201,7 @@ pub(in crate::api::instance) async fn decorate_content(
     let Some(placements) = library.instances.get(instance_id) else {
         return Ok(());
     };
-    let metadata = crate::state::get_instance(instance_id, &state.pool)
+    let metadata = crate::api::instance::get_by_id(instance_id)
         .await?
         .ok_or_else(|| {
             crate::ErrorKind::InputError("Unknown instance".to_string())

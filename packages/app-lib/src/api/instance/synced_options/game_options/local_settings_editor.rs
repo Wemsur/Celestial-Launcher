@@ -83,7 +83,7 @@ async fn load_instance_document(
     Vec<u8>,
     HashSet<String>,
 )> {
-    let metadata = crate::state::get_instance(instance_id, &state.pool)
+    let metadata = crate::api::instance::get_by_id(instance_id)
         .await?
         .ok_or_else(|| input_error("Unknown instance"))?;
     if crate::state::game_options_sync_is_enabled(&state.pool).await?

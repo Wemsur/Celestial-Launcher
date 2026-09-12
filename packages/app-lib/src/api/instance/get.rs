@@ -216,6 +216,14 @@ pub(crate) fn instance_metadata_from_instance(
             )
         };
 
+    // Sync preferences live in the instance's own sidecar, so a JSON-backed
+    // instance reports the same `synced_options` a DB-backed one would.
+    let synced_options = libraries::CelestialJson::read_from_dir(&dir)
+        .ok()
+        .flatten()
+        .map(|celestial| celestial.synced_options)
+        .unwrap_or_default();
+
     InstanceMetadata {
         instance: Instance {
             update_channel,
@@ -227,6 +235,7 @@ pub(crate) fn instance_metadata_from_instance(
         shared_instance: None,
         quarantined: false,
         group_ids,
+        synced_options,
         launch_overrides,
     }
 }

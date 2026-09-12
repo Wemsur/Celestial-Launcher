@@ -26,7 +26,7 @@ pub(super) fn currently_launcher_owned_keys(
 pub async fn sync_before_launch(instance_id: &str) -> crate::Result<()> {
     let state = State::get().await?;
     let _guard = state.lock_synced_options().await;
-    let metadata = crate::state::get_instance(instance_id, &state.pool)
+    let metadata = crate::api::instance::get_by_id(instance_id)
         .await?
         .ok_or_else(|| input_error("Unknown instance"))?;
     if sync_is_active_for_instance(&metadata, &state).await? {
@@ -48,7 +48,7 @@ pub async fn apply_launcher_overrides(
     }
     let state = State::get().await?;
     let _guard = state.lock_synced_options().await;
-    let metadata = crate::state::get_instance(instance_id, &state.pool)
+    let metadata = crate::api::instance::get_by_id(instance_id)
         .await?
         .ok_or_else(|| input_error("Unknown instance"))?;
     let path = options_path(&metadata, &state);

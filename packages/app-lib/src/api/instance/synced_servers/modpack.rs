@@ -15,7 +15,7 @@ use uuid::Uuid;
 pub async fn capture_modpack_servers(instance_id: &str) -> crate::Result<()> {
     let state = State::get().await?;
     let _guard = state.lock_synced_options().await;
-    let metadata = crate::state::get_instance(instance_id, &state.pool)
+    let metadata = crate::api::instance::get_by_id(instance_id)
         .await?
         .ok_or_else(|| ErrorKind::InputError("Unknown instance".to_string()))?;
     let path = instance_dir(&metadata, &state).join(SERVERS_FILE);
@@ -30,7 +30,7 @@ pub async fn capture_modpack_servers(instance_id: &str) -> crate::Result<()> {
 pub async fn clear_modpack_servers(instance_id: &str) -> crate::Result<()> {
     let state = State::get().await?;
     let _guard = state.lock_synced_options().await;
-    let metadata = crate::state::get_instance(instance_id, &state.pool)
+    let metadata = crate::api::instance::get_by_id(instance_id)
         .await?
         .ok_or_else(|| ErrorKind::InputError("Unknown instance".to_string()))?;
     replace_modpack_servers(&metadata, Vec::new(), &state).await?;

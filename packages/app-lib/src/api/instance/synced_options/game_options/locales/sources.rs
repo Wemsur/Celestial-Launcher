@@ -79,14 +79,18 @@ pub(super) async fn snapshot_instance(
     state: &State,
 ) -> crate::Result<String> {
     let version = &metadata.applied_content_set.game_version;
-    let instance_dir = state
-        .directories
-        .instances_dir()
-        .join(&metadata.instance.path);
+    let instance_dir = crate::state::libraries::resolve_instance_dir(
+        state,
+        &metadata.instance.path,
+    );
+    let shared_dirs = crate::state::libraries::shared_content_dirs(
+        &instance_dir,
+        &metadata.instance.library_format,
+    );
     let scanned =
         crate::state::instances::adapters::filesystem::scan_content_files(
-            &state.directories.instances_dir(),
-            &metadata.instance.path,
+            &instance_dir,
+            &shared_dirs,
         )?;
     let scanned: Vec<_> = scanned
         .into_iter()

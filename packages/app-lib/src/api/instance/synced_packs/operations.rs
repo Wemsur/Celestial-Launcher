@@ -29,7 +29,7 @@ async fn source(
     project_path: &str,
     state: &State,
 ) -> crate::Result<(InstanceMetadata, ContentItem)> {
-    let metadata = crate::state::get_instance(instance_id, &state.pool)
+    let metadata = crate::api::instance::get_by_id(instance_id)
         .await?
         .ok_or_else(|| {
             crate::ErrorKind::InputError("Unknown instance".to_string())
@@ -408,7 +408,7 @@ async fn sync_pack_once(
     automatic: bool,
 ) -> crate::Result<()> {
     let state = State::get().await?;
-    let initial_metadata = crate::state::get_instance(instance_id, &state.pool)
+    let initial_metadata = crate::api::instance::get_by_id(instance_id)
         .await?
         .ok_or_else(|| {
             crate::ErrorKind::InputError("Unknown instance".to_owned())
@@ -417,7 +417,7 @@ async fn sync_pack_once(
         super::worker::Preparation::new(&state, &initial_metadata).await;
     let global = get_global_options().await?;
     if automatic {
-        let metadata = crate::state::get_instance(instance_id, &state.pool)
+        let metadata = crate::api::instance::get_by_id(instance_id)
             .await?
             .ok_or_else(|| {
                 crate::ErrorKind::InputError("Unknown instance".to_string())
@@ -664,7 +664,7 @@ pub async fn desync_pack(
 ) -> crate::Result<()> {
     let state = State::get().await?;
     let _guard = state.lock_synced_options().await;
-    let metadata = crate::state::get_instance(instance_id, &state.pool)
+    let metadata = crate::api::instance::get_by_id(instance_id)
         .await?
         .ok_or_else(|| {
             crate::ErrorKind::InputError("Unknown instance".to_string())

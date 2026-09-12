@@ -327,6 +327,12 @@ pub(crate) struct CelestialJson {
     pub submitted_time_played: u64,
     #[serde(default)]
     pub recent_time_played: u64,
+    /// Which sync features this instance takes part in.
+    ///
+    /// Kept in the instance's own sidecar rather than the launcher database so the
+    /// choice travels with the instance — copying a profile copies its sync setup.
+    #[serde(default)]
+    pub synced_options: crate::state::InstanceSyncedOptions,
 }
 
 impl CelestialJson {
