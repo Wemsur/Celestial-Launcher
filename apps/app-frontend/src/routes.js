@@ -1,13 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import * as Pages from '@/pages'
-import * as Hosting from '@/pages/hosting/manage'
-import * as Instance from '@/pages/instance'
 import * as Library from '@/pages/library'
 import * as Project from '@/pages/project'
 
 /**
- * Configures application routing. Add page to pages/index and then add to route table here.
+ * Loads each page when its route is visited.
  */
 export default new createRouter({
 	history: createWebHistory(),
@@ -15,42 +13,42 @@ export default new createRouter({
 		{
 			path: '/',
 			name: 'Home',
-			component: Pages.Index,
+			component: () => import('@/pages/Index.vue'),
 		},
 		{
 			path: '/hosting/manage/',
 			name: 'Servers',
-			component: Pages.Servers,
+			component: () => import('@/pages/Servers.vue'),
 		},
 		{
 			path: '/hosting/manage/:id',
 			name: 'ServerManage',
-			component: Hosting.Index,
+			component: () => import('@/pages/hosting/manage/Index.vue'),
 			children: [
 				{
 					path: '',
 					name: 'ServerManageOverview',
-					component: Hosting.Overview,
+					component: () => import('@/pages/hosting/manage/Overview.vue'),
 				},
 				{
 					path: 'content',
 					name: 'ServerManageContent',
-					component: Hosting.Content,
+					component: () => import('@/pages/hosting/manage/Content.vue'),
 				},
 				{
 					path: 'files',
 					name: 'ServerManageFiles',
-					component: Hosting.Files,
+					component: () => import('@/pages/hosting/manage/Files.vue'),
 				},
 				{
 					path: 'backups',
 					name: 'ServerManageBackups',
-					component: Hosting.Backups,
+					component: () => import('@/pages/hosting/manage/Backups.vue'),
 				},
 				{
 					path: 'access',
 					name: 'ServerManageAccess',
-					component: Hosting.Access,
+					component: () => import('@/pages/hosting/manage/Access.vue'),
 				},
 			],
 		},
@@ -95,12 +93,17 @@ export default new createRouter({
 		{
 			path: '/skins',
 			name: 'Skin selector',
-			component: Pages.Skins,
+			component: () => import('@/pages/Skins.vue'),
+		},
+		{
+			path: '/screenshots',
+			name: 'Screenshots',
+			component: () => import('@/pages/Screenshots.vue'),
 		},
 		{
 			path: '/user/:user/:projectType?',
 			name: 'User',
-			component: Pages.User,
+			component: () => import('@/pages/User.vue'),
 		},
 		{
 			path: '/library',
@@ -149,66 +152,71 @@ export default new createRouter({
 		{
 			path: '/project/:id',
 			name: 'Project',
-			component: Project.Index,
+			component: () => import('@/pages/project/Index.vue'),
 			props: true,
 			children: [
 				{
 					path: '',
 					name: 'Description',
-					component: Project.Description,
+					component: () => import('@/pages/project/Description.vue'),
 				},
 				{
 					path: 'versions',
 					name: 'Versions',
-					component: Project.Versions,
+					component: () => import('@/pages/project/Versions.vue'),
 				},
 				{
 					path: 'version/:version',
 					name: 'Version',
-					component: Project.Version,
+					component: () => import('@/pages/project/Version.vue'),
 					props: true,
 				},
 				{
 					path: 'gallery',
 					name: 'Gallery',
-					component: Project.Gallery,
+					component: () => import('@/pages/project/Gallery.vue'),
 				},
 			],
 		},
 		{
 			path: '/instance/:id',
 			name: 'Instance',
-			component: Instance.Index,
+			component: () => import('@/pages/instance/layout.vue'),
 			children: [
 				{
 					path: 'worlds',
 					name: 'InstanceWorlds',
-					component: Instance.Worlds,
+					component: () => import('@/pages/instance/worlds/index.vue'),
 				},
 				{
 					path: 'share',
 					name: 'InstanceShare',
-					component: Instance.Share,
+					component: () => import('@/pages/instance/share/index.vue'),
 				},
 				{
 					path: '',
 					name: 'InstanceContent',
-					component: Instance.Content,
+					component: () => import('@/pages/instance/content/index.vue'),
 				},
 				{
 					path: 'projects/:type',
 					name: 'InstanceContentFilter',
-					component: Instance.Content,
+					component: () => import('@/pages/instance/content/index.vue'),
 				},
 				{
 					path: 'files',
 					name: 'InstanceFiles',
-					component: Instance.Files,
+					component: () => import('@/pages/instance/files/index.vue'),
+				},
+				{
+					path: 'screenshots',
+					name: 'InstanceScreenshots',
+					component: () => import('@/pages/instance/screenshots/index.vue'),
 				},
 				{
 					path: 'logs',
 					name: 'InstanceLogs',
-					component: Instance.Logs,
+					component: () => import('@/pages/instance/logs/index.vue'),
 					meta: {
 						renderMode: 'fixed',
 					},
@@ -225,7 +233,7 @@ export default new createRouter({
 			document.querySelector('.browse-detail-pane')?.scrollTo(0, 0)
 			if (from.matched.some((record) => record.name === 'DiscoverSplitProject')) return
 		}
-		if (to.path === from.path) return
+		if (to.path === from.path || to.name === 'Home') return
 		// Sometimes Vue's scroll behavior is not working as expected, so we need to manually scroll to top (especially on Linux)
 		document.querySelector('.app-viewport')?.scrollTo(0, 0)
 		return {

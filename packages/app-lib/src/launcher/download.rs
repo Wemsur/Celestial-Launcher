@@ -36,6 +36,8 @@ use std::{
 };
 use tokio::sync::OnceCell;
 
+const MINECRAFT_DOWNLOAD_CONCURRENCY: usize = 8;
+
 const MINECRAFT_DOWNLOAD_PROGRESS_MIN_BYTES: u64 = 256 * 1024;
 
 #[derive(Clone, Debug)]
@@ -149,7 +151,7 @@ async fn fetch_minecraft_file(
     expected_size: Option<u64>,
     progress: Option<MinecraftDownloadProgress>,
     context: InstallErrorContext,
-) -> crate::Result<bytes::Bytes> {
+) -> crate::Result<DownloadedFile> {
     let mut context = context;
     context.urls.push(url.to_string());
     context.expected_hash = sha1.map(str::to_string);
@@ -159,8 +161,16 @@ async fn fetch_minecraft_file(
     }
 
     let Some(progress) = progress else {
-        return fetch(url, sha1, None, None, &st.fetch_semaphore, &st.pool)
-            .await;
+        return fetch_file(
+            url,
+            sha1,
+            None,
+            None,
+            &st.fetch_semaphore,
+            &st.pool,
+            None,
+        )
+        .await;
     };
 
     let last_downloaded = Arc::new(AtomicU64::new(0));
@@ -178,13 +188,9 @@ async fn fetch_minecraft_file(
         }
     };
 
-    let bytes = match fetch_advanced_with_progress(
-        Method::GET,
+    let bytes = match fetch_file(
         url,
         sha1,
-        None,
-        None,
-        None,
         None,
         None,
         &st.fetch_semaphore,
@@ -399,7 +405,7 @@ fn missing_initial_minecraft_bytes(
         )?)
 }
 
-#[tracing::instrument(skip(st, version))]
+#[tracing::instrument(skip(st, version, reporter))]
 pub async fn download_minecraft(
     st: &State,
     version: &GameVersionInfo,
@@ -638,20 +644,32 @@ pub async fn download_client(
                 .build(),
         )
         .await?;
-        write(&path, &bytes, &st.io_semaphore).await?;
+        bytes.copy_to(&path, &st.io_semaphore).await?;
 
         // For .minecraft format, also write to the instance directory
         if let Some(inst_dir) = instance_dir {
-            if let Err(e) =
-                crate::state::libraries::write_version_jar_to_instance_dir(
-                    inst_dir, version, &bytes,
-                )
-                .await
-            {
-                tracing::warn!(
-                    "Failed to write client jar to instance dir {}: {e}",
-                    inst_dir.display()
-                );
+            match io::read(bytes.path()).await {
+                Ok(jar_bytes) => {
+                    if let Err(e) =
+                        crate::state::libraries::write_version_jar_to_instance_dir(
+                            inst_dir,
+                            version,
+                            &jar_bytes,
+                        )
+                        .await
+                    {
+                        tracing::warn!(
+                            "Failed to write client jar to instance dir {}: {e}",
+                            inst_dir.display()
+                        );
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to read client jar for instance dir {}: {e}",
+                        inst_dir.display()
+                    );
+                }
             }
         }
 
@@ -703,7 +721,8 @@ pub async fn download_assets_index(
                 .build(),
         )
         .await?;
-        let index = serde_json::from_slice(&index)?;
+        let index: AssetsIndex =
+            read_json(index.path(), &st.io_semaphore).await?;
         write(&path, &serde_json::to_vec(&index)?, &st.io_semaphore).await?;
         tracing::info!("Fetched assets index");
         Ok(index)
@@ -734,7 +753,7 @@ pub async fn download_assets(
         .map(Ok::<(&String, &Asset), crate::Error>);
 
     loading_try_for_each_concurrent(assets,
-            None,
+			Some(MINECRAFT_DOWNLOAD_CONCURRENCY),
             loading_bar,
             loading_amount,
             num_futs,
@@ -770,7 +789,7 @@ pub async fn download_assets(
                     sub_hash = &hash[..2]
                 );
 
-                let fetch_cell = OnceCell::<bytes::Bytes>::new();
+				let fetch_cell = OnceCell::<DownloadedFile>::new();
                 tokio::try_join! {
                     async {
                         if should_fetch_object {
@@ -787,7 +806,7 @@ pub async fn download_assets(
                                         .build(),
                                 ))
                                 .await?;
-                            write(&resource_path, resource, &st.io_semaphore).await?;
+                            resource.copy_to(&resource_path, &st.io_semaphore).await?;
                             tracing::trace!("Fetched asset with hash {hash}");
                         }
                         Ok::<_, crate::Error>(())
@@ -807,7 +826,7 @@ pub async fn download_assets(
                                         .build(),
                                 ))
                                 .await?;
-                            write(&legacy_resource_path, resource, &st.io_semaphore).await?;
+                            resource.copy_to(&legacy_resource_path, &st.io_semaphore).await?;
                             tracing::trace!("Fetched legacy asset with hash {hash}");
                         }
                         Ok::<_, crate::Error>(())
@@ -848,7 +867,7 @@ pub async fn download_libraries(
     let num_files = libraries.len();
     loading_try_for_each_concurrent(
         stream::iter(libraries.iter()).map(Ok::<&Library, crate::Error>),
-        None,
+		Some(MINECRAFT_DOWNLOAD_CONCURRENCY),
         loading_bar,
         loading_amount,
         num_files,
@@ -905,7 +924,7 @@ pub async fn download_libraries(
                     .await?;
 
                     if let Ok(mut archive) =
-                        zip::ZipArchive::new(std::io::Cursor::new(&data))
+                        zip::ZipArchive::new(std::fs::File::open(data.path())?)
                     {
                         match archive.extract(&natives_dir) {
                             Ok(_) => tracing::debug!(
@@ -951,7 +970,7 @@ pub async fn download_libraries(
                             .build(),
                     )
                     .await?;
-                    write(&path, &bytes, &st.io_semaphore).await?;
+                    bytes.copy_to(&path, &st.io_semaphore).await?;
 
                     tracing::trace!(
                         "Fetched library {} to path {:?}",
@@ -983,18 +1002,19 @@ pub async fn download_libraries(
                     // failed download here is not a fatal condition.
                     //
                     // See DEV-479.
-                    match fetch(
+                    match fetch_file(
                         &url,
                         None,
                         None,
                         None,
                         &st.fetch_semaphore,
                         &st.pool,
+						None,
                     )
                     .await
                     {
                         Ok(bytes) => {
-                            write(&path, &bytes, &st.io_semaphore).await?;
+                            bytes.copy_to(&path, &st.io_semaphore).await?;
 
                             tracing::debug!(
                                 "Fetched library {} to path {:?}",
@@ -1062,7 +1082,7 @@ pub async fn download_log_config(
                 .build(),
         )
         .await?;
-        write(&path, &bytes, &st.io_semaphore).await?;
+        bytes.copy_to(&path, &st.io_semaphore).await?;
         tracing::trace!("Fetched log config {}", log_download.id);
     }
     if let Some(loading_bar) = loading_bar {

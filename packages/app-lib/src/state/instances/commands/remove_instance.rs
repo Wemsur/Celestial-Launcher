@@ -9,10 +9,19 @@ pub(crate) async fn remove_instance(
     let instance =
         instance_rows::get_instance_by_id(instance_id, &state.pool).await?;
 
+    // Held across the whole teardown so a concurrent sync cannot recreate files
+    // underneath us. Acquired exactly once — these are real mutexes and a second
+    // `lock_instance_content` for the same instance would deadlock.
+    let _synced_options_lock = state.lock_synced_options().await;
+    let _content_lock = state.lock_instance_content(instance_id).await;
+    crate::api::instance::remove_generated_instance_files(instance_id, state)
+        .await?;
+
     match instance {
         Some(instance) => {
-            let _content_lock = state.lock_instance_content(instance_id).await;
             delete_instance_row_and_locks(&instance.id, state).await?;
+            // Resolved through the library registry, not `instances_dir()`: a
+            // JSON-backed instance can live anywhere the user registered.
             let path = libraries::resolve_instance_dir(state, &instance.path);
             if path.exists() {
                 crate::util::io::remove_dir_all(&path).await?;

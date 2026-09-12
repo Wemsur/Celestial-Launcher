@@ -8,6 +8,7 @@ export const DEFAULT_FEATURE_FLAGS = {
 	show_version_environment_column: false,
 	server_ram_as_bytes_always_on: false,
 	always_show_app_controls: false,
+	show_sync_instances_update_modal: false,
 	skip_non_essential_warnings: false,
 	skip_unknown_pack_warning: false,
 	pride_fundraiser: true,
@@ -22,13 +23,24 @@ export const DEFAULT_FEATURE_FLAGS = {
 	friends_offline_collapsed: true,
 	friends_pending_collapsed: true,
 	dismissed_photosensitivity_filter_warning: false,
+	localhost_sign_in: false,
 }
 
 export type FeatureFlag = keyof typeof DEFAULT_FEATURE_FLAGS
 type FeatureFlags = Record<FeatureFlag, boolean>
 
+const syncFeaturesAcrossDevices = ref(false)
+
+// Written by App.vue from the startup settings and from cross-device behavior
+// sync. The fork has no UI toggle for it, but the fields are part of the
+// upstream sync contract, so they stay as plain data holders.
+const syncBehaviorAcrossDevices = ref(false)
 const featureFlags = reactive<FeatureFlags>({ ...DEFAULT_FEATURE_FLAGS })
 
+
+function setFeaturesSyncAcrossDevices(enabled: boolean): void {
+	syncFeaturesAcrossDevices.value = enabled
+}
 
 function getFeatureFlag(key: FeatureFlag): boolean {
 	return featureFlags[key] ?? DEFAULT_FEATURE_FLAGS[key]
@@ -43,11 +55,18 @@ function notifySubscribers() {
 }
 
 const appSettings = reactive({
-
+	syncFeaturesAcrossDevices,
+	syncBehaviorAcrossDevices,
+	toggleSidebar: false,
 	hideNametagSkinsPage: false,
+	showFilesTabInInstances: true,
+	showWorldsTabInInstances: true,
+	showScreenshotsTabInInstances: false,
+	showSkinSelectorInSidebar: true,
+	nativeDecorations: false,
 	devMode: false,
 	featureFlags,
-
+	setFeaturesSyncAcrossDevices,
 	getFeatureFlag,
 	$subscribe(callback: SubCallback) {
 		subscribers.add(callback)
@@ -59,6 +78,8 @@ const appSettings = reactive({
 watch(
 	() => ({
 		hideNametagSkinsPage: appSettings.hideNametagSkinsPage,
+		syncBehaviorAcrossDevices: appSettings.syncBehaviorAcrossDevices,
+		toggleSidebar: appSettings.toggleSidebar,
 		devMode: appSettings.devMode,
 	}),
 	() => notifySubscribers(),

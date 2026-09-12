@@ -2,9 +2,8 @@ use crate::event::InstancePayloadType;
 use crate::event::emit::emit_instance;
 use crate::state::instances::adapters::sqlite::instance_rows;
 use crate::state::{
-    CreateInstance, EditInstance, Instance, InstanceLink, InstanceMetadata,
-    ModLoader, State,
-    InstanceIconConfig,
+    CreateInstance, EditInstance, Instance, InstanceIconConfig, InstanceLink,
+    InstanceMetadata, InstanceSyncedOption, ModLoader, State,
 };
 use crate::state::libraries::InstanceJson;
 
@@ -255,8 +254,30 @@ pub async fn edit(
                 "Unknown instance".to_string(),
             ))
         })?;
+
+    super::reconcile_instance_synced_options(instance_id).await?;
+
     emit_instance(&meta.instance.id, InstancePayloadType::Edited).await?;
     Ok(meta)
+}
+
+pub async fn set_synced_option(
+    instance_id: &str,
+    option: InstanceSyncedOption,
+    enabled: bool,
+    resolution: Option<super::SyncedOptionJoinResolution>,
+) -> crate::Result<InstanceMetadata> {
+    let instance = super::synced_options::set_instance_option(
+        instance_id,
+        option,
+        enabled,
+        resolution,
+    )
+    .await?;
+
+    emit_instance(&instance.instance.id, InstancePayloadType::Edited).await?;
+
+    Ok(instance)
 }
 
 #[tracing::instrument]

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { PlusIcon, SearchIcon, SpinnerIcon, SquarePlusIcon, UpdatedIcon } from '@modrinth/assets'
-import { Button, defineMessages, StyledInput, useVIntl } from '@modrinth/ui'
+import { Button, defineMessages, Input, useVIntl } from '@modrinth/ui'
 import { computed, inject, type Ref } from 'vue'
 
 import FilterMenu from '@/components/ui/library/library-toolbar/filter-menu.vue'
@@ -42,7 +42,7 @@ function openNewGroup() {
 				<SpinnerIcon v-if="isRefreshing?.value" class="animate-spin" />
 				<UpdatedIcon v-else />
 			</Button>
-			<StyledInput
+			<Input
 				v-model="search"
 				:icon="SearchIcon"
 				type="text"

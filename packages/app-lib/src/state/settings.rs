@@ -20,6 +20,17 @@ pub struct Settings {
     pub native_decorations: bool,
     pub toggle_sidebar: bool,
     pub sync_theme_across_devices: bool,
+    pub sync_behavior_across_devices: bool,
+    #[serde(default = "default_true")]
+    pub sync_features_across_devices: bool,
+    #[serde(default = "default_true")]
+    pub show_files_tab_in_instances: bool,
+    #[serde(default = "default_true")]
+    pub show_worlds_tab_in_instances: bool,
+    #[serde(default)]
+    pub show_screenshots_tab_in_instances: bool,
+    #[serde(default = "default_true")]
+    pub show_skin_selector_in_sidebar: bool,
 
     pub telemetry: bool,
     pub discord_rpc: bool,
@@ -47,15 +58,19 @@ pub struct Settings {
     pub version: usize,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, Hash, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum FeatureFlag {
     PagePath,
     ProjectBackground,
-    WorldsTab,
     WorldsInHome,
     ServerRamAsBytesAlwaysOn,
     AlwaysShowAppControls,
+    ShowSyncInstancesUpdateModal,
     SkipUnknownPackWarning,
     PrideFundraiser,
     ServersInApp,
@@ -72,6 +87,7 @@ pub enum FeatureFlag {
     FriendsOfflineCollapsed,
     FriendsPendingCollapsed,
     DismissedPhotosensitivityFilterWarning,
+    LocalhostSignIn,
 }
 
 impl Settings {
@@ -91,7 +107,9 @@ impl Settings {
                 hook_pre_launch, hook_wrapper, hook_post_exit,
                 custom_dir, prev_custom_dir, migrated, json(feature_flags) feature_flags, toggle_sidebar,
                 skipped_update, pending_update_toast_for_version, auto_download_updates,
-                sync_theme_across_devices,
+				sync_theme_across_devices, sync_behavior_across_devices, sync_features_across_devices,
+				show_files_tab_in_instances, show_worlds_tab_in_instances,
+				show_screenshots_tab_in_instances, show_skin_selector_in_sidebar,
                 version
             FROM settings
             "
@@ -110,7 +128,7 @@ impl Settings {
             advanced_rendering: res.advanced_rendering == 1,
             native_decorations: res.native_decorations == 1,
             toggle_sidebar: res.toggle_sidebar == 1,
-            telemetry: false,  // 强制禁用Modrinth遥测
+            telemetry: res.telemetry == 1,
             discord_rpc: res.discord_rpc == 1,
             developer_mode: res.developer_mode == 1,
             personalized_ads: res.personalized_ads == 1,
@@ -151,6 +169,15 @@ impl Settings {
                 .pending_update_toast_for_version,
             auto_download_updates: res.auto_download_updates.map(|x| x == 1),
             sync_theme_across_devices: res.sync_theme_across_devices == 1,
+            sync_behavior_across_devices: res.sync_behavior_across_devices == 1,
+            sync_features_across_devices: res.sync_features_across_devices == 1,
+            show_files_tab_in_instances: res.show_files_tab_in_instances == 1,
+            show_worlds_tab_in_instances: res.show_worlds_tab_in_instances == 1,
+            show_screenshots_tab_in_instances: res
+                .show_screenshots_tab_in_instances
+                == 1,
+            show_skin_selector_in_sidebar: res.show_skin_selector_in_sidebar
+                == 1,
             version: res.version as usize,
         })
     }
@@ -212,8 +239,14 @@ impl Settings {
                 auto_download_updates = $31,
 
                 sync_theme_across_devices = $32,
+                sync_behavior_across_devices = $33,
+				sync_features_across_devices = $34,
+				show_files_tab_in_instances = $35,
+				show_worlds_tab_in_instances = $36,
+				show_screenshots_tab_in_instances = $37,
+				show_skin_selector_in_sidebar = $38,
 
-                version = $33
+				version = $39
             ",
             max_concurrent_writes,
             max_concurrent_downloads,
@@ -247,6 +280,12 @@ impl Settings {
             self.pending_update_toast_for_version,
             self.auto_download_updates,
             self.sync_theme_across_devices,
+            self.sync_behavior_across_devices,
+            self.sync_features_across_devices,
+            self.show_files_tab_in_instances,
+            self.show_worlds_tab_in_instances,
+            self.show_screenshots_tab_in_instances,
+            self.show_skin_selector_in_sidebar,
             version,
         )
         .execute(exec)
@@ -335,11 +374,6 @@ pub enum Theme {
     Dark,
     Light,
     Oled,
-    Elegant,
-    Customdark,
-    Customlight,
-    #[serde(rename = "antiquedark")] // 告诉 Serde：当前端传包进 "antiquedark" 字符串时，映射到此处的枚举
-    AntiqueDark,
     Retro,
     System,
 }
@@ -350,10 +384,6 @@ impl Theme {
             Theme::Dark => "dark",
             Theme::Light => "light",
             Theme::Oled => "oled",
-            Theme::Elegant => "elegant",
-            Theme::AntiqueDark => "antiquedark",
-            Theme::Customdark => "customdark",
-            Theme::Customlight => "customlight",
             Theme::Retro => "retro",
             Theme::System => "system",
         }
@@ -365,10 +395,6 @@ impl Theme {
             "light" => Theme::Light,
             "oled" => Theme::Oled,
             "retro" => Theme::Retro,
-            "elegant" => Theme::Elegant,
-            "antiquedark" => Theme::AntiqueDark,
-            "customdark" => Theme::Customdark,
-            "customlight" => Theme::Customlight,
             "system" => Theme::System,
             _ => Theme::Dark,
         }
@@ -402,7 +428,6 @@ pub struct Hooks {
 pub enum DefaultPage {
     Home,
     Library,
-    Worlds,
 }
 
 impl DefaultPage {
@@ -410,7 +435,6 @@ impl DefaultPage {
         match self {
             DefaultPage::Home => "home",
             DefaultPage::Library => "library",
-            DefaultPage::Worlds => "Worlds",
         }
     }
 
@@ -418,7 +442,6 @@ impl DefaultPage {
         match string {
             "home" => Self::Home,
             "library" => Self::Library,
-            "Worlds" => Self::Worlds,
             _ => Self::Home,
         }
     }

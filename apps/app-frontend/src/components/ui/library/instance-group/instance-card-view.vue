@@ -3,6 +3,7 @@ import { Avatar, avatarTintBackground, truncatedTooltip } from '@modrinth/ui'
 import { computed, ref } from 'vue'
 
 import { useAppSettings } from '@/composables/use-app-settings.ts'
+import { useImageThumbnail } from '@/composables/use-image-thumbnail'
 import { useTheme } from '@/composables/use-theme.ts'
 import { getInstanceIconUrl } from '@/helpers/instance'
 import type { GameInstance } from '@/helpers/types'
@@ -17,10 +18,21 @@ const props = withDefaults(
 	},
 )
 
-const iconSrc = computed(() => getInstanceIconUrl(props.instance.icon_path))
+const localIcon = computed(() => {
+	const path = props.instance.icon_path
+	return path && !/^https?:/.test(path) && !path.toLowerCase().endsWith('.svg') ? path : undefined
+})
 const appSettings = useAppSettings()
 const theme = useTheme()
 const compactMode = computed(() => appSettings.getFeatureFlag('compact_instance_cards'))
+const thumbnail = useImageThumbnail(
+	localIcon,
+	() => (compactMode.value ? 96 : 384),
+	() => String(props.instance.modified),
+)
+const iconSrc = computed(() =>
+	localIcon.value ? thumbnail.value : getInstanceIconUrl(props.instance.icon_path),
+)
 
 const nameRef = ref<HTMLElement | null>(null)
 const versionRef = ref<HTMLElement | null>(null)
@@ -53,7 +65,7 @@ const tintBackground = computed(
 
 <template>
 	<div
-		class="relative isolate flex w-full min-w-0 select-none overflow-clip border border-solid text-left transition-all"
+		class="relative isolate flex w-full min-w-0 select-none overflow-clip border border-solid text-left transition-[background-color,border-color,filter]"
 		:class="{
 			'flex-row items-center justify-start gap-2.5 rounded-xl p-2.5': compactMode,
 			'flex-col items-start justify-end gap-3 rounded-[20px] p-3': !compactMode,
@@ -105,7 +117,7 @@ const tintBackground = computed(
 			></div>
 		</div>
 		<div
-			class="relative flex shrink-0 items-center overflow-clip"
+			class="relative flex shrink-0 items-center max-w-full overflow-clip"
 			:class="compactMode ? 'size-10 rounded-lg' : 'aspect-square min-w-full rounded-2xl'"
 		>
 			<Avatar
@@ -114,9 +126,11 @@ const tintBackground = computed(
 				:class="compactMode ? '!rounded-lg' : '!rounded-2xl'"
 				size="100%"
 				:src="iconSrc"
+				loading="lazy"
 				:tint-by="instance.id"
 				alt=""
 				no-shadow
+				pad-transparent-corners
 			/>
 			<slot name="loading" :compact="compactMode" />
 			<div

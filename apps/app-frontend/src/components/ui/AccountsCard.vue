@@ -49,7 +49,7 @@
                 </div>
             </div>
         </template>
-		<div class="bg-button-bg pt-1 pb-2 border border-solid border-surface-5">
+		<div class="bg-button-bg pt-1 pb-2 border-0 border-t border-solid border-surface-5">
 			<template v-if="accounts.length > 0">
 				<div v-for="account in accounts" :key="account.profile.id" class="flex gap-1 items-center">
 					<button
@@ -126,7 +126,7 @@
         <form class="space-y-6 min-w-[400px]" @submit.prevent="handleCreateOffline">
             <label class="flex flex-col gap-2">
                 <span class="font-semibold text-contrast">用户名</span>
-                <StyledInput
+                <Input
                     ref="offlineInputRef"
                     v-model="offlineUsername"
                     wrapper-class="w-full"
@@ -172,12 +172,12 @@ import {
 	defineMessages,
 	IconButton,
 	injectNotificationManager,
+    Input,
     NewModal,
-    StyledInput,
 	useVIntl,
 } from '@modrinth/ui'
 import type { Ref } from 'vue'
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 
 import { useAppEvent } from '@/composables/use-app-event'
 import { handleSevereError } from '@/composables/use-error.js'
@@ -191,7 +191,7 @@ import {
 	users,
 } from '@/helpers/auth'
 import { process_listener } from '@/helpers/events'
-import { generatePlayerHeadBlob, getPlayerHeadUrl } from '@/helpers/rendering/batch-skin-renderer.ts'
+import { generatePlayerHeadBlob, getPlayerHeadUrl } from '@/helpers/rendering/player-head'
 import type { Skin } from '@/helpers/skins'
 import { get_available_skins } from '@/helpers/skins'
 
@@ -217,10 +217,27 @@ const loginDisabled = ref(false)
 const defaultUser = ref<string | undefined>()
 const equippedSkin = ref<Skin | null>(null)
 const headUrlCache = ref(new Map<string, string>())
+const equippedHeadUrl = ref<string>()
+let headRequest = 0
+
+async function updateHeadUrl(skin: Skin | null) {
+	const request = ++headRequest
+	if (equippedHeadUrl.value) URL.revokeObjectURL(equippedHeadUrl.value)
+	equippedHeadUrl.value = undefined
+	if (!skin) return
+	const url = await getPlayerHeadUrl(skin)
+	if (request !== headRequest) URL.revokeObjectURL(url)
+	else equippedHeadUrl.value = url
+}
+
+onUnmounted(() => {
+	headRequest++
+	if (equippedHeadUrl.value) URL.revokeObjectURL(equippedHeadUrl.value)
+})
 
 // 离线账户弹窗
 const offlineModalRef = ref<InstanceType<typeof NewModal>>()
-const offlineInputRef = ref<InstanceType<typeof StyledInput>>()
+const offlineInputRef = ref<InstanceType<typeof Input>>()
 const offlineUsername = ref('')
 const offlineSubmitting = ref(false)
 const offlineError = ref('')
@@ -248,20 +265,10 @@ async function refreshValues() {
     try {
         const skins = await get_available_skins()
         equippedSkin.value = skins.find((skin) => skin.is_equipped) ?? null
-
-        if (equippedSkin.value) {
-            try {
-                const headUrl = await getPlayerHeadUrl(equippedSkin.value)
-                headUrlCache.value = new Map(headUrlCache.value).set(
-                    equippedSkin.value.texture_key,
-                    headUrl,
-                )
-            } catch (error) {
-                console.warn('Failed to get head render for equipped skin:', error)
-            }
-        }
+        await updateHeadUrl(equippedSkin.value)
     } catch {
         equippedSkin.value = null
+        void updateHeadUrl(null)
     }
 }
 
@@ -269,8 +276,7 @@ async function setEquippedSkin(skin: Skin) {
 	equippedSkin.value = skin
 
 	try {
-		const headUrl = await getPlayerHeadUrl(skin)
-		headUrlCache.value = new Map(headUrlCache.value).set(skin.texture_key, headUrl)
+		await updateHeadUrl(skin)
 	} catch (error) {
 		console.warn('Failed to get head render for equipped skin:', error)
 	}
@@ -304,15 +310,15 @@ const avatarUrl = computed(() => {
         return null
     }
 
-    // 如果有装备的皮肤，优先用缓存
+    // 如果有装备的皮肤，优先用已渲染的头像
     if (equippedSkin.value?.texture_key) {
-        const cachedUrl = headUrlCache.value.get(equippedSkin.value.texture_key)
+        const cachedUrl = equippedHeadUrl.value
         if (cachedUrl) {
             return cachedUrl
         }
     }
 
-    // 尝试从账户列表中获取该账户的皮肤 URL 并渲染头像
+    // 尝试从账户列表中获取该账户的皮肤 URL 并本地渲染头像
     const skinUrl = selectedAccount.value.profile?.skins?.[0]?.url
     if (skinUrl) {
         const headKey = `head-${selectedAccount.value.profile.id}`
@@ -335,7 +341,17 @@ function getAccountAvatarUrl(account: MinecraftCredential) {
         return null
     }
 
-    // 从账户的 profile.skins 获取皮肤 URL 并渲染头像
+    if (
+        account.profile.id === selectedAccount.value?.profile?.id &&
+        equippedSkin.value?.texture_key
+    ) {
+        const cachedUrl = equippedHeadUrl.value
+        if (cachedUrl) {
+            return cachedUrl
+        }
+    }
+
+    // 从账户的 profile.skins 获取皮肤 URL 并本地渲染头像
     const skinUrl = account.profile?.skins?.[0]?.url
     if (skinUrl) {
         const headKey = `head-${account.profile.id}`

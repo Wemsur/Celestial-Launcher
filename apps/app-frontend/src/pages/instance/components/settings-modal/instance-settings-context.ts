@@ -17,7 +17,7 @@ export interface InstanceSettingsContext {
 	offline?: boolean
 	isMinecraftServer: Ref<boolean>
 	onUnlinked: () => void
-	closeModal?: () => void
+	closeModal?: (onAfterClose?: () => void) => void
 	registerUnsavedChangesController: (
 		controller: InstanceSettingsUnsavedChangesController | null,
 	) => void

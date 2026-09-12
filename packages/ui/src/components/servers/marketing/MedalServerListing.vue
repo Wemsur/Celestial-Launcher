@@ -26,7 +26,7 @@
 				v-if="isDisabled"
 				class="relative z-10 flex size-16 items-center justify-center rounded-xl border-[1px] border-solid border-button-border bg-button-bg shadow-sm"
 			>
-				<Avatar src="https://cdn-raw.modrinth.com/medal_icon.webp" size="64px" class="opacity-50" />
+				<Avatar src="https://cdn.modrinth.com/medal_icon.webp" size="64px" class="opacity-50" />
 				<SpinnerIcon
 					v-if="isUpgrading"
 					class="size-8 animate-spin absolute text-contrast"
@@ -34,7 +34,7 @@
 				/>
 				<LockIcon v-else class="size-8 absolute" :class="{ 'opacity-50': isDisabled }" />
 			</div>
-			<Avatar v-else src="https://cdn-raw.modrinth.com/medal_icon.webp" size="64px" class="z-10" />
+			<Avatar v-else src="https://cdn.modrinth.com/medal_icon.webp" size="64px" class="z-10" />
 			<div class="z-10 ml-4 flex min-w-0 flex-col gap-1.5">
 				<div class="flex flex-row items-center gap-2.5">
 					<h2
@@ -142,32 +142,44 @@
 				{{ formatMessage(messages.upgradingNotice) }}
 			</div>
 		</div>
-		<div
-			v-else-if="status === 'suspended' && suspension_reason === 'cancelled'"
-			class="server-listing-notice"
-		>
-			<div>{{ formatMessage(messages.medalTrialEndedNotice) }}</div>
-		</div>
-		<div v-else-if="status === 'suspended' && suspension_reason" class="server-listing-notice">
-			<div>
+		<div v-else-if="status === 'suspended'" class="server-listing-notice">
+			<div v-if="suspension_reason === 'cancelled'">
+				{{ formatMessage(messages.medalTrialEndedNotice) }}
+			</div>
+			<div v-else-if="suspension_reason">
 				{{
 					formatMessage(messages.suspendedWithReasonNotice, {
 						reason: suspension_reason,
 					})
 				}}
 			</div>
-			<CopyCode :text="`${props.server_id}`" class="ml-auto" />
-		</div>
-		<div v-else-if="status === 'suspended'" class="server-listing-notice">
-			<div>{{ formatMessage(messages.suspendedNotice) }}</div>
-			<CopyCode :text="`${props.server_id}`" class="ml-auto" />
+			<div v-else>{{ formatMessage(messages.suspendedNotice) }}</div>
+			<div
+				v-if="onDownloadWorld || suspension_reason !== 'cancelled'"
+				class="flex flex-wrap items-center gap-2"
+			>
+				<Button
+					v-if="onDownloadWorld"
+					type="outlined"
+					data-server-listing-button
+					@click="onDownloadWorld"
+				>
+					<DownloadIcon />
+					{{ formatMessage(commonMessages.downloadFilesButton) }}
+				</Button>
+				<CopyCode
+					v-if="suspension_reason !== 'cancelled'"
+					:text="`${props.server_id}`"
+					class="ml-auto"
+				/>
+			</div>
 		</div>
 	</div>
 </template>
 
 <script setup lang="ts">
 import type { Archon } from '@modrinth/api-client'
-import { LockIcon, RocketIcon, SparklesIcon, SpinnerIcon } from '@modrinth/assets'
+import { DownloadIcon, LockIcon, RocketIcon, SparklesIcon, SpinnerIcon } from '@modrinth/assets'
 import { useQuery } from '@tanstack/vue-query'
 import dayjs from 'dayjs'
 import dayjsDuration from 'dayjs/plugin/duration'
@@ -175,6 +187,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { Button } from '#ui/components/base/buttons'
+import { commonMessages } from '#ui/utils/common-messages'
 
 import { defineMessages, useVIntl } from '../../../composables/i18n'
 import { injectModrinthClient } from '../../../providers/api-client'
@@ -200,6 +213,7 @@ type MedalServerListingProps = {
 	upstream?: Archon.Servers.v0.Upstream | null
 	flows?: Archon.Servers.v0.Flows
 	medal_expires?: string
+	onDownloadWorld?: (() => void) | null
 	owner?: ServerListingOwner
 }
 

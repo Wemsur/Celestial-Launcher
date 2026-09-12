@@ -5,9 +5,6 @@
   "action.continue": {
     "message": "Continuă"
   },
-  "admin.billing.error.not-found": {
-    "message": "Utilizatorul nu a fost găsit"
-  },
   "app-marketing.download.description": {
     "message": "Aplicația noastră de desktop este disponibilă pe toate platformele, alege versiunea ta favorită."
   },
@@ -43,12 +40,6 @@
   },
   "app-marketing.download.windows": {
     "message": "Windows"
-  },
-  "app-marketing.features.follow.description": {
-    "message": "Salvează conținut care îți place și primește actualizări cu un singur click."
-  },
-  "app-marketing.features.follow.title": {
-    "message": "Urmărește proiecte"
   },
   "app-marketing.features.importing.description": {
     "message": "Importă toate profilurile tale favorite de pe aplicația pe care o foloseai înainte, și începe cu Modrinth App în secunde!"
@@ -86,12 +77,6 @@
   "app-marketing.features.mod-management.version": {
     "message": "Versiune"
   },
-  "app-marketing.features.offline.description": {
-    "message": "Joacă-te cu modurile tale, indiferent dacă ești conectat la internet sau nu."
-  },
-  "app-marketing.features.offline.title": {
-    "message": "Modul offline"
-  },
   "app-marketing.features.open-source.description": {
     "message": "Lansatorul Modrinth este complet cu sursă deschisă. Poți vedea codul sursă pe <github-link>GitHub</github-link>-ul nostru!"
   },
@@ -112,12 +97,6 @@
   },
   "app-marketing.features.performance.google-chrome": {
     "message": "Google Chrome"
-  },
-  "app-marketing.features.performance.infinite-mb": {
-    "message": "∞ MB"
-  },
-  "app-marketing.features.performance.less-than-150mb": {
-    "message": "< 150 MB"
   },
   "app-marketing.features.performance.modrinth-app": {
     "message": "Modrinth App"
@@ -247,9 +226,6 @@
   },
   "auth.reset-password.title.long": {
     "message": "Resetează-ți parola"
-  },
-  "auth.sign-in.2fa.placeholder": {
-    "message": "Introdu codul..."
   },
   "auth.sign-in.title": {
     "message": "Conectare"
@@ -740,9 +716,6 @@
   "hosting-marketing.faq.cpu-kind": {
     "message": "Ce fel de CPU-uri folosesc serverele Modrinth Hosting?"
   },
-  "hosting-marketing.faq.cpu-kind.answer": {
-    "message": "Serverele Modrinth Hosting folosesc AMD Ryzen 7900 si 7950X3D sau echivalent la 5+ GHz, împreuna cu memorie DDR5."
-  },
   "hosting-marketing.faq.ddos-protection": {
     "message": "Au serverele Modrinth Hosting protectie DDos?"
   },
@@ -940,9 +913,6 @@
   },
   "layout.action.file-lookup": {
     "message": "Căutare fișier"
-  },
-  "layout.action.lookup-by-email": {
-    "message": "Căutare după email"
   },
   "layout.action.manage-server-notices": {
     "message": "Administrează notificările serverului"

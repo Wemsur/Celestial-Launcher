@@ -219,7 +219,9 @@ pub async fn retry_job(job_id: Uuid) -> crate::Result<InstallJobSnapshot> {
     };
     emit_install_job(&record.snapshot()).await?;
 
-    if let Err(error) = prepare_initial_instance(&mut job.state, &state).await {
+    if let Err(error) =
+        Box::pin(prepare_initial_instance(&mut job.state, &state)).await
+    {
         let error_view = install_error_view(
             job.state.progress.phase,
             &error,
@@ -259,9 +261,7 @@ pub async fn retry_job(job_id: Uuid) -> crate::Result<InstallJobSnapshot> {
     if target_was_nulled {
         let _ = store::update_state(job_id, &job.state, &state).await;
     }
-    if let Err(error) =
-        lock_existing_instance_if_needed(&job.state, &state).await
-    {
+    if let Err(error) = lock_install_target(&job.state, &state).await {
         let error_view = install_error_view(
             job.state.progress.phase,
             &error,
@@ -404,7 +404,9 @@ async fn start(request: InstallRequest) -> crate::Result<InstallJobSnapshot> {
         store::insert(id, &job_state, InstallJobStatus::Queued, &state).await?;
     emit_install_job(&record.snapshot()).await?;
 
-    if let Err(error) = prepare_initial_instance(&mut job_state, &state).await {
+    if let Err(error) =
+        Box::pin(prepare_initial_instance(&mut job_state, &state)).await
+    {
         let error_view = install_error_view(
             job_state.progress.phase,
             &error,
@@ -471,9 +473,7 @@ async fn start(request: InstallRequest) -> crate::Result<InstallJobSnapshot> {
         let _ = store::update_state(id, &job_state, &state).await;
     }
 
-    if let Err(error) =
-        lock_existing_instance_if_needed(&job_state, &state).await
-    {
+    if let Err(error) = lock_install_target(&job_state, &state).await {
         let error_view = install_error_view(
             job_state.progress.phase,
             &error,
@@ -509,7 +509,7 @@ async fn prepare_initial_instance(
             library_path,
             instance_format,
         } => {
-            let metadata = crate::api::instance::create(
+            let metadata = Box::pin(crate::api::instance::create(
                 name,
                 game_version,
                 loader,
@@ -519,7 +519,7 @@ async fn prepare_initial_instance(
                 link,
                 library_path,
                 instance_format,
-            )
+            ))
             .await?;
             set_display(
                 job_state,
@@ -560,7 +560,7 @@ async fn prepare_initial_instance(
                 .and_then(|edit| edit.link.clone())
                 .or_else(|| preview.link.clone())
                 .unwrap_or(InstanceLink::Unmanaged);
-            let metadata = crate::api::instance::create(
+            let metadata = Box::pin(crate::api::instance::create(
                 name,
                 preview.game_version,
                 preview.modloader,
@@ -570,7 +570,7 @@ async fn prepare_initial_instance(
                 link,
                 library_path,
                 instance_format,
-            )
+            ))
             .await?;
             set_display(
                 job_state,
@@ -608,7 +608,7 @@ async fn prepare_initial_instance(
                         data.instance_icon_url.clone(),
                     )
                 };
-            let metadata = crate::api::instance::create(
+            let metadata = Box::pin(crate::api::instance::create(
                 data.name.clone(),
                 game_version,
                 loader,
@@ -618,7 +618,7 @@ async fn prepare_initial_instance(
                 shared_link,
                 None,
                 None,
-            )
+            ))
             .await?;
             set_display(
                 job_state,
@@ -633,7 +633,7 @@ async fn prepare_initial_instance(
         InstallRequest::ImportInstance {
             instance_folder, ..
         } => {
-            let metadata = crate::api::instance::create(
+            let metadata = Box::pin(crate::api::instance::create(
                 instance_folder,
                 "1.19.4".to_string(),
                 ModLoader::Vanilla,
@@ -643,7 +643,7 @@ async fn prepare_initial_instance(
                 InstanceLink::Unmanaged,
                 None,
                 None,
-            )
+            ))
             .await?;
             set_display(
                 job_state,
@@ -679,7 +679,7 @@ async fn prepare_initial_instance(
                         .filter(|p| !p.is_empty())
                 }
             };
-            let created = crate::api::instance::create(
+            let created = Box::pin(crate::api::instance::create(
                 metadata.instance.name.clone(),
                 metadata.applied_content_set.game_version.clone(),
                 metadata.applied_content_set.loader,
@@ -689,7 +689,7 @@ async fn prepare_initial_instance(
                 metadata.link.clone(),
                 target_library_path,
                 None,
-            )
+            ))
             .await?;
             set_display(
                 job_state,
@@ -796,9 +796,24 @@ async fn run_job(job_id: Uuid) -> crate::Result<()> {
             if let Some(record) =
                 store::complete_success(job_id, &job_state, &state).await?
             {
-                // DB-backed instance — emit the record snapshot.
-                emit_instance(&instance_id, InstancePayloadType::Edited)
-                    .await?;
+                if let Err(error) =
+                    crate::api::instance::reconcile_instance_synced_options(
+                        &instance_id,
+                    )
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to reconcile synced options after installing {instance_id}: {error}"
+                    );
+                }
+                if let Err(error) =
+                    emit_instance(&instance_id, InstancePayloadType::Edited)
+                        .await
+                {
+                    tracing::warn!(
+                        "Failed to emit completed instance {instance_id}: {error}"
+                    );
+                }
                 emit_install_job(&record.snapshot()).await?;
             } else {
                 // JSON-backed instance — complete_success stores None to
@@ -1056,13 +1071,13 @@ async fn run_request(
                 },
             )
             .await?;
-            crate::api::pack::import::import_instance_with_reporter(
+            Box::pin(crate::api::pack::import::import_instance_with_reporter(
                 &instance_id,
                 launcher_type,
                 base_path,
                 instance_folder,
                 InstallProgressReporter::new(job_id, job_state.clone()),
-            )
+            ))
             .await?;
             Ok(Some(instance_id))
         }
@@ -1082,13 +1097,15 @@ async fn run_request(
             )
             .await?;
             let state = State::get().await?;
-            crate::api::pack::import::copy_dotminecraft_with_reporter(
-                &instance_id,
-                crate::api::instance::get_full_path(&source_instance_id)
-                    .await?,
-                &state.io_semaphore,
-                InstallProgressReporter::new(job_id, job_state.clone()),
-                InstallPhaseDetails::Empty,
+            Box::pin(
+                crate::api::pack::import::copy_dotminecraft_with_reporter(
+                    &instance_id,
+                    crate::api::instance::get_full_path(&source_instance_id)
+                        .await?,
+                    &state.io_semaphore,
+                    InstallProgressReporter::new(job_id, job_state.clone()),
+                    InstallPhaseDetails::Empty,
+                ),
             )
             .await?;
             let context =
@@ -1111,7 +1128,7 @@ async fn run_request(
         }
         InstallRequest::InstallExistingInstance { instance_id, force } => {
             prepare_existing_rollback(job_state, state, &instance_id).await?;
-            lock_existing_instance(&instance_id, state).await?;
+            lock_instance(&instance_id, state).await?;
             update_progress(
                 job_id,
                 job_state,
@@ -1143,7 +1160,8 @@ async fn run_request(
             post_install_edit,
         } => {
             prepare_existing_rollback(job_state, state, &instance_id).await?;
-            lock_existing_instance(&instance_id, state).await?;
+            lock_instance(&instance_id, state).await?;
+            crate::api::instance::prepare_instance_update(&instance_id).await?;
             let disabled_project_ids = remove_existing_pack_content(
                 job_id,
                 job_state,
@@ -1170,7 +1188,7 @@ async fn run_request(
         }
         InstallRequest::UpdateSharedInstance { instance_id, data } => {
             prepare_existing_rollback(job_state, state, &instance_id).await?;
-            lock_existing_instance(&instance_id, state).await?;
+            lock_instance(&instance_id, state).await?;
             let rollback_instance = job_state
                 .rollback
                 .as_ref()
@@ -1557,7 +1575,7 @@ async fn prepare_existing_rollback(
         // Restore, never delete. This is an instance the user already had, so
         // `DeleteNewInstance` is the wrong cleanup: `apply_cleanup` resolves it
         // through `remove_instance`, which would delete the whole instance
-        // directory if the install fails. `lock_existing_instance` and
+        // directory if the install fails. `lock_instance` and
         // `apply_cleanup` both handle the JSON-backed case of this variant.
         job_state.cleanup = InstallCleanup::RestoreExistingInstance {
             instance_id: instance_id.to_string(),
@@ -1565,31 +1583,31 @@ async fn prepare_existing_rollback(
         true
     };
     if !is_json_backed {
-        // DB-backed: lock_existing_instance is called below via
-        // lock_existing_instance_if_needed which only triggers for
-        // RestoreExistingInstance.
+        // DB-backed: lock_instance is called below via
+        // lock_install_target which only triggers for a concrete target.
     }
 
     Ok(())
 }
 
-async fn lock_existing_instance_if_needed(
+async fn lock_install_target(
     job_state: &InstallJobState,
     state: &State,
 ) -> crate::Result<()> {
-    if let InstallCleanup::RestoreExistingInstance { instance_id } =
-        &job_state.cleanup
-    {
-        lock_existing_instance(instance_id, state).await?;
+    match &job_state.target {
+        InstallTarget::NewInstance {
+            instance_id: Some(instance_id),
+        }
+        | InstallTarget::ExistingInstance { instance_id } => {
+            lock_instance(instance_id, state).await?;
+        }
+        InstallTarget::NewInstance { instance_id: None } => {}
     }
 
     Ok(())
 }
 
-async fn lock_existing_instance(
-    instance_id: &str,
-    state: &State,
-) -> crate::Result<()> {
+async fn lock_instance(instance_id: &str, state: &State) -> crate::Result<()> {
     // JSON-backed instances: update stage in instance.json instead of DB
     if crate::state::get_instance(instance_id, &state.pool).await?.is_none()
     {

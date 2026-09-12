@@ -135,6 +135,19 @@ pub async fn get_content_items(
         ),
     }
 
+    let result = match result {
+        Ok(mut items) => {
+            super::synced_packs::decorate_content(
+                instance_id,
+                &mut items,
+                &state,
+            )
+            .await?;
+            Ok(items)
+        }
+        Err(error) => Err(error),
+    };
+
     if local_first && let Ok(items) = &result {
         spawn_metadata_completion(
             "content",

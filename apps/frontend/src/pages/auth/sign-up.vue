@@ -38,8 +38,8 @@ import SignUpView from '@/components/ui/auth/SignUp.vue'
 import {
 	LAST_SIGN_IN_OAUTH_PROVIDER_STORAGE_KEY,
 	PENDING_SIGN_IN_OAUTH_PROVIDER_STORAGE_KEY,
-	promotePendingSignInOAuthProvider,
-} from '@/composables/auth.ts'
+} from '@/composables/accounts.ts'
+import { promotePendingSignInOAuthProvider } from '@/composables/auth.ts'
 
 interface AuthGlobalsResponse {
 	captcha_enabled?: boolean
@@ -100,7 +100,6 @@ useHead({
 	title: () => `${formatMessage(messages.title)} - Modrinth`,
 })
 
-const auth = await useAuth()
 const route = useNativeRoute()
 const pendingSignInOAuthProvider = useStorage(
 	PENDING_SIGN_IN_OAUTH_PROVIDER_STORAGE_KEY,
@@ -118,10 +117,6 @@ const lastSignInOAuthProvider = useStorage(
 const redirectTarget = getQueryString(route.query.redirect)
 const showOtherOptions = ref(false)
 const isCreateAccountStep = ref(false)
-
-if (auth.value.user) {
-	await navigateTo('/dashboard')
-}
 
 const captcha = ref<{ reset?: () => void } | null>(null)
 const setCaptchaRef = (captchaRef: unknown) => {
@@ -275,7 +270,7 @@ async function createAccount(accountConsent: boolean) {
 		if (route.query.redirect) {
 			await navigateTo(getQueryString(route.query.redirect))
 		} else {
-			await navigateTo('/dashboard')
+			await navigateTo(`/user/${username.value}`)
 		}
 	} catch (err) {
 		addNotification({

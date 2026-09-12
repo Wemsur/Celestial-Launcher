@@ -6,7 +6,13 @@
 		@contextmenu="emit('contextmenu', $event)"
 	>
 		<template #leading>
-			<Avatar :src="project.icon_url" :alt="project.title" :tint-by="project.id" size="96px" />
+			<Avatar
+				:src="project.icon_url"
+				:raw-src="project.raw_icon_url"
+				:alt="project.title"
+				:tint-by="project.id"
+				size="96px"
+			/>
 		</template>
 
 		<template v-if="showStatusBadge" #badges>

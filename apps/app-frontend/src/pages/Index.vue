@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import { BoxIcon, CogIcon, FolderSearchIcon, PlayIcon, PlusIcon } from '@modrinth/assets'
 import {
-	Button, defineMessages, injectNotificationManager,
+	Button, ContextMenu, defineMessages, injectNotificationManager,
 	NavTabs, NewModal as Modal,
-	StyledInput, DropdownSelect,
+	Input, DropdownSelect,
 	useVIntl,
 } from '@modrinth/ui'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { computed, inject, onActivated, onUnmounted, provide, type Ref, ref, shallowRef, watch, watchEffect } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 
-import ContextMenu from '@/components/ui/context-menu/index.vue'
 import LibrarySection from '@/components/ui/library/index.vue'
+import { libraryScrollTop } from '@/components/ui/library/view-state'
 import WelcomeScreen from '@/components/ui/WelcomeScreen.vue'
 import RecentWorldsList from '@/components/ui/world/RecentWorldsList.vue'
 import { useAppEvent } from '@/composables/use-app-event'
@@ -28,12 +29,15 @@ defineOptions({
 	name: 'LibraryPage',
 })
 
-const { handleError } = injectNotificationManager()
 const { formatMessage } = useVIntl()
+const { handleError } = injectNotificationManager()
 const { hasCreatedInstance, isReady } = injectOnboardingChecklist()
 const showCreationModal = inject<() => void>('showCreationModal')
 const pageOptions = ref<InstanceType<typeof ContextMenu>>()
 const appSettings = useAppSettings()
+onBeforeRouteLeave(() => {
+	libraryScrollTop.value = document.querySelector('.app-viewport')?.scrollTop ?? 0
+})
 
 // Unfiltered and sorted most-recently-played first, provided by App.vue so the
 // home page and the sidebar copy of "jump back in" share one `list()` call.
@@ -51,17 +55,20 @@ const messages = defineMessages({
 		id: 'app.library.context-menu.create-instance',
 		defaultMessage: 'New instance',
 	},
-    library: { id: 'app.library.title', defaultMessage: 'Library' },
+	library: { id: 'app.library.title', defaultMessage: 'Library' },
+	libraryActionsLabel: {
+		id: 'app.library.actions.label',
+		defaultMessage: 'Library actions',
+	},
 })
 
-const homeBreadcrumb = useRootBreadcrumb({
+useRootBreadcrumb({
 	slot: 'root',
 	id: 'home',
 	label: formatMessage(messages.home),
 	to: '/',
 	visual: { type: 'icon', component: PlayIcon },
 })
-onActivated(homeBreadcrumb.reset)
 
 // ── Instances ────────────────────────────────────────────────────────────────
 
@@ -314,13 +321,14 @@ function openPageContextMenu(event: MouseEvent) {
 	}
 	event.preventDefault()
 	event.stopPropagation()
-	pageOptions.value?.showMenu(event, {}, [{ name: 'new_instance' }])
-}
-
-function handlePageOption({ option }: { option: string }) {
-	if (option === 'new_instance') {
-		showCreationModal?.()
-	}
+	pageOptions.value?.open(event, [
+		{
+			id: 'new_instance',
+			label: formatMessage(messages.newInstance),
+			icon: PlusIcon,
+			action: () => showCreationModal?.(),
+		},
+	])
 }
 </script>
 
@@ -343,7 +351,7 @@ function handlePageOption({ option }: { option: string }) {
 					<h2 class="m-0 text-lg font-semibold text-contrast">
 						库名称（可选）
 					</h2>
-					<StyledInput
+					<Input
 						v-model="addLibraryName"
 						placeholder="留空则使用文件夹名"
 						type="text"
@@ -353,7 +361,7 @@ function handlePageOption({ option }: { option: string }) {
 				<h2 class="m-0 text-lg font-semibold text-contrast">
 					库位置
 				</h2>
-				<StyledInput
+				<Input
 					v-model="addLibraryPath"
 					placeholder="选择文件夹或输入路径"
 					:icon="BoxIcon"
@@ -365,7 +373,7 @@ function handlePageOption({ option }: { option: string }) {
 							<FolderSearchIcon aria-hidden="true" />
 						</Button>
 					</template>
-				</StyledInput>
+				</Input>
 				<div class="flex flex-col gap-1">
 					<span class="text-sm font-medium text-primary">格式</span>
 					<DropdownSelect
@@ -398,7 +406,7 @@ function handlePageOption({ option }: { option: string }) {
 			<div class="flex flex-col gap-4 w-[480px]">
 				<div class="flex flex-col gap-1">
 					<span class="text-sm font-medium text-primary">库名称</span>
-					<StyledInput
+					<Input
 						v-model="librarySettingsName"
 						type="text"
 						wrapper-class="w-full"
@@ -410,7 +418,7 @@ function handlePageOption({ option }: { option: string }) {
 					<span class="text-sm font-medium text-primary">库路径</span>
 					<!-- Read-only: a library's path is its identity (instance IDs are
 					     hashed from it), so it can only be added or removed, never edited. -->
-					<StyledInput
+					<Input
 						:model-value="librarySettingsPath"
 						type="text"
 						wrapper-class="w-full"
@@ -473,8 +481,6 @@ function handlePageOption({ option }: { option: string }) {
 		<!-- Library Section -->
 		<LibrarySection :instances="instances" :library-path="activeTab === 'all' ? undefined : activeTab" />
 
-		<ContextMenu ref="pageOptions" @option-clicked="handlePageOption">
-			<template #new_instance> <PlusIcon /> {{ formatMessage(messages.newInstance) }} </template>
-		</ContextMenu>
+		<ContextMenu ref="pageOptions" :label="formatMessage(messages.libraryActionsLabel)" />
 	</div>
 </template>

@@ -2,11 +2,13 @@
 
 <script setup lang="ts">
 import { RightArrowIcon } from '@modrinth/assets'
-import { type Component, type ComponentPublicInstance, computed, nextTick, ref } from 'vue'
+import { useElementSize } from '@vueuse/core'
+import { type Component, type ComponentPublicInstance, computed, nextTick, ref, watch } from 'vue'
 
 import { type MessageDescriptor, useVIntl } from '../../composables/i18n'
 import { useScrollIndicator } from '../../composables/scroll-indicator'
 import { truncatedTooltip } from '../../utils/truncate'
+import LoadingIndicator from '../base/LoadingIndicator.vue'
 import NewModal from './NewModal.vue'
 export interface Tab {
 	name: MessageDescriptor
@@ -18,6 +20,14 @@ export interface Tab {
 	shown?: boolean
 }
 
+defineSlots<{
+	title?(): unknown
+	'sidebar-header'?(): unknown
+	footer?(): unknown
+	content?(props: { tab: Tab | undefined; index: number }): unknown
+	'floating-action-bar'?(): unknown
+}>()
+
 const { formatMessage } = useVIntl()
 
 const props = withDefaults(
@@ -28,10 +38,13 @@ const props = withDefaults(
 		width?: string
 		closable?: boolean
 		onHide?: () => void
+		onAfterHide?: () => void
 		onShow?: () => void
 		beforeHide?: () => boolean
 		beforeTabChange?: (fromIndex: number, toIndex: number) => boolean
+		hideTabSelection?: boolean
 		floatingActionBarShown?: boolean
+		disableClose?: boolean
 	}>(),
 	{
 		header: undefined,
@@ -39,10 +52,13 @@ const props = withDefaults(
 		width: undefined,
 		closable: true,
 		onHide: undefined,
+		onAfterHide: undefined,
 		onShow: undefined,
 		beforeHide: undefined,
 		beforeTabChange: undefined,
+		hideTabSelection: false,
 		floatingActionBarShown: false,
+		disableClose: false,
 	},
 )
 
@@ -62,6 +78,14 @@ function tabLabelTooltip(index: number, label: string) {
 const scrollContainer = ref<HTMLElement | null>(null)
 const { showTopFade, showBottomFade, checkScrollState, forceCheck } =
 	useScrollIndicator(scrollContainer)
+
+const floatingActionBarContainer = ref<HTMLElement | null>(null)
+const { height: floatingActionBarHeight } = useElementSize(floatingActionBarContainer)
+const contentBottomPadding = computed(() =>
+	props.floatingActionBarShown ? `calc(${floatingActionBarHeight.value}px + 2.25rem)` : '1.5rem',
+)
+
+watch(contentBottomPadding, () => forceCheck(), { flush: 'post' })
 
 const sidebarScrollContainer = ref<HTMLElement | null>(null)
 const {
@@ -87,7 +111,7 @@ const sidebarFadeStyle = computed(() => ({
 }))
 
 function setTab(index: number) {
-	if (index === selectedTab.value) return
+	if (index === selectedTab.value && !props.hideTabSelection) return
 	if (props.beforeTabChange?.(selectedTab.value, index) === false) return
 	selectedTab.value = index
 	nextTick(() => forceCheck())
@@ -116,8 +140,10 @@ defineExpose({ show, hide, selectedTab, setTab })
 		:width="width"
 		:closable="closable"
 		:on-hide="onHide"
+		:on-after-hide="onAfterHide"
 		:on-show="onShow"
 		:before-hide="beforeHide"
+		:disable-close="disableClose"
 		no-padding
 	>
 		<template v-if="$slots.title" #title>
@@ -127,6 +153,8 @@ defineExpose({ show, hide, selectedTab, setTab })
 			<div
 				class="flex min-w-0 max-h-[min(70vh,600px)] flex-col border-0 border-r-[1px] border-solid border-divider pr-4"
 			>
+				<slot name="sidebar-header" />
+
 				<div class="relative min-h-0 flex-1">
 					<div
 						ref="sidebarScrollContainer"
@@ -146,7 +174,7 @@ defineExpose({ show, hide, selectedTab, setTab })
 								:href="tab.href ?? undefined"
 								:target="tab.href ? '_blank' : undefined"
 								:rel="tab.href ? 'noopener noreferrer' : undefined"
-								:class="`flex shrink-0 min-w-0 gap-2 items-center text-left rounded-xl px-4 py-2 border-none font-semibold cursor-pointer active:scale-[0.97] transition-all no-underline ${!tab.href && selectedTab === index ? 'bg-button-bgSelected text-button-textSelected' : 'bg-transparent text-button-text hover:bg-button-bg hover:text-contrast'}`"
+								:class="`flex shrink-0 min-w-0 gap-2 items-center text-left rounded-xl px-4 py-2 border-none font-semibold cursor-pointer active:scale-[0.97] transition-all no-underline ${!tab.href && !hideTabSelection && selectedTab === index ? 'bg-button-bgSelected text-button-textSelected' : 'bg-transparent text-button-text hover:bg-button-bg hover:text-contrast'}`"
 								@click="!tab.href && setTab(index)"
 							>
 								<component :is="tab.icon" class="w-4 h-4 flex-shrink-0" />
@@ -175,19 +203,28 @@ defineExpose({ show, hide, selectedTab, setTab })
 				<div
 					ref="scrollContainer"
 					class="scroll-fade absolute inset-0 overflow-y-auto px-6"
-					:class="floatingActionBarShown ? 'pb-24' : 'pb-6'"
 					:style="contentFadeStyle"
 					@scroll="checkScrollState"
 				>
-					<Suspense>
-						<component
-							:is="visibleTabs[selectedTab]?.content"
-							v-if="visibleTabs[selectedTab]?.content"
-						/>
-					</Suspense>
+					<div class="flow-root min-h-full" :style="{ paddingBottom: contentBottomPadding }">
+						<slot name="content" :tab="visibleTabs[selectedTab]" :index="selectedTab">
+							<Suspense>
+								<component
+									:is="visibleTabs[selectedTab]?.content"
+									v-if="visibleTabs[selectedTab]?.content"
+								/>
+								<template #fallback>
+									<LoadingIndicator class="py-2" />
+								</template>
+							</Suspense>
+						</slot>
+					</div>
 				</div>
 
-				<div class="pointer-events-none absolute bottom-3 left-6 right-6 z-20">
+				<div
+					ref="floatingActionBarContainer"
+					class="pointer-events-none absolute bottom-3 left-6 right-6 z-20"
+				>
 					<div class="pointer-events-auto">
 						<slot name="floating-action-bar" />
 					</div>

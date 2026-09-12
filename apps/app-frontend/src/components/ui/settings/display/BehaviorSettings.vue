@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import {
 	defineMessages,
+	injectNotificationManager,
 	Toggle,
 	useSavable,
 	useVIntl,
 } from '@modrinth/ui'
-import { inject, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { inject, onBeforeUnmount, onMounted } from 'vue'
 
 import {
 	DEFAULT_FEATURE_FLAGS,
@@ -17,14 +19,21 @@ import {
 	setUiPreferences,
 	useUiPreferences,
 } from '@/composables/use-ui-preferences.ts'
-import { type AppSettings, get, set } from '@/helpers/settings.ts'
+import {
+	type AppSettings,
+	appSettingsKeys,
+	appSettingsQueryOptions,
+	get,
+	set,
+} from '@/helpers/settings.ts'
 import { appSettingsModalContextKey } from '@/providers/app-settings-modal'
 
 const appSettings = useAppSettings()
 const { formatMessage } = useVIntl()
+const { handleError } = injectNotificationManager()
 const settingsModal = inject(appSettingsModalContextKey, null)
+const queryClient = useQueryClient()
 
-const worldsInHomeFlag: FeatureFlag = 'worlds_in_home'
 const compactInstanceCardsFlag: FeatureFlag = 'compact_instance_cards'
 const skipNonEssentialWarningsFlag: FeatureFlag = 'skip_non_essential_warnings'
 const skipUnknownPackWarningFlag: FeatureFlag = 'skip_unknown_pack_warning'
@@ -58,15 +67,6 @@ const messages = defineMessages({
 	sidebarOnStartupDescription: {
 		id: 'app.behavior-settings.sidebar-on-startup.description',
 		defaultMessage: 'Whether the right sidebar is already open when the app launches.',
-	},
-	jumpBackIntoWorldsTitle: {
-		id: 'app.appearance-settings.jump-back-into-worlds.title',
-		defaultMessage: 'Jump into worlds or instances',
-	},
-	jumpBackIntoWorldsDescription: {
-		id: 'app.appearance-settings.jump-back-into-worlds.description',
-		defaultMessage:
-			'Show recently played worlds or instances in the "Jump in" section on the Home page.',
 	},
 	jumpBackInSidebarTitle: {
 		id: 'app.appearance-settings.jump-back-in-sidebar.title',
@@ -125,7 +125,6 @@ type BehaviorSettingsState = {
 	minimizeApp: boolean
 	/** File-backed: the sidebar's state at launch, nothing more. */
 	showSidebarOnStartup: boolean
-	showJumpIn: boolean
 	showJumpInSidebar: boolean
 	compactInstanceCards: boolean
 	showPlayTime: boolean
@@ -134,7 +133,8 @@ type BehaviorSettingsState = {
 	skipNonEssentialWarnings: boolean
 }
 
-const persistedSettings = ref(await get())
+const settingsQuery = useQuery(appSettingsQueryOptions())
+await settingsQuery.suspense()
 
 // File-backed, not part of `AppSettings`: it lives in
 // `<appdata>/interface/ui-preferences.json` so no interface preference has to be
@@ -146,7 +146,6 @@ function getBehaviorSettingsState(settings: AppSettings): BehaviorSettingsState 
 	return {
 		minimizeApp: settings.hide_on_process_start,
 		showSidebarOnStartup: uiPreferences.sidebarVisibleOnStartup,
-		showJumpIn: settings.feature_flags[worldsInHomeFlag] ?? DEFAULT_FEATURE_FLAGS[worldsInHomeFlag],
 		showJumpInSidebar: uiPreferences.jumpBackInSidebar,
 		compactInstanceCards:
 			settings.feature_flags[compactInstanceCardsFlag] ??
@@ -164,18 +163,17 @@ function getBehaviorSettingsState(settings: AppSettings): BehaviorSettingsState 
 	}
 }
 
-const { saved, current, changes, saving, hasChanges, reset, save } = useSavable(
-	() => getBehaviorSettingsState(persistedSettings.value),
-	async () => {
-		const value = current.value
-
+const settingsMutation = useMutation({
+	mutationKey: appSettingsKeys.update,
+	scope: { id: 'app-settings' },
+	mutationFn: async (value: BehaviorSettingsState) => {
+		const latestSettings = await get()
 		const nextSettings: AppSettings = {
-			...persistedSettings.value,
+			...latestSettings,
 			hide_on_process_start: value.minimizeApp,
 			hide_nametag_skins_page: value.hideNametag,
 			feature_flags: {
-				...persistedSettings.value.feature_flags,
-				[worldsInHomeFlag]: value.showJumpIn,
+				...latestSettings.feature_flags,
 				[compactInstanceCardsFlag]: value.compactInstanceCards,
 				[showPlayTimeFlag]: value.showPlayTime,
 				[skipUnknownPackWarningFlag]: !value.warnOnUnknownModpacks,
@@ -188,14 +186,21 @@ const { saved, current, changes, saving, hasChanges, reset, save } = useSavable(
 			jumpBackInSidebar: value.showJumpInSidebar,
 			sidebarVisibleOnStartup: value.showSidebarOnStartup,
 		})
-		persistedSettings.value = nextSettings
+		queryClient.setQueryData(appSettingsKeys.all, nextSettings)
 		appSettings.hideNametagSkinsPage = value.hideNametag
-		appSettings.featureFlags[worldsInHomeFlag] = value.showJumpIn
 		appSettings.featureFlags[compactInstanceCardsFlag] = value.compactInstanceCards
 		appSettings.featureFlags[showPlayTimeFlag] = value.showPlayTime
 		appSettings.featureFlags[skipUnknownPackWarningFlag] = !value.warnOnUnknownModpacks
 		appSettings.featureFlags[skipNonEssentialWarningsFlag] = value.skipNonEssentialWarnings
 	},
+	onMutate: () => queryClient.cancelQueries({ queryKey: appSettingsKeys.all }),
+	onError: handleError,
+	onSettled: () => queryClient.invalidateQueries({ queryKey: appSettingsKeys.all }),
+})
+
+const { saved, current, changes, saving, hasChanges, reset, save } = useSavable(
+	() => getBehaviorSettingsState(settingsQuery.data.value!),
+	() => settingsMutation.mutateAsync({ ...current.value }),
 )
 
 async function saveBehaviorSettings(): Promise<void> {
@@ -256,18 +261,6 @@ onBeforeUnmount(() => {
 			{{ formatMessage(messages.contentTitle) }}
 		</h2>
 		<div class="mt-4 flex flex-col gap-6">
-			<div class="flex items-center justify-between gap-4">
-				<div>
-					<h3 class="m-0 text-lg font-semibold text-contrast">
-						{{ formatMessage(messages.jumpBackIntoWorldsTitle) }}
-					</h3>
-					<p class="m-0 mt-1">
-						{{ formatMessage(messages.jumpBackIntoWorldsDescription) }}
-					</p>
-				</div>
-				<Toggle id="jump-back-into-worlds" v-model="current.showJumpIn" />
-			</div>
-
 			<div class="flex items-center justify-between gap-4">
 				<div>
 					<h3 class="m-0 text-lg font-semibold text-contrast">

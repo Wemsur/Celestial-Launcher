@@ -5,7 +5,14 @@
 			:header="project.license.name ? project.license.name : formatMessage(messages.licenseTitle)"
 		>
 			<template #title>
-				<Avatar :src="project.icon_url" :alt="project.title" class="icon" size="32px" no-shadow />
+				<Avatar
+					:src="project.icon_url"
+					:raw-src="project.raw_icon_url"
+					:alt="project.title"
+					class="icon"
+					size="32px"
+					no-shadow
+				/>
 				<span class="text-lg font-extrabold text-contrast">
 					{{ project.license.name ? project.license.name : formatMessage(messages.licenseTitle) }}
 				</span>
@@ -35,6 +42,17 @@
 					</span>
 					<span v-if="aiDisclosure.note" class="text-sm text-secondary">
 						<BasicMarkdownText :text="aiDisclosure.note" :target="linkTarget" />
+					</span>
+				</div>
+			</div>
+			<div v-if="aiFunctionalityDisclosure">
+				<BrainCogIcon aria-hidden="true" />
+				<div class="flex flex-col gap-1">
+					<span>
+						{{ capitalizeString(formatMessage(messages.aiFunctionalityTitle)) }}
+					</span>
+					<span v-if="aiFunctionalityDisclosure.note" class="text-sm text-secondary">
+						<BasicMarkdownText :text="aiFunctionalityDisclosure.note" :target="linkTarget" />
 					</span>
 				</div>
 			</div>
@@ -86,7 +104,7 @@
 				</div>
 			</div>
 			<div v-if="systemInteractionsDisclosure">
-				<CircuitBoardIcon aria-hidden="true" />
+				<MonitorCogIcon aria-hidden="true" />
 				<div class="flex flex-col gap-1">
 					<span>
 						{{ capitalizeString(formatMessage(messages.systemInteractionsTitle)) }}
@@ -226,15 +244,16 @@
 import type { Labrinth } from '@modrinth/api-client'
 import {
 	BookTextIcon,
+	BrainCogIcon,
 	CalendarIcon,
 	CircleDollarSignIcon,
-	CircuitBoardIcon,
 	DropdownIcon,
 	ExternalIcon,
 	EyeIcon,
 	GitForkIcon,
 	HeartIcon,
 	MegaphoneIcon,
+	MonitorCogIcon,
 	RadioTowerIcon,
 	ScaleIcon,
 	SparklesIcon,
@@ -263,7 +282,7 @@ const formatDateTime = useFormatDateTime({
 	dateStyle: 'long',
 })
 
-const AI_USE_ORDER: Labrinth.Projects.v3.AiUsage[] = ['code', 'assets', 'text', 'functionality']
+const AI_USE_ORDER: Labrinth.Projects.v3.AiUsage[] = ['code', 'assets', 'text']
 
 const props = defineProps<{
 	project: Labrinth.Projects.v2.Project
@@ -303,6 +322,10 @@ const messages = defineMessages({
 	aiGeneratedContent: {
 		id: 'project.disclosure.ai-generated-content.title',
 		defaultMessage: 'Contains AI-generated {types}',
+	},
+	aiFunctionalityTitle: {
+		id: 'project.disclosure.ai-functionality.title',
+		defaultMessage: 'Generative AI functionality',
 	},
 	derivativeWork: {
 		id: 'project.disclosure.derivative-work.title',
@@ -346,6 +369,7 @@ function findDisclosure<T extends Labrinth.Projects.v3.ProjectDisclosureType>(ty
 }
 
 const aiDisclosure = computed(() => findDisclosure('ai_content'))
+const aiFunctionalityDisclosure = computed(() => findDisclosure('ai_functionality'))
 const advertisingDisclosure = computed(() => findDisclosure('advertisements'))
 const paidFeaturesDisclosure = computed(() => findDisclosure('paid_features'))
 const telemetryDisclosure = computed(() => findDisclosure('telemetry'))
@@ -387,10 +411,6 @@ const aiUseLabels = {
 	text: defineMessage({
 		id: 'project.disclosure.ai-generated-content.use.text',
 		defaultMessage: 'text',
-	}),
-	functionality: defineMessage({
-		id: 'project.disclosure.ai-generated-content.use.functionality',
-		defaultMessage: 'functionality',
 	}),
 	content: defineMessage({
 		id: 'project.disclosure.ai-generated-content.use.content',
