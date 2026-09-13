@@ -62,13 +62,18 @@ const messages = defineMessages({
 	},
 })
 
-useRootBreadcrumb({
+// The home page is the breadcrumb root. `onActivated` fires when this component
+// is re-entered from the KeepAlive cache (see App.vue's `<KeepAlive>`), which is
+// what drops whatever the previous page pushed onto the stack — without it the
+// title bar keeps showing the page you just came from.
+const homeBreadcrumb = useRootBreadcrumb({
 	slot: 'root',
 	id: 'home',
 	label: formatMessage(messages.home),
 	to: '/',
 	visual: { type: 'icon', component: PlayIcon },
 })
+onActivated(homeBreadcrumb.reset)
 
 // ── Instances ────────────────────────────────────────────────────────────────
 
