@@ -28,11 +28,14 @@ const SCREENSHOT_SCAN_CONCURRENCY: usize = 8;
 fn screenshot_source_of(
     metadata: crate::state::InstanceMetadata,
 ) -> InstanceScreenshotSource {
+    // Read this before the struct literal: the fields below move `path` (and the
+    // rest) out of `metadata.instance`, so it can no longer be borrowed.
+    let json_backed = metadata.instance.is_json_backed();
     InstanceScreenshotSource {
         id: metadata.instance.id,
         name: metadata.instance.name,
         path: metadata.instance.path,
-        json_backed: metadata.instance.is_json_backed(),
+        json_backed,
     }
 }
 
