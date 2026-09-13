@@ -81,7 +81,38 @@ pub(super) async fn list_source_screenshots(
 ) -> crate::Result<Vec<InstanceScreenshot>> {
     let _lock = state.lock_instance_screenshots(&source.id).await;
     let scanned = scan_source_screenshots(state, &source).await?;
+
+    if source.json_backed {
+        // The `screenshots` table has a FOREIGN KEY onto `instances`, and a
+        // library instance has no row there — trying to record one fails, which
+        // is what used to take the whole page down. List straight from disk
+        // instead; custom groups are a DB feature and stay unavailable for
+        // these instances.
+        return Ok(scanned
+            .into_iter()
+            .map(|screenshot| filesystem_screenshot(&source, screenshot))
+            .collect());
+    }
+
     reconcile_source_screenshots(state, &source, scanned).await
+}
+
+/// A screenshot of an instance that has no database row behind it.
+fn filesystem_screenshot(
+    source: &InstanceScreenshotSource,
+    scanned: ScannedScreenshot,
+) -> InstanceScreenshot {
+    InstanceScreenshot {
+        // Deterministic so list keys and the selection survive a rescan.
+        id: format!("{}:{}", source.id, scanned.file_name),
+        instance_id: source.id.clone(),
+        instance_name: source.name.clone(),
+        file_name: scanned.file_name,
+        created_at: scanned.created_at,
+        modified_at: scanned.modified_at,
+        group_id: None,
+        path: scanned.path,
+    }
 }
 
 pub(crate) async fn reconcile_screenshots(

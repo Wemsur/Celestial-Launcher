@@ -189,6 +189,11 @@ pub(crate) struct InstanceScreenshotSource {
     pub id: String,
     pub name: String,
     pub path: String,
+    /// Library instances are JSON-backed and have no row in `instances`. The
+    /// `screenshots` table has a foreign key onto that table, so their
+    /// screenshots can never be written to the DB and are listed from disk only.
+    #[sqlx(default)]
+    pub json_backed: bool,
 }
 
 #[derive(Debug, sqlx::FromRow)]

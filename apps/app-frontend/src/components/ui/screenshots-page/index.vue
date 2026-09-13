@@ -67,6 +67,7 @@ import {
 	type ScreenshotKey,
 	set_screenshot_group_memberships,
 } from '@/helpers/instance'
+import { toError } from '@/helpers/errors'
 import { MAX_INSTANCE_GROUP_NAME_LENGTH } from '@/helpers/instance-groups'
 import {
 	instanceListQueryOptions,
@@ -347,7 +348,7 @@ const screenshotsError = computed(() => {
 	const error =
 		screenshotsQuery.error.value ||
 		(groupBy.value === 'custom' ? screenshotGroupsQuery.error.value : null)
-	return error instanceof Error ? error : error ? new Error(String(error)) : null
+	return error ? toError(error) : null
 })
 const selectionActive = computed(() => selectedKeys.value.size > 0)
 const selectedScreenshots = computed(() =>

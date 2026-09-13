@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use futures::stream::{self, StreamExt, TryStreamExt};
+use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
@@ -32,6 +32,7 @@ fn screenshot_source_of(
         id: metadata.instance.id,
         name: metadata.instance.name,
         path: metadata.instance.path,
+        json_backed: metadata.instance.is_json_backed(),
     }
 }
 
@@ -120,16 +121,26 @@ async fn list_source_screenshot_sets(
     state: &State,
     sources: Vec<InstanceScreenshotSource>,
 ) -> crate::Result<Vec<InstanceScreenshot>> {
-    let mut screenshots =
-        stream::iter(sources.into_iter().map(|source| async move {
-            list_source_screenshots(state, source).await
-        }))
-        .buffer_unordered(SCREENSHOT_SCAN_CONCURRENCY)
-        .try_collect::<Vec<Vec<InstanceScreenshot>>>()
-        .await?
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
+    // One unreadable source (a library that moved, a permission error) must not
+    // blank the whole page — log it and show everything else.
+    let mut screenshots = stream::iter(sources.into_iter().map(|source| async move {
+        let id = source.id.clone();
+        match list_source_screenshots(state, source).await {
+            Ok(found) => found,
+            Err(error) => {
+                tracing::warn!(
+                    "Failed to list screenshots for instance '{id}': {error}"
+                );
+                Vec::new()
+            }
+        }
+    }))
+    .buffer_unordered(SCREENSHOT_SCAN_CONCURRENCY)
+    .collect::<Vec<Vec<InstanceScreenshot>>>()
+    .await
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>();
 
     sort_screenshots(&mut screenshots);
     Ok(screenshots)
