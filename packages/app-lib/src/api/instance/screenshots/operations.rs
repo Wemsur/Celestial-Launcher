@@ -25,6 +25,41 @@ use crate::util::io::{self, IOError};
 const SCREENSHOTS_DIRECTORY: &str = "screenshots";
 const SCREENSHOT_SCAN_CONCURRENCY: usize = 8;
 
+fn screenshot_source_of(
+    metadata: crate::state::InstanceMetadata,
+) -> InstanceScreenshotSource {
+    InstanceScreenshotSource {
+        id: metadata.instance.id,
+        name: metadata.instance.name,
+        path: metadata.instance.path,
+    }
+}
+
+/// Every instance the launcher knows about, as screenshot sources.
+///
+/// Enumerated from the instance list rather than the `instances` table. Instances
+/// created through a library are JSON-backed and never get a DB row, so the old
+/// `SELECT id, name, path FROM instances` returned nothing for them and the
+/// screenshots page came up empty.
+pub(super) async fn screenshot_sources(
+    _state: &State,
+) -> crate::Result<Vec<InstanceScreenshotSource>> {
+    Ok(crate::api::instance::list(None)
+        .await?
+        .into_iter()
+        .map(screenshot_source_of)
+        .collect())
+}
+
+/// The screenshot source for one instance, JSON-backed or not.
+pub(super) async fn screenshot_source(
+    instance_id: &str,
+) -> crate::Result<Option<InstanceScreenshotSource>> {
+    Ok(crate::api::instance::get_by_id(instance_id)
+        .await?
+        .map(screenshot_source_of))
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct ScreenshotKey {
     pub instance_id: String,
@@ -55,12 +90,9 @@ pub async fn list_screenshots(
     instance_id: &str,
 ) -> crate::Result<Vec<InstanceScreenshot>> {
     let state = State::get().await?;
-    let source =
-        instance_rows::get_instance_screenshot_source(instance_id, &state.pool)
-            .await?
-            .ok_or_else(|| {
-                crate::ErrorKind::InputError("Unknown instance".to_string())
-            })?;
+    let source = screenshot_source(instance_id).await?.ok_or_else(|| {
+        crate::ErrorKind::InputError("Unknown instance".to_string())
+    })?;
 
     list_source_screenshots(&state, source).await
 }
@@ -74,13 +106,13 @@ pub async fn list_synced_screenshots() -> crate::Result<Vec<InstanceScreenshot>>
         return Ok(Vec::new());
     }
     let state = State::get().await?;
-    let sources = instance_rows::list_screenshot_sources(&state.pool).await?;
+    let sources = screenshot_sources(&state).await?;
     list_source_screenshot_sets(&state, sources).await
 }
 
 pub async fn list_all_screenshots() -> crate::Result<Vec<InstanceScreenshot>> {
     let state = State::get().await?;
-    let sources = instance_rows::list_screenshot_sources(&state.pool).await?;
+    let sources = screenshot_sources(&state).await?;
     list_source_screenshot_sets(&state, sources).await
 }
 
@@ -160,10 +192,7 @@ pub async fn export_screenshots(
         let source = match sources.get(&key.instance_id) {
             Some(source) => source,
             None => {
-                let source = instance_rows::get_instance_screenshot_source(
-                    &key.instance_id,
-                    &state.pool,
-                )
+                let source = screenshot_source(&key.instance_id)
                 .await?
                 .ok_or_else(|| {
                     crate::ErrorKind::InputError("Unknown instance".to_string())
@@ -229,10 +258,7 @@ pub async fn move_screenshots(
     instance_ids.sort_unstable();
     instance_ids.dedup();
     let _locks = lock_instance_screenshots(&state, instance_ids).await;
-    let target_source = instance_rows::get_instance_screenshot_source(
-        target_instance_id,
-        &state.pool,
-    )
+    let target_source = screenshot_source(target_instance_id)
     .await?
     .ok_or_else(|| {
         crate::ErrorKind::InputError("Unknown target instance".to_string())
@@ -290,10 +316,7 @@ pub async fn get_screenshot_path(
     validate_file_name(&key.file_name)?;
 
     let state = State::get().await?;
-    let source = instance_rows::get_instance_screenshot_source(
-        &key.instance_id,
-        &state.pool,
-    )
+    let source = screenshot_source(&key.instance_id)
     .await?
     .ok_or_else(|| {
         crate::ErrorKind::InputError("Unknown instance".to_string())
@@ -336,10 +359,7 @@ pub async fn save_edited_screenshot(
     validate_file_name(&key.file_name)?;
 
     let state = State::get().await?;
-    let source = instance_rows::get_instance_screenshot_source(
-        &key.instance_id,
-        &state.pool,
-    )
+    let source = screenshot_source(&key.instance_id)
     .await?
     .ok_or_else(|| {
         crate::ErrorKind::InputError("Unknown instance".to_string())
@@ -514,7 +534,9 @@ pub(super) async fn source_screenshots_dir(
     state: &State,
     source: &InstanceScreenshotSource,
 ) -> crate::Result<PathBuf> {
-    let instance_dir = state.directories.instances_dir().join(&source.path);
+    // 库里的实例路径可能是绝对路径（JSON 实例），resolve_instance_dir 两种情况都覆盖。
+    let instance_dir =
+        crate::state::libraries::resolve_instance_dir(state, &source.path);
     let canonical_instance_dir =
         tokio::fs::canonicalize(&instance_dir)
             .await

@@ -1,10 +1,10 @@
 use super::operations::{
-    InstanceScreenshot, has_png_extension, sort_screenshots,
+    InstanceScreenshot, has_png_extension, screenshot_source, sort_screenshots,
     source_screenshots_dir,
 };
 use crate::State;
 use crate::state::instances::adapters::sqlite::{
-    instance_rows::{self, InstanceScreenshotSource},
+    instance_rows::InstanceScreenshotSource,
     screenshot_rows::{self, ScreenshotRow},
 };
 use crate::util::fetch::sha1_file_async;
@@ -88,10 +88,7 @@ pub(crate) async fn reconcile_screenshots(
     instance_id: &str,
 ) -> crate::Result<()> {
     let state = State::get().await?;
-    let Some(source) =
-        instance_rows::get_instance_screenshot_source(instance_id, &state.pool)
-            .await?
-    else {
+    let Some(source) = screenshot_source(instance_id).await? else {
         return Ok(());
     };
 
@@ -103,7 +100,8 @@ pub(super) async fn scan_source_screenshots(
     state: &State,
     source: &InstanceScreenshotSource,
 ) -> crate::Result<Vec<ScannedScreenshot>> {
-    let instance_dir = state.directories.instances_dir().join(&source.path);
+    let instance_dir =
+        crate::state::libraries::resolve_instance_dir(state, &source.path);
     if !tokio::fs::try_exists(&instance_dir)
         .await
         .map_err(|error| IOError::with_path(error, &instance_dir))?
