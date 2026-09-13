@@ -9,8 +9,8 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
 use super::reconciliation::{
-    list_source_screenshots, reconcile_source_screenshots,
-    scan_source_screenshots,
+    filesystem_screenshot, list_source_screenshots,
+    reconcile_source_screenshots, scan_source_screenshots,
 };
 use crate::State;
 use crate::event::InstancePayloadType;
@@ -365,41 +365,13 @@ pub async fn get_screenshot_path(
     Ok(canonical_path)
 }
 
-pub async fn save_edited_screenshot(
-    key: ScreenshotKey,
+/// Reject an edit whose pixel dimensions exceed the image it came from.
+///
+/// Shared by both save paths so the rule cannot drift between them.
+async fn validate_edited_png(
+    source_path: PathBuf,
     png_bytes: Vec<u8>,
-    mode: ScreenshotEditSaveMode,
-) -> crate::Result<InstanceScreenshot> {
-    validate_file_name(&key.file_name)?;
-
-    let state = State::get().await?;
-    let source = screenshot_source(&key.instance_id)
-    .await?
-    .ok_or_else(|| {
-        crate::ErrorKind::InputError("Unknown instance".to_string())
-    })?;
-    let _lock = state.lock_instance_screenshots(&source.id).await;
-
-    let scanned = scan_source_screenshots(&state, &source).await?;
-    let current =
-        reconcile_source_screenshots(&state, &source, scanned).await?;
-    let source_screenshot = current
-        .iter()
-        .find(|screenshot| screenshot.file_name == key.file_name)
-        .ok_or_else(|| {
-            crate::ErrorKind::InputError("Unknown screenshot".to_string())
-        })?;
-    let source_row = screenshot_rows::get_screenshot_by_key(
-        &key.instance_id,
-        &key.file_name,
-        &state.pool,
-    )
-    .await?
-    .ok_or_else(|| {
-        crate::ErrorKind::InputError("Unknown screenshot".to_string())
-    })?;
-
-    let source_path = source_screenshot.path.clone();
+) -> crate::Result<Vec<u8>> {
     let (source_dimensions, edited_dimensions, png_bytes) =
         tokio::task::spawn_blocking(move || {
             let source = std::fs::File::open(&source_path)
@@ -431,6 +403,112 @@ pub async fn save_edited_screenshot(
         ))
         .into());
     }
+    Ok(png_bytes)
+}
+
+/// Save an edit for an instance with no database row behind it.
+///
+/// Same file work as the indexed path, but nothing is recorded: the `screenshots`
+/// table has a foreign key onto `instances`, so a library instance can never own
+/// rows there. The next filesystem scan picks the new file up on its own.
+async fn save_edited_screenshot_filesystem(
+    state: &State,
+    source: &InstanceScreenshotSource,
+    key: ScreenshotKey,
+    png_bytes: Vec<u8>,
+    mode: ScreenshotEditSaveMode,
+) -> crate::Result<InstanceScreenshot> {
+    let scanned = scan_source_screenshots(state, source).await?;
+    let source_screenshot = scanned
+        .iter()
+        .find(|screenshot| screenshot.file_name == key.file_name)
+        .ok_or_else(|| {
+            crate::ErrorKind::InputError("Unknown screenshot".to_string())
+        })?;
+
+    let png_bytes =
+        validate_edited_png(source_screenshot.path.clone(), png_bytes)
+            .await?;
+
+    let screenshots_dir = source_screenshots_dir(state, source).await?;
+    let target_path = match mode {
+        ScreenshotEditSaveMode::CreateCopy => {
+            available_target_path(&screenshots_dir, &key.file_name).await?
+        }
+        ScreenshotEditSaveMode::ReplaceEdit => {
+            source_screenshot.path.clone()
+        }
+    };
+    let target_file_name = target_path
+        .file_name()
+        .and_then(|file_name| file_name.to_str())
+        .ok_or_else(|| {
+            crate::ErrorKind::InputError(
+                "Could not determine edited screenshot file name".to_string(),
+            )
+        })?
+        .to_string();
+
+    io::write(&target_path, png_bytes).await?;
+
+    // Rescan so the returned entry carries the new file's real metadata.
+    // Separate name: `source_screenshot` still borrows the first scan above.
+    let rescanned = scan_source_screenshots(state, source).await?;
+    rescanned
+        .into_iter()
+        .find(|screenshot| screenshot.file_name == target_file_name)
+        .map(|screenshot| filesystem_screenshot(source, screenshot))
+        .ok_or_else(|| {
+            crate::ErrorKind::InputError(
+                "Could not index edited screenshot".to_string(),
+            )
+        })
+}
+
+pub async fn save_edited_screenshot(
+    key: ScreenshotKey,
+    png_bytes: Vec<u8>,
+    mode: ScreenshotEditSaveMode,
+) -> crate::Result<InstanceScreenshot> {
+    validate_file_name(&key.file_name)?;
+
+    let state = State::get().await?;
+    let source = screenshot_source(&key.instance_id)
+    .await?
+    .ok_or_else(|| {
+        crate::ErrorKind::InputError("Unknown instance".to_string())
+    })?;
+    let _lock = state.lock_instance_screenshots(&source.id).await;
+
+    if source.json_backed {
+        return save_edited_screenshot_filesystem(
+            &state, &source, key, png_bytes, mode,
+        )
+        .await;
+    }
+
+    let scanned = scan_source_screenshots(&state, &source).await?;
+    let current =
+        reconcile_source_screenshots(&state, &source, scanned).await?;
+    let source_screenshot = current
+        .iter()
+        .find(|screenshot| screenshot.file_name == key.file_name)
+        .ok_or_else(|| {
+            crate::ErrorKind::InputError("Unknown screenshot".to_string())
+        })?;
+    let source_row = screenshot_rows::get_screenshot_by_key(
+        &key.instance_id,
+        &key.file_name,
+        &state.pool,
+    )
+    .await?
+    .ok_or_else(|| {
+        crate::ErrorKind::InputError("Unknown screenshot".to_string())
+    })?;
+
+    let png_bytes =
+        validate_edited_png(source_screenshot.path.clone(), png_bytes)
+            .await?;
 
     let screenshots_dir = source_screenshots_dir(&state, &source).await?;
     let (target_path, copy_group) = match mode {

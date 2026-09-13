@@ -98,7 +98,7 @@ pub(super) async fn list_source_screenshots(
 }
 
 /// A screenshot of an instance that has no database row behind it.
-fn filesystem_screenshot(
+pub(super) fn filesystem_screenshot(
     source: &InstanceScreenshotSource,
     scanned: ScannedScreenshot,
 ) -> InstanceScreenshot {
