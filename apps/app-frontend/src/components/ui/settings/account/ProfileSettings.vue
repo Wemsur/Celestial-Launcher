@@ -154,7 +154,7 @@ import {
     users,
 } from '@/helpers/auth.js'
 import { get as getModrinthUser,login, logout } from '@/helpers/mr_auth.ts'
-import { generatePlayerHeadBlob } from '@/helpers/rendering/batch-skin-renderer.ts'
+import { generatePlayerHeadBlob } from '@/helpers/rendering/player-head'
 import {
 	change_user_avatar,
 	delete_user_avatar,
