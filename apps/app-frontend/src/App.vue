@@ -977,13 +977,6 @@ async function setupApp() {
 	tags.initialize()
 	await traceStartupStep('Initialize onboarding checklist', () => onboardingChecklist.initialize())
 
-    if (shouldShowNewIconEditorNotification(showChecklist.value)) {
-        addPopupNotification({
-            contentType: 'custom',
-            component: NewIconEditorNotification,
-            autoCloseMs: null,
-        })
-    }
     const allSettings = await getSettings()
     //主题转换
     const rawTheme = allSettings.theme
@@ -3079,7 +3072,6 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 	*,
 	:deep(*) {
 		box-shadow: none !important;
-		--tw-drop-shadow:;
 	}
 }
 
