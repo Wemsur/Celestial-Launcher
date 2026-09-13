@@ -1,0 +1,112 @@
+name: Celestial Launcher Linux ARM64
+
+# 临时工作流：只出 Linux ARM64 产物，用来补发给有需求的用户。
+#
+# 用 GitHub 托管的 ARM64 runner（公开仓库免费），因此是原生编译，不需要交叉
+# 编译那一整套 arm64 sysroot —— 这是能这么省事的关键。仓库转私有后该 runner
+# 将不可用，届时需要自建 runner 或改用交叉编译。
+#
+# 两种用法：
+#   1. 只出产物：Actions → 本工作流 → Run workflow，ref 填 `3.3.0`
+#      （或留空用当前分支），跑完在 run 页面下载 CelestialLauncher-linux-arm64。
+#   2. 直接挂到已有 release：tag 填 `3.3.0`，构建完会自动把产物附加到该 release。
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: '要构建的 ref / tag / commit（留空 = 触发时的分支）'
+        required: false
+        default: ''
+      tag:
+        description: '可选：构建完把产物附加到这个已存在的 release tag'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    name: Build (linux-arm64)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      # 见 celestial-release.yml：仓库里有一个空目标的符号链接，不关掉会中断 checkout。
+      - name: Disable git symlinks
+        shell: bash
+        run: git config --global core.symlinks false
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # theseus.jar 的 gradle 构建需要 JVM 17+。
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-arm64
+
+      # rpm 是为了让 `--bundles rpm` 有 rpmbuild 可用（24.04 镜像不自带）。
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev rpm
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - run: corepack enable
+
+      - name: Seed app-lib environment
+        shell: bash
+        run: cp packages/app-lib/.env.prod packages/app-lib/.env
+
+      - run: pnpm install
+
+      - name: Build
+        shell: bash
+        run: pnpm --filter=@modrinth/app run tauri build --bundles deb,rpm,appimage
+
+      - name: Collect installers
+        shell: bash
+        run: |
+          mkdir -p dist
+          for f in \
+            target/release/bundle/deb/*.deb \
+            target/release/bundle/rpm/*.rpm \
+            target/release/bundle/appimage/*.AppImage; do
+            [ -e "$f" ] && cp "$f" dist/
+          done
+          ls -la dist
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: CelestialLauncher-linux-arm64
+          path: dist/*
+          if-no-files-found: error
+
+  # 仅在填了 tag 时运行：把上面构建的产物附加到已存在的 release。
+  attach:
+    name: Attach to release
+    needs: build
+    if: ${{ inputs.tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download ARM64 bundles
+        uses: actions/download-artifact@v4
+        with:
+          name: CelestialLauncher-linux-arm64
+          path: release-files
+
+      - name: Attach to ${{ inputs.tag }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          files: release-files/*
