@@ -91,10 +91,6 @@ pub(super) fn update_server_data(
     }
 }
 
-pub(super) fn server_hidden(server: &NbtCompound) -> bool {
-    server.get::<_, i8>("hidden").unwrap_or(0) != 0
-}
-
 pub(super) fn server_address(server: &NbtCompound) -> String {
     server.get::<_, &str>("ip").unwrap_or_default().to_string()
 }

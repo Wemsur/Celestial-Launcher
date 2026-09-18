@@ -115,7 +115,11 @@ pub(crate) async fn get_installed_project_ids_for_instance(
         .collect())
 }
 
+// Only `installed` is read — the other columns exist because the row maps 1:1
+// onto the SELECT below, which is left untouched (editing it would invalidate the
+// offline `.sqlx` cache).
 #[derive(sqlx::FromRow)]
+#[allow(dead_code)]
 struct InstanceInstallCandidateRow {
     id: String,
     name: String,
@@ -345,11 +349,6 @@ async fn list_content_inner(
     packs_only: bool,
     state: &State,
 ) -> crate::Result<Vec<ContentItem>> {
-    tracing::info!(
-        "list_content called for instance '{}', content_set={:?}",
-        instance_id, content_set_id
-    );
-    let t_scope = std::time::Instant::now();
     // A JSON-backed instance has no DB row, so a failed lookup here is routine,
     // not fatal: fall back to resolving the scope from its `instance.json`.
     let resolved = match resolve_content_scope_with_instance(
@@ -359,35 +358,9 @@ async fn list_content_inner(
     )
     .await
     {
-        Ok(resolved) => {
-            tracing::info!(
-                "list_content: using DB scope for instance '{}', content_set='{}'",
-                resolved.instance.id,
-                resolved.content_set.id
-            );
-            resolved
-        }
-        Err(e) => {
-            tracing::info!(
-                "list_content: DB scope failed for '{}': {}, trying JSON fallback",
-                instance_id, e
-            );
-            let json_resolved =
-                resolve_content_scope_for_json(instance_id, state).await?;
-            tracing::info!(
-                "list_content: using JSON scope for instance '{}', content_set='{}'",
-                json_resolved.instance.id,
-                json_resolved.content_set.id
-            );
-            json_resolved
-        }
+        Ok(resolved) => resolved,
+        Err(_) => resolve_content_scope_for_json(instance_id, state).await?,
     };
-    tracing::info!(
-        "content_timing: [1/6] resolve scope {} ms for '{}'",
-        t_scope.elapsed().as_millis(),
-        instance_id
-    );
-    let t_link = std::time::Instant::now();
     let link = sqlite::instance_rows::get_instance_link(
         &resolved.instance.id,
         &state.pool,
@@ -411,11 +384,6 @@ async fn list_content_inner(
             None => None,
         }
     };
-    tracing::info!(
-        "content_timing: [2/6] link + modpack identifiers {} ms for '{}'",
-        t_link.elapsed().as_millis(),
-        instance_id
-    );
     let filter = if imported_modpack_scope {
         ContentFilter::ExcludeSourceKind {
             source_kind: ContentSourceKind::ImportedModpack,
@@ -444,11 +412,6 @@ async fn list_content_inner(
         && let Some(items) =
             load_cached_content_items(&resolved.instance, state)
     {
-        tracing::info!(
-            "content_timing: [F] resolved item cache HIT ({} items) for '{}'",
-            items.len(),
-            instance_id
-        );
         spawn_content_refresh_for_instance(&resolved.instance, state);
         return Ok(items);
     }
@@ -465,7 +428,6 @@ async fn list_content_inner(
     let installed_versions = scope_content.versions;
     let files = scope_content.projects.into_iter().collect::<Vec<_>>();
 
-    let t_items = std::time::Instant::now();
     let items = content_files_to_content_items(
         &resolved.instance,
         resolved.content_set.loader,
@@ -475,12 +437,6 @@ async fn list_content_inner(
         state,
     )
     .await;
-    tracing::info!(
-        "content_timing: [6/6] content_files_to_content_items {} ms ({} files) for '{}'",
-        t_items.elapsed().as_millis(),
-        files.len(),
-        instance_id
-    );
     if unfiltered && let Ok(items) = &items {
         store_cached_content_items(
             &resolved.instance,
@@ -506,7 +462,6 @@ pub(crate) async fn list_content_skeleton(
     instance_id: &str,
     state: &State,
 ) -> crate::Result<Vec<ContentItem>> {
-    let started = std::time::Instant::now();
     let resolved = match resolve_content_scope_with_instance(
         instance_id, None, &state.pool,
     )
@@ -517,12 +472,6 @@ pub(crate) async fn list_content_skeleton(
     };
 
     if let Some(items) = load_cached_content_items(&resolved.instance, state) {
-        tracing::info!(
-            "content_timing: [S] skeleton {} ms ({} items, from item cache) for '{}'",
-            started.elapsed().as_millis(),
-            items.len(),
-            instance_id
-        );
         return Ok(items);
     }
 
@@ -560,13 +509,6 @@ pub(crate) async fn list_content_skeleton(
         })
         .collect::<Vec<_>>();
     sort_content_items(&mut items);
-
-    tracing::info!(
-        "content_timing: [S] skeleton {} ms ({} bare items) for '{}'",
-        started.elapsed().as_millis(),
-        items.len(),
-        instance_id
-    );
 
     Ok(items)
 }
@@ -1124,12 +1066,6 @@ async fn content_projects_for_scope_inner(
     filter: ContentFilter<'_>,
     packs_only: bool,
 ) -> crate::Result<ScopeContent> {
-    tracing::info!(
-        "content_projects_for_scope: starting for instance '{}', content_set='{}'",
-        resolved.instance.id,
-        resolved.content_set.id
-    );
-    let t_sync = std::time::Instant::now();
     let mut files = sync_instance_content_files_with_freshness(
         &resolved.instance,
         ContentSyncFreshness::from_cache_behaviour(cache_behaviour),
@@ -1144,16 +1080,9 @@ async fn content_projects_for_scope_inner(
             )
         });
     }
-    tracing::info!(
-        "content_timing: [3/6] sync_content_files {} ms ({} files) for '{}'",
-        t_sync.elapsed().as_millis(),
-        files.len(),
-        resolved.instance.id
-    );
     // Fingerprinted after the pack filter so the cached item list can never be
     // reused for a differently filtered read.
     let files_fingerprint = instance_files_fingerprint(&files);
-    let t_db = std::time::Instant::now();
     let entries = sqlite::content_rows::get_content_entries(
         &resolved.content_set.id,
         &state.pool,
@@ -1174,12 +1103,6 @@ async fn content_projects_for_scope_inner(
         .iter()
         .map(|file| file.sha1.as_str())
         .collect::<Vec<_>>();
-    tracing::info!(
-        "content_timing: [4/6] local db rows {} ms for '{}'",
-        t_db.elapsed().as_millis(),
-        resolved.instance.id
-    );
-    let t_files_api = std::time::Instant::now();
     let file_info = CachedEntry::get_file_many(
         &hashes,
         cache_behaviour,
@@ -1187,17 +1110,10 @@ async fn content_projects_for_scope_inner(
         &state.api_semaphore,
     )
     .await?;
-    tracing::info!(
-        "content_timing: [5a/6] get_file_many {} ms ({} hashes in, {} matched)",
-        t_files_api.elapsed().as_millis(),
-        hashes.len(),
-        file_info.len()
-    );
     let file_info_by_hash = file_info
         .into_iter()
         .map(|file| (file.hash.clone(), file))
         .collect::<HashMap<_, _>>();
-    let t_channels = std::time::Instant::now();
     // A packs-only read never renders update badges, so the version lookup that
     // feeds them is pure cost — skip it and hand back empty collections.
     let (installed_channels, installed_versions) = if packs_only {
@@ -1211,11 +1127,6 @@ async fn content_projects_for_scope_inner(
         )
         .await?
     };
-    tracing::info!(
-        "content_timing: [5b/6] get_installed_update_channels {} ms ({} versions read)",
-        t_channels.elapsed().as_millis(),
-        installed_versions.len()
-    );
     let update_keys = files
         .iter()
         .filter(|_| !packs_only)
@@ -1238,7 +1149,6 @@ async fn content_projects_for_scope_inner(
         .collect::<Vec<_>>();
     let update_key_refs =
         update_keys.iter().map(String::as_str).collect::<Vec<_>>();
-    let t_updates = std::time::Instant::now();
     let file_updates = CachedEntry::get_file_update_many(
         &update_key_refs,
         cache_behaviour,
@@ -1246,11 +1156,6 @@ async fn content_projects_for_scope_inner(
         &state.api_semaphore,
     )
     .await?;
-    tracing::info!(
-        "content_timing: [5c/6] get_file_update_many {} ms ({} keys)",
-        t_updates.elapsed().as_millis(),
-        update_key_refs.len()
-    );
     let mut updates_by_hash: HashMap<String, Vec<String>> = HashMap::new();
     for update in file_updates {
         updates_by_hash
@@ -1441,7 +1346,6 @@ async fn content_files_to_content_items(
                 .map(|metadata| metadata.version_id.clone())
         })
         .collect::<HashSet<_>>();
-    let t_meta = std::time::Instant::now();
     let meta = resolve_metadata(
         &project_ids,
         &version_ids,
@@ -1451,23 +1355,11 @@ async fn content_files_to_content_items(
         &state.api_semaphore,
     )
     .await?;
-    tracing::info!(
-        "content_timing: [6a/6] resolve_metadata {} ms ({} projects, {} versions)",
-        t_meta.elapsed().as_millis(),
-        project_ids.len(),
-        version_ids.len()
-    );
-    let t_embedded = std::time::Instant::now();
     let embedded_metadata =
         super::embedded_content_metadata::resolve_embedded_content_metadata(
             instance, loader, files, state,
         )
             .await?;
-    tracing::info!(
-        "content_timing: [6b/6] resolve_embedded_content_metadata {} ms ({} resolved)",
-        t_embedded.elapsed().as_millis(),
-        embedded_metadata.len()
-    );
     let instance_path =
         libraries::resolve_instance_dir(&state, &instance.path);
     let paths = files

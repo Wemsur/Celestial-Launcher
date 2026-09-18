@@ -1,5 +1,4 @@
 use crate::worlds::{DisplayStatus, WorldType};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default)]
 pub struct AttachedWorldData {
@@ -35,39 +34,6 @@ impl AttachedWorldData {
             project_id: row.project_id,
             content_kind: row.content_kind,
         }))
-    }
-
-    pub async fn get_all_for_instance(
-        instance_id: &str,
-        exec: impl sqlx::Executor<'_, Database = sqlx::Sqlite>,
-    ) -> crate::Result<HashMap<(WorldType, String), Self>> {
-        let attached_data = sqlx::query!(
-            "
-			SELECT world_type, world_id, display_status, project_id, content_kind
-			FROM attached_world_data
-			WHERE instance_id = ?
-			",
-            instance_id,
-        )
-        .fetch_all(exec)
-        .await?;
-
-        Ok(attached_data
-            .into_iter()
-            .map(|row| {
-                let world_type = WorldType::from_string(&row.world_type);
-                let display_status =
-                    DisplayStatus::from_string(&row.display_status);
-                (
-                    (world_type, row.world_id),
-                    AttachedWorldData {
-                        display_status,
-                        project_id: row.project_id,
-                        content_kind: row.content_kind,
-                    },
-                )
-            })
-            .collect())
     }
 
     pub async fn remove_for_world(

@@ -78,6 +78,10 @@ default = ["custom-protocol"]
 # DO NOT remove this
 custom-protocol = ["tauri/custom-protocol"]
 export-app-events = ["theseus/export-ts"]
+# Carried from upstream Modrinth: the self-updater is disabled in this fork, but
+# the `#[cfg(feature = "updater")]` blocks stay in the tree. Declaring the flag
+# (never enabled) keeps those blocks compiled out without the unexpected-cfg lint.
+updater = []
 
 [lints]
 workspace = true

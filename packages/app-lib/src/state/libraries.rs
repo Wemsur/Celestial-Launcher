@@ -217,26 +217,6 @@ impl InstanceJson {
         }
     }
 
-    pub(crate) fn from_instance(instance: &Instance) -> Self {
-        Self {
-            name: Some(instance.name.clone()),
-            icon_path: instance.icon_path.clone(),
-            created: Some(instance.created),
-            last_played: instance.last_played,
-            submitted_time_played: instance.submitted_time_played,
-            recent_time_played: instance.recent_time_played,
-            ..Default::default()
-        }
-    }
-
-    /// Derive an Instance from this JSON sidecar and a known absolute path.
-    pub(crate) fn to_instance(
-        &self,
-        absolute_path: &str,
-    ) -> Instance {
-        self.to_instance_with_format(absolute_path, self.library_format.clone())
-    }
-
     /// Derive an Instance from this JSON sidecar and a known absolute path,
     /// overriding the library format.
     pub(crate) fn to_instance_with_format(
@@ -356,34 +336,8 @@ impl CelestialJson {
         Ok(())
     }
 
-    pub(crate) fn launch_overrides(
-        &self,
-        instance_id: &str,
-    ) -> crate::state::InstanceLaunchOverrides {
-        match self.launch_overrides.as_ref() {
-            Some(data) => crate::state::InstanceLaunchOverrides {
-                instance_id: instance_id.to_string(),
-                java_path: data.java_path.clone(),
-                extra_launch_args: data.extra_launch_args.clone(),
-                custom_env_vars: data.custom_env_vars.clone(),
-                memory: data.memory,
-                force_fullscreen: data.force_fullscreen,
-                game_resolution: data.game_resolution,
-                hooks: data.hooks.clone(),
-                visible_tabs: data.visible_tabs,
-            },
-            None => crate::state::InstanceLaunchOverrides::empty(
-                instance_id.to_string(),
-            ),
-        }
-    }
-
     pub(crate) fn groups(&self) -> &[String] {
         &self.groups
-    }
-
-    pub(crate) fn update_channel(&self) -> ReleaseChannel {
-        self.update_channel
     }
 }
 
@@ -544,21 +498,12 @@ pub async fn list_instances_from_json(
     }
 
     let config = get_libraries_config(state).await?;
-    let library_count = config.libraries.len();
     let libraries = config.libraries;
 
-    let started = std::time::Instant::now();
     // The walk is entirely blocking IO — one `read_dir` per library plus a
     // `read_to_string` per instance — so it must not run on a runtime worker.
     let instances =
         tokio::task::spawn_blocking(move || scan_libraries(&libraries)).await?;
-
-    tracing::info!(
-        "content_timing: [json] list_instances_from_json {} ms ({} instances in {} libraries)",
-        started.elapsed().as_millis(),
-        instances.len(),
-        library_count
-    );
 
     store_instance_list(&instances);
 
@@ -1077,25 +1022,6 @@ pub fn resolve_instance_dir_with_dirs(
     } else {
         dirs.instances_dir().join(instance_path)
     }
-}
-
-/// Find the library info for a given instance path by walking up the path.
-/// Returns None if the instance is not under any configured library.
-pub(crate) fn find_library_for_instance<'a>(
-    config: &'a LibrariesConfig,
-    instance_path: &Path,
-) -> Option<&'a LibraryInfo> {
-    let mut current = Some(instance_path);
-    while let Some(path) = current {
-        for lib in &config.libraries {
-            let lib_path = Path::new(&lib.path);
-            if path.starts_with(lib_path) {
-                return Some(lib);
-            }
-        }
-        current = path.parent();
-    }
-    None
 }
 
 /// Returns the library root directory (the configured library path) for an instance.

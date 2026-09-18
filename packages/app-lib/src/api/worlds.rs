@@ -929,7 +929,7 @@ pub async fn edit_server_in_instance(
     pack_status: ServerPackStatus,
 ) -> Result<()> {
     let state = State::get().await?;
-    let (instance_id, instance_path) =
+    let (_instance_id, instance_path) =
         resolve_instance_identity(instance_id, &state).await?;
     let instance_dir =
         libraries::resolve_instance_dir(&state, &instance_path);
@@ -956,7 +956,7 @@ pub async fn remove_server_from_instance(
     index: usize,
 ) -> Result<()> {
     let state = State::get().await?;
-    let (instance_id, instance_path) =
+    let (_instance_id, instance_path) =
         resolve_instance_identity(instance_id, &state).await?;
     let instance_dir =
         libraries::resolve_instance_dir(&state, &instance_path);

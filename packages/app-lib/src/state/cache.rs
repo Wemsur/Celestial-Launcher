@@ -2008,7 +2008,7 @@ impl CachedEntry {
                     .collect::<Vec<_>>();
 
                 futures::future::try_join_all(fetch_urls.iter().map(
-                    |(key, url)| {
+                    |(_key, url)| {
                         fetch_json(
                             Method::GET,
                             url,

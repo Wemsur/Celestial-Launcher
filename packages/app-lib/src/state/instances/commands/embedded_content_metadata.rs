@@ -479,7 +479,6 @@ pub(crate) async fn resolve_embedded_content_metadata(
     files: &[(String, ContentFile)],
     state: &State,
 ) -> crate::Result<HashMap<String, EmbeddedContentMetadata>> {
-    let t_candidates = std::time::Instant::now();
     // Resolved once: this used to run per candidate inside the map below.
     let instance_dir = libraries::resolve_instance_dir(state, &instance.path);
     let candidates = files
@@ -500,10 +499,7 @@ pub(crate) async fn resolve_embedded_content_metadata(
     if candidates.is_empty() {
         return Ok(HashMap::new());
     }
-    let candidate_count = candidates.len();
-    let t_candidates = t_candidates.elapsed();
 
-    let t_lookup = std::time::Instant::now();
     let cache_keys = candidates
         .keys()
         .map(|hash| metadata_cache_key(hash, loader))
@@ -517,10 +513,7 @@ pub(crate) async fn resolve_embedded_content_metadata(
         &state.api_semaphore,
     )
     .await?;
-    let cached_count = cached.len();
-    let t_lookup = t_lookup.elapsed();
 
-    let t_icons = std::time::Instant::now();
     let mut resolved = HashMap::new();
     let mut resolved_hashes = HashSet::new();
     for cached in cached {
@@ -536,14 +529,11 @@ pub(crate) async fn resolve_embedded_content_metadata(
             }
         }
     }
-    let t_icons = t_icons.elapsed();
 
-    let t_inspect = std::time::Instant::now();
     let pending = candidates
         .into_iter()
         .filter(|(hash, _)| !resolved_hashes.contains(hash))
         .collect::<Vec<_>>();
-    let inspected_count = pending.len();
     let inspected_metadata = stream::iter(pending)
         .map(|(hash, path)| async move {
             let inspection = tokio::task::spawn_blocking(move || {
@@ -609,17 +599,6 @@ pub(crate) async fn resolve_embedded_content_metadata(
         );
     }
     CachedEntry::upsert_many(&entries, &state.pool).await?;
-
-    tracing::info!(
-        "content_timing: [6b-split] candidates {} ms ({} candidates) | sqlite lookup {} ms ({} rows) | icon stat {} ms | inspect+upsert {} ms ({} inspected)",
-        t_candidates.as_millis(),
-        candidate_count,
-        t_lookup.as_millis(),
-        cached_count,
-        t_icons.as_millis(),
-        t_inspect.elapsed().as_millis(),
-        inspected_count,
-    );
 
     Ok(resolved)
 }

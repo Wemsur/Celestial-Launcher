@@ -5,7 +5,6 @@ use crate::state::{
     CreateInstance, EditInstance, Instance, InstanceIconConfig, InstanceLink,
     InstanceMetadata, InstanceSyncedOption, ModLoader, State,
 };
-use crate::state::libraries::InstanceJson;
 
 #[tracing::instrument]
 #[allow(clippy::too_many_arguments)]

@@ -923,41 +923,6 @@ pub(crate) async fn get_instance_metadata_by_id(
     Ok(record)
 }
 
-pub(crate) async fn get_instance_metadata_many(
-    ids: &[&str],
-    pool: &SqlitePool,
-) -> crate::Result<Vec<InstanceMetadataRecord>> {
-    if ids.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let ids_json = serde_json::to_string(ids)?;
-    let rows = query_instance_metadata!(
-        r#"
-        WITH requested AS (
-            SELECT value AS id, key AS ord
-            FROM json_each(?)
-        )
-        "#,
-        r#"
-        FROM requested
-        INNER JOIN instances i
-            ON i.id = requested.id
-        "#,
-        "ORDER BY requested.ord",
-        ids_json,
-    )
-    .fetch_all(pool)
-    .await?;
-
-    let mut records = rows
-        .into_iter()
-        .map(InstanceMetadataRow::into_record)
-        .collect::<crate::Result<Vec<_>>>()?;
-    attach_sync_preferences(&mut records, pool).await?;
-    Ok(records)
-}
-
 pub(crate) async fn list_instance_metadata(
     pool: &SqlitePool,
 ) -> crate::Result<Vec<InstanceMetadataRecord>> {

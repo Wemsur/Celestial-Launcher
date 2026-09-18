@@ -11,10 +11,6 @@ pub async fn get() -> crate::Result<OnboardingChecklist> {
     get_onboarding_checklist(&state.pool).await
 }
 
-pub(crate) async fn mark_created_instance() -> crate::Result<()> {
-    mark(OnboardingChecklistItem::CreatedInstance).await
-}
-
 pub(crate) async fn mark_logged_into_minecraft() -> crate::Result<()> {
     mark(OnboardingChecklistItem::LoggedIntoMinecraft).await
 }

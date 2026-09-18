@@ -97,11 +97,6 @@ pub async fn get_content_items(
     cache_behaviour: Option<CacheBehaviour>,
 ) -> crate::Result<Vec<ContentItem>> {
     let state = State::get().await?;
-    tracing::info!(
-        "get_content_items called for instance '{}', cache={:?}",
-        instance_id,
-        cache_behaviour
-    );
 
     // Nothing on the first-paint path may wait on the network. A cold metadata
     // cache otherwise costs a round trip per batch, which on a slow link is the
@@ -111,7 +106,6 @@ pub async fn get_content_items(
     let (local_first, effective_behaviour) =
         local_first_behaviour(cache_behaviour);
 
-    let started = std::time::Instant::now();
     let result = crate::state::list_content(
         instance_id,
         None,
@@ -119,21 +113,6 @@ pub async fn get_content_items(
         &state,
     )
     .await;
-    match &result {
-        Ok(items) => tracing::info!(
-            "content_timing: TOTAL get_content_items {} ms ({} items, local_first={}) for instance '{}'",
-            started.elapsed().as_millis(),
-            items.len(),
-            local_first,
-            instance_id
-        ),
-        Err(e) => tracing::error!(
-            "content_timing: TOTAL get_content_items FAILED after {} ms for instance '{}': {}",
-            started.elapsed().as_millis(),
-            instance_id,
-            e
-        ),
-    }
 
     let result = match result {
         Ok(mut items) => {
@@ -247,23 +226,15 @@ fn spawn_metadata_completion<F, Fut>(
         return;
     }
     tokio::spawn(async move {
-        let started = std::time::Instant::now();
         let outcome = complete(instance_id.clone()).await;
 
         match outcome {
             Ok(completed) if completed != previous => {
-                tracing::info!(
-                    "content_timing: [bg] metadata completion ({guard}) {} ms changed the result, notifying frontend",
-                    started.elapsed().as_millis(),
-                );
                 let _ =
                     emit_instance(&instance_id, InstancePayloadType::Synced)
                         .await;
             }
-            Ok(_) => tracing::info!(
-                "content_timing: [bg] metadata completion ({guard}) {} ms, nothing new",
-                started.elapsed().as_millis(),
-            ),
+            Ok(_) => {}
             Err(error) => tracing::warn!(
                 "Background metadata completion ({guard}) failed: {error}"
             ),
@@ -294,19 +265,7 @@ pub async fn refresh_content_updates(
     instance_id: &str,
 ) -> crate::Result<Vec<ContentUpdate>> {
     let state = State::get().await?;
-    let started = std::time::Instant::now();
-    let result =
-        crate::state::refresh_content_updates(instance_id, &state).await;
-    tracing::info!(
-        "content_timing: TOTAL refresh_content_updates {} ms ({}) for instance '{}'",
-        started.elapsed().as_millis(),
-        match &result {
-            Ok(updates) => format!("{} updates", updates.len()),
-            Err(_) => "failed".to_string(),
-        },
-        instance_id
-    );
-    result
+    crate::state::refresh_content_updates(instance_id, &state).await
 }
 
 #[tracing::instrument]

@@ -43,24 +43,6 @@ pub(crate) async fn get_instance_metadata(
     Ok(Some(instance_metadata(record, quarantined)))
 }
 
-pub(crate) async fn get_instances_metadata(
-    instance_ids: &[&str],
-    pool: &SqlitePool,
-) -> crate::Result<Vec<InstanceMetadata>> {
-    let records =
-        instance_rows::get_instance_metadata_many(instance_ids, pool).await?;
-    let quarantined_ids =
-        instance_rows::get_quarantined_instance_ids(pool).await?;
-
-    Ok(records
-        .into_iter()
-        .map(|record| {
-            let quarantined = quarantined_ids.contains(&record.instance.id);
-            instance_metadata(record, quarantined)
-        })
-        .collect())
-}
-
 pub(crate) async fn list_instances(
     pool: &SqlitePool,
 ) -> crate::Result<Vec<InstanceMetadata>> {

@@ -18,11 +18,11 @@ use uuid::Uuid;
 const SCREENSHOT_HASH_CONCURRENCY: usize = 8;
 
 pub(super) struct ScannedScreenshot {
-    file_name: String,
-    created_at: DateTime<Utc>,
-    modified_at: i64,
-    file_size: i64,
-    path: PathBuf,
+    pub(super) file_name: String,
+    pub(super) created_at: DateTime<Utc>,
+    pub(super) modified_at: i64,
+    pub(super) file_size: i64,
+    pub(super) path: PathBuf,
 }
 
 struct ResolvedScreenshot {

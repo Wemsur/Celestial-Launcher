@@ -6,12 +6,12 @@
 
 use native_dialog::{DialogBuilder, MessageLevel};
 use std::{env, io};
+#[cfg(feature = "updater")]
 use std::sync::atomic::Ordering;
 use tauri::{Emitter, Listener, Manager};
 use tauri_plugin_fs::FsExt;
 use theseus::prelude::*;
 use std::fs;
-use std::path::PathBuf;
 use base64::{Engine as _, engine::general_purpose};
 use tauri_plugin_http::reqwest;
 
@@ -313,16 +313,6 @@ Write-Host "Import completed successfully"
 
     // --- 阶段3: 退出当前应用（不做 restart，因为 dev 模式下 restart 不会重启 Vite）---
     std::process::exit(0);
-}
-
-fn copy_file_exclusive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
-    // 如果目标文件已被占用，先尝试删除（覆盖式复制）
-    if dst.exists() {
-        let _ = fs::remove_file(dst);
-    }
-    fs::copy(src, dst)
-        .map_err(|e| format!("复制 {} 失败: {}", src.file_name().unwrap_or_default().to_string_lossy(), e))?;
-    Ok(())
 }
 
 #[tauri::command]

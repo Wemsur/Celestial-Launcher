@@ -395,7 +395,6 @@ async fn sync_json_instance_content_files(
     let cache_path = content_cache_path(instance, state);
 
     // Try loading cached data first — this is near-instant.
-    let t_cache = std::time::Instant::now();
     if freshness == ContentSyncFreshness::UseCache
         && let Some(cache) = load_content_cache(&cache_path)?
         && !cache.stale
@@ -418,12 +417,6 @@ async fn sync_json_instance_content_files(
             })
             .collect();
 
-        tracing::info!(
-            "content_timing: [3a] content_cache.json HIT {} ms ({} files) for '{}'",
-            t_cache.elapsed().as_millis(),
-            instance_files.len(),
-            instance.id,
-        );
         // Fire-and-forget background refresh so subsequent calls get fresh
         // data without blocking the UI. Throttled: several queries can ask for
         // the same instance's content within a second of each other.
@@ -432,11 +425,6 @@ async fn sync_json_instance_content_files(
     }
 
     // Full filesystem scan (slow path, result is cached for next time).
-    tracing::info!(
-        "content_timing: [3a] content_cache.json MISS (freshness={:?}) for '{}', doing full scan",
-        freshness,
-        instance.id,
-    );
     sync_json_instance_content_files_internal(instance, state, cache_path, None)
         .await
 }
@@ -480,14 +468,9 @@ fn spawn_content_refresh(
     expected_scanned_at: u64,
 ) {
     if !claim_background_refresh(&instance_id) {
-        tracing::debug!(
-            "content_timing: [bg] skipping background refresh of '{}' (throttled)",
-            instance_id
-        );
         return;
     }
     tokio::spawn(async move {
-        let started = std::time::Instant::now();
         let state = match State::get().await {
             Ok(s) => s,
             Err(e) => {
@@ -513,11 +496,6 @@ fn spawn_content_refresh(
                 e
             );
         }
-        tracing::info!(
-            "content_timing: [bg] background content refresh {} ms for '{}'",
-            started.elapsed().as_millis(),
-            instance_id
-        );
     });
 }
 
@@ -552,16 +530,7 @@ async fn sync_json_instance_content_files_internal(
     cache_path: PathBuf,
     expected_scanned_at: Option<u64>,
 ) -> crate::Result<Vec<InstanceFile>> {
-    let t_lock = std::time::Instant::now();
     let _content_lock = state.lock_instance_content(&instance.id).await;
-    let lock_wait = t_lock.elapsed();
-    if lock_wait.as_millis() > 50 {
-        tracing::info!(
-            "content_timing: [3b-lock] waited {} ms for the content lock of '{}'",
-            lock_wait.as_millis(),
-            instance.id
-        );
-    }
     let instance_dir =
         libraries::resolve_instance_dir(state, &instance.path);
     let shared_dirs = libraries::shared_content_dirs(
@@ -572,15 +541,8 @@ async fn sync_json_instance_content_files_internal(
         "sync_json_content_files: scanning directory '{}'",
         instance_dir.display()
     );
-    let t_scan = std::time::Instant::now();
     let scanned =
         filesystem::scan_content_files(&instance_dir, &shared_dirs)?;
-    tracing::info!(
-        "content_timing: [3b] scan_content_files {} ms ({} files) for '{}'",
-        t_scan.elapsed().as_millis(),
-        scanned.len(),
-        instance.id
-    );
 
     // Hashes recorded by the previous scan. Reusable because the key embeds the
     // file's size and mtime, so a hit proves the bytes are unchanged.
@@ -599,7 +561,6 @@ async fn sync_json_instance_content_files_internal(
         .unwrap_or_default();
 
     let hashes_by_key = hash_scanned_files(
-        &instance.id,
         &instance_dir,
         &scanned,
         &known_hashes,
@@ -700,20 +661,12 @@ async fn sync_db_instance_content_files(
         "sync_db_content_files: scanning directory '{}'",
         instance_dir.display()
     );
-    let t_scan = std::time::Instant::now();
     let scanned =
         filesystem::scan_content_files(&instance_dir, &shared_dirs)?;
-    tracing::info!(
-        "content_timing: [3b] scan_content_files (db) {} ms ({} files) for '{}'",
-        t_scan.elapsed().as_millis(),
-        scanned.len(),
-        instance.id
-    );
     // No hash reuse on this path: the DB rows carry no mtime, so a row cannot
     // prove a file is unchanged (a same-size edit would slip through). It still
     // gets the parallel, streaming hasher.
     let hashes_by_key = hash_scanned_files(
-        &instance.id,
         &instance_dir,
         &scanned,
         &HashMap::new(),
@@ -847,16 +800,13 @@ fn hash_key_for(file: &filesystem::ScannedContentFile) -> &str {
 /// size and mtime, so a hit proves the contents are unchanged. The rest are
 /// hashed across several blocking tasks, streaming through a fixed buffer.
 async fn hash_scanned_files(
-    instance_id: &str,
     instance_dir: &Path,
     scanned: &[filesystem::ScannedContentFile],
     known: &HashMap<String, String>,
 ) -> crate::Result<HashMap<String, String>> {
-    let started = std::time::Instant::now();
     let mut hashes: HashMap<String, String> =
         HashMap::with_capacity(scanned.len());
     let mut pending: Vec<(String, PathBuf)> = Vec::new();
-    let mut pending_bytes = 0u64;
 
     for file in scanned {
         let key = hash_key_for(file);
@@ -867,22 +817,13 @@ async fn hash_scanned_files(
             hashes.insert(key.to_string(), sha1.clone());
             continue;
         }
-        pending_bytes += file.size;
         pending.push((
             key.to_string(),
             instance_dir.join(&file.relative_path),
         ));
     }
 
-    let reused = hashes.len();
     if pending.is_empty() {
-        tracing::info!(
-            "content_timing: [3c] sha1 hashing {} ms (0 hashed, {} reused of {} files) for '{}'",
-            started.elapsed().as_millis(),
-            reused,
-            scanned.len(),
-            instance_id
-        );
         return Ok(hashes);
     }
 
@@ -919,24 +860,11 @@ async fn hash_scanned_files(
         })
         .collect::<Vec<_>>();
 
-    let mut hashed = 0usize;
     for handle in handles {
         for (key, sha1) in handle.await? {
             hashes.insert(key, sha1);
-            hashed += 1;
         }
     }
-
-    tracing::info!(
-        "content_timing: [3c] sha1 hashing {} ms ({} hashed, {} reused of {} files, {:.1} MiB read, {} tasks) for '{}'",
-        started.elapsed().as_millis(),
-        hashed,
-        reused,
-        scanned.len(),
-        pending_bytes as f64 / (1024.0 * 1024.0),
-        tasks,
-        instance_id
-    );
 
     Ok(hashes)
 }

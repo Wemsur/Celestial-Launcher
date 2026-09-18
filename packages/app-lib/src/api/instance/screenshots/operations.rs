@@ -16,7 +16,7 @@ use crate::State;
 use crate::event::InstancePayloadType;
 use crate::event::emit::emit_instance;
 use crate::state::instances::adapters::sqlite::{
-    instance_rows::{self, InstanceScreenshotSource},
+    instance_rows::InstanceScreenshotSource,
     screenshot_rows,
 };
 use crate::util::fetch::sha1_file_async;
@@ -196,7 +196,6 @@ pub async fn export_screenshots(
         .into());
     }
 
-    let state = State::get().await?;
     let mut sources = HashMap::new();
     let mut archive_folders = HashMap::<String, String>::new();
     let mut used_archive_folders = HashSet::new();
@@ -454,7 +453,7 @@ async fn save_edited_screenshot_filesystem(
     // Rescan so the returned entry carries the new file's real metadata.
     // Separate name: `source_screenshot` still borrows the first scan above.
     let rescanned = scan_source_screenshots(state, source).await?;
-    rescanned
+    Ok(rescanned
         .into_iter()
         .find(|screenshot| screenshot.file_name == target_file_name)
         .map(|screenshot| filesystem_screenshot(source, screenshot))
@@ -462,7 +461,7 @@ async fn save_edited_screenshot_filesystem(
             crate::ErrorKind::InputError(
                 "Could not index edited screenshot".to_string(),
             )
-        })
+        })?)
 }
 
 pub async fn save_edited_screenshot(

@@ -1,4 +1,4 @@
-use sqlx::{Executor, Sqlite, SqlitePool};
+use sqlx::{Executor, Sqlite};
 
 use crate::State;
 
@@ -16,22 +16,8 @@ pub struct OnboardingChecklist {
 }
 
 pub(crate) enum OnboardingChecklistItem {
-    CreatedInstance,
     LoggedIntoMinecraft,
     LoggedIntoModrinth,
-}
-
-/// Lightweight row holder for the onboarding_checklist table.
-#[derive(Debug, sqlx::FromRow)]
-struct OnboardingRow {
-    #[sqlx(rename = "has_created_instance")]
-    has_created_instance: i64,
-    #[sqlx(rename = "has_logged_into_minecraft")]
-    has_logged_into_minecraft: i64,
-    #[sqlx(rename = "has_logged_into_modrinth")]
-    has_logged_into_modrinth: i64,
-    #[sqlx(rename = "show_checklist")]
-    show_checklist: i64,
 }
 
 /// Read the onboarding-checklist row from SQLite and compute
@@ -97,17 +83,6 @@ pub(crate) async fn mark_onboarding_checklist_item(
     pool: &sqlx::SqlitePool,
 ) -> crate::Result<Option<OnboardingChecklist>> {
     let result = match item {
-        OnboardingChecklistItem::CreatedInstance => {
-            sqlx::query!(
-                "
-                UPDATE onboarding_checklist
-                SET has_created_instance = TRUE
-                WHERE id = 0 AND has_created_instance = FALSE
-                ",
-            )
-            .execute(pool)
-            .await?
-        }
         OnboardingChecklistItem::LoggedIntoMinecraft => {
             sqlx::query!(
                 "
