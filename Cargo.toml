@@ -307,12 +307,25 @@ wildcard_dependencies = "warn"
 # opt-level 1 keeps incremental rebuilds quick.
 [profile.dev]
 opt-level = 1
+# Full debuginfo (the default `debug = 2`) is the bulk of the final link: the
+# theseus_gui binary alone emits ~630 MB of object files at debug = 2. Line tables
+# keep panic backtraces (file + line) while dropping variable-level info, which
+# shrinks the dev binary and cuts the single-threaded link at the end of the build.
+# Bump back to `true` only when stepping through locals in a debugger.
+debug = "line-tables-only"
 
 [profile.dev.package."*"]
 opt-level = 2
 
 [profile.dev.package.sqlx-macros]
 opt-level = 3
+
+# theseus_gui is the last crate in the graph (nothing compiles in parallel with it)
+# and is pure command/Tauri glue — the hot work (SHA-1, SQLite, image, zip) lives in
+# the theseus lib and dependencies, which stay at opt-level 2 above. Optimizing this
+# crate only lengthens its codegen with no runtime payoff, so pin it to 0.
+[profile.dev.package.theseus_gui]
+opt-level = 0
 
 # Optimize for speed and reduce size on release builds
 [profile.release]
