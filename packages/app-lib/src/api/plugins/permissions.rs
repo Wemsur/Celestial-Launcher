@@ -29,6 +29,8 @@ pub enum PermissionKind {
     Style,
     /// Put UI into one of the launcher's named slots.
     Slot,
+    /// Register a page of its own with the launcher's router.
+    Route,
     /// Reach a host over the network.
     Network,
     /// Touch the DOM inside one of the launcher's named regions.
@@ -45,6 +47,7 @@ impl PermissionKind {
             Self::Storage => "storage",
             Self::Style => "style",
             Self::Slot => "slot",
+            Self::Route => "route",
             Self::Network => "network",
             Self::Region => "region",
             Self::Event => "event",
@@ -57,6 +60,7 @@ impl PermissionKind {
             "storage" => Self::Storage,
             "style" => Self::Style,
             "slot" => Self::Slot,
+            "route" => Self::Route,
             "network" => Self::Network,
             "region" => Self::Region,
             "event" => Self::Event,
@@ -69,14 +73,16 @@ impl PermissionKind {
     /// bare, so `storage:foo` is a manifest mistake worth reporting rather than
     /// quietly accepting a scope that will never be checked against anything.
     fn requires_scope(self) -> bool {
-        !matches!(self, Self::Storage | Self::Style)
+        !matches!(self, Self::Storage | Self::Style | Self::Route)
     }
 
     pub fn risk(self) -> PermissionRisk {
         match self {
-            Self::Storage | Self::Style | Self::Slot | Self::Event => {
-                PermissionRisk::Low
-            }
+            Self::Storage
+            | Self::Style
+            | Self::Slot
+            | Self::Route
+            | Self::Event => PermissionRisk::Low,
             Self::Network | Self::Region | Self::HostApi => PermissionRisk::High,
         }
     }
@@ -190,20 +196,16 @@ mod tests {
 
     #[test]
     fn bare_kinds_parse() {
-        assert_eq!(
-            PluginPermission::parse("storage"),
-            Ok(PluginPermission {
-                kind: PermissionKind::Storage,
-                scope: None
-            })
-        );
-        assert_eq!(
-            PluginPermission::parse("style"),
-            Ok(PluginPermission {
-                kind: PermissionKind::Style,
-                scope: None
-            })
-        );
+        for (raw, kind) in [
+            ("storage", PermissionKind::Storage),
+            ("style", PermissionKind::Style),
+            ("route", PermissionKind::Route),
+        ] {
+            assert_eq!(
+                PluginPermission::parse(raw),
+                Ok(PluginPermission { kind, scope: None })
+            );
+        }
     }
 
     #[test]

@@ -1062,6 +1062,7 @@ async function setupApp() {
 	// rendered. Slot containers that are not on screen yet are picked up as they
 	// appear.
 	void loadPlugins({
+		events: appEvents,
 		onCrash: (plugin, message) => {
 			addNotification({
 				title: `插件「${plugin.manifest?.name ?? plugin.id}」已停止运行`,
@@ -2536,6 +2537,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 		/>
 		<UnknownPackWarningModal ref="unknownPackWarningModal" />
 		<div
+			data-plugin-region="navbar"
 			class="app-grid-navbar bg-bg-raised flex flex-col p-[0.5rem] pt-0 gap-[0.25rem] w-[--left-bar-width]"
 		>
 			<NavButton
@@ -2679,7 +2681,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 				</NavButton>
 			</span>
 		</div>
-		<div data-tauri-drag-region class="app-grid-statusbar bg-bg-raised h-[--top-bar-height] flex">
+		<div data-plugin-region="topbar" data-tauri-drag-region class="app-grid-statusbar bg-bg-raised h-[--top-bar-height] flex">
 			<div data-tauri-drag-region class="flex min-w-0 flex-1 items-center overflow-hidden p-2">
                 <div data-tauri-drag-region class="h-full w-auto shrink-0 text-contrast pointer-events-none" style="margin-top: 0px; margin-left: 3px">
                     <CelestialLogo class="h-8 w-auto shrink-0 text-contrast pointer-events-none" style="margin-top: 0;margin-bottom: -8px" />
@@ -2833,6 +2835,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			</RouterView>
 		</div>
 		<div
+			data-plugin-region="sidebar"
 			class="app-sidebar mt-px shrink-0 flex flex-col border-0 border-l-[1px] border-[--brand-gradient-border] border-solid"
 			:class="{ 'has-plus': hasPlus }"
 		>
@@ -2906,6 +2909,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 						</div>
 					</div>
 				</div>
+				<div data-plugin-slot="sidebar.bottom"></div>
 			</div>
 			<template v-if="false">
 				<a

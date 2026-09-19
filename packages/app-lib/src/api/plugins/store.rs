@@ -459,22 +459,27 @@ fn summarize(
     };
 
     let record = records.iter().find(|record| record.id == manifest.id);
-    let (enabled, granted) = match record {
-        Some(record) => (record.enabled, record.granted.clone()),
-        // A folder with no registry entry is one the user dropped in by hand.
-        // Adopting it with the low-risk defaults keeps that workflow usable
-        // without writing to the registry during a read-only scan.
-        None => (
-            true,
-            declared
-                .iter()
-                .filter(|permission| {
-                    permission.risk() == PermissionRisk::Low
-                })
-                .map(ToString::to_string)
-                .collect(),
-        ),
-    };
+    let enabled = record.map(|record| record.enabled).unwrap_or(true);
+    let mut granted = record
+        .map(|record| record.granted.clone())
+        .unwrap_or_default();
+
+    // Declaring a low-risk permission is what grants it, and that is applied on
+    // top of whatever the registry holds rather than only when the plugin is
+    // new. Otherwise a plugin update that adds a slot or a style would sit
+    // unapproved until the user re-approved everything, and would break on
+    // launch in the meantime. Revoking a low-risk permission is not expressible
+    // yet — that arrives with the plugin page.
+    for permission in &declared {
+        if permission.risk() != PermissionRisk::Low {
+            continue;
+        }
+        let entry = permission.to_string();
+        if !granted.contains(&entry) {
+            granted.push(entry);
+        }
+    }
+    granted.sort();
 
     let pending = declared
         .iter()
