@@ -302,9 +302,8 @@ wildcard_dependencies = "warn"
 # A dev build at opt-level 0 is not just "a bit slower" for this workload — it is
 # 20-40x slower on the hot paths. Measured: SHA-1 over the content of a 90-mod
 # instance ran at 18 MiB/s per thread, against 400-800 MiB/s for an optimized
-# build; SQLite JSON deserialization is affected in the same way. Optimizing the
-# dependencies (where that work actually happens) while keeping our own crates at
-# opt-level 1 keeps incremental rebuilds quick.
+# build; SQLite JSON deserialization is affected in the same way. Our own crates
+# stay at opt-level 1, which keeps incremental rebuilds quick.
 [profile.dev]
 opt-level = 1
 # Full debuginfo (the default `debug = 2`) is the bulk of the final link: the
@@ -314,16 +313,47 @@ opt-level = 1
 # Bump back to `true` only when stepping through locals in a debugger.
 debug = "line-tables-only"
 
+# Only a handful of dependencies run hot enough to be worth optimizing. Leaving
+# all of them at opt-level 2 is what made a cold dev build take an hour; the rest
+# stay at 1, alongside the workspace crates.
 [profile.dev.package."*"]
-opt-level = 2
+opt-level = 1
+# Dependency debuginfo costs far more than it is worth: it dominates both codegen
+# and the final link, and it is the launcher's own code that gets stepped through.
+# Our crates keep line tables (see `[profile.dev]`), so backtraces still resolve
+# through them.
+debug = false
+
+# SHA-1 over downloaded files, and the JSON parsing around it.
+[profile.dev.package.sha1_smol]
+opt-level = 3
+[profile.dev.package.serde_json]
+opt-level = 3
+
+# SQLite. `libsqlite3-sys` is C built through `cc`, which takes its -O level from
+# this profile, so it has to be named separately to be optimized at all.
+[profile.dev.package.sqlx]
+opt-level = 3
+[profile.dev.package.libsqlite3-sys]
+opt-level = 3
+
+# Archives and images: decompression dominates instance imports and icon work.
+[profile.dev.package.flate2]
+opt-level = 3
+[profile.dev.package.async_zip]
+opt-level = 3
+[profile.dev.package.zip]
+opt-level = 3
+[profile.dev.package.image]
+opt-level = 3
 
 [profile.dev.package.sqlx-macros]
 opt-level = 3
 
 # theseus_gui is the last crate in the graph (nothing compiles in parallel with it)
-# and is pure command/Tauri glue — the hot work (SHA-1, SQLite, image, zip) lives in
-# the theseus lib and dependencies, which stay at opt-level 2 above. Optimizing this
-# crate only lengthens its codegen with no runtime payoff, so pin it to 0.
+# and is pure command/Tauri glue — the hot work lives in the theseus lib and in the
+# crates listed above. Optimizing this crate only lengthens its codegen with no
+# runtime payoff, so pin it to 0.
 [profile.dev.package.theseus_gui]
 opt-level = 0
 
