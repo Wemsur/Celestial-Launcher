@@ -1,0 +1,578 @@
+//! Where plugins live, what state they carry, and the operations that change
+//! that state: scan, install, uninstall, enable, and grant permissions.
+//!
+//! Layout, under the launcher's settings directory:
+//!
+//! ```text
+//! settings_dir/
+//!   plugins.json          ← registry: enabled flag + granted permissions
+//!   plugins/<id>/         ← the plugin itself, folder name == manifest id
+//!   plugin-data/<id>/     ← writable scratch space handed to the plugin
+//! ```
+//!
+//! The registry is a JSON file rather than a database table on purpose: plugin
+//! state is launcher-local bookkeeping, and adding a table would mean a schema
+//! migration for something that has no referential integrity to enforce.
+
+use super::manifest::{PluginManifest, PluginType, is_valid_plugin_id};
+use super::permissions::{PermissionRisk, PluginPermission};
+use crate::State;
+use crate::util::io;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+
+const PLUGINS_DIR: &str = "plugins";
+const PLUGIN_DATA_DIR: &str = "plugin-data";
+const STATE_FILE: &str = "plugins.json";
+
+pub fn plugins_dir(state: &State) -> PathBuf {
+    state.directories.settings_dir.join(PLUGINS_DIR)
+}
+
+/// The scratch space handed to a plugin. Validated, because the id comes from
+/// the frontend and would otherwise be a path-traversal primitive.
+pub fn plugin_data_dir(
+    state: &State,
+    plugin_id: &str,
+) -> crate::Result<PathBuf> {
+    Ok(state
+        .directories
+        .settings_dir
+        .join(PLUGIN_DATA_DIR)
+        .join(checked_id(plugin_id)?))
+}
+
+fn state_file(state: &State) -> PathBuf {
+    state.directories.settings_dir.join(STATE_FILE)
+}
+
+/// Reject an id that could name anything other than a direct child of the
+/// plugins directory.
+fn checked_id(plugin_id: &str) -> crate::Result<&str> {
+    if !is_valid_plugin_id(plugin_id) {
+        return Err(crate::ErrorKind::InputError(format!(
+            "Invalid plugin id '{plugin_id}'"
+        ))
+        .into());
+    }
+    Ok(plugin_id)
+}
+
+fn plugin_dir(state: &State, plugin_id: &str) -> crate::Result<PathBuf> {
+    Ok(plugins_dir(state).join(checked_id(plugin_id)?))
+}
+
+/// What the launcher remembers about a plugin between runs.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PluginRecord {
+    pub id: String,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub granted: Vec<String>,
+    #[serde(default)]
+    pub installed_at: Option<i64>,
+    /// Where the plugin came from, when it was installed by the launcher.
+    #[serde(default)]
+    pub source: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+struct PluginStateFile {
+    #[serde(default)]
+    plugins: Vec<PluginRecord>,
+}
+
+/// A plugin as the plugin page sees it: the manifest, plus what the launcher
+/// currently allows it to do.
+///
+/// `manifest` is `None` for a plugin whose folder exists but whose manifest
+/// could not be read; `error` then says why. Those still have to be listed —
+/// otherwise a broken plugin would be invisible and impossible to remove from
+/// the UI.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PluginSummary {
+    /// The manifest id, or the folder name when the manifest is unusable.
+    pub id: String,
+    pub dir_name: String,
+    pub path: String,
+    pub enabled: bool,
+    pub granted: Vec<String>,
+    /// Declared but not granted. For a low-risk permission this only happens
+    /// after the user revoked it; for a high-risk one it means "waiting for the
+    /// user to say yes".
+    pub pending: Vec<String>,
+    pub high_risk_pending: Vec<String>,
+    pub manifest: Option<PluginManifest>,
+    pub error: Option<String>,
+}
+
+impl PluginSummary {
+    /// The declared plugin type, when the manifest is readable.
+    pub fn plugin_type(&self) -> Option<PluginType> {
+        self.manifest.as_ref().map(|manifest| manifest.r#type)
+    }
+
+    /// Whether this plugin may be loaded at all.
+    ///
+    /// A plugin with unapproved high-risk permissions still loads: the ones the
+    /// user has not approved simply do not work, which is easier to explain
+    /// than a plugin that refuses to start.
+    pub fn loadable(&self) -> bool {
+        self.manifest.is_some() && self.enabled
+    }
+}
+
+pub async fn list() -> crate::Result<Vec<PluginSummary>> {
+    let state = State::get().await?;
+    let root = plugins_dir(&state);
+    if !root.exists() {
+        return Ok(Vec::new());
+    }
+
+    let registry = read_state(&state).await?;
+    let mut plugins = Vec::new();
+    let mut entries = io::read_dir(&root).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        if !entry.file_type().await?.is_dir() {
+            continue;
+        }
+        let dir_name = entry.file_name().to_string_lossy().to_string();
+        // Dot-folders are scratch space, not plugins.
+        if dir_name.starts_with('.') {
+            continue;
+        }
+        plugins.push(summarize(
+            &entry.path(),
+            dir_name,
+            registry.plugins.as_slice(),
+        ));
+    }
+    plugins.sort_by(|left, right| left.id.cmp(&right.id));
+    Ok(plugins)
+}
+
+pub async fn get(plugin_id: &str) -> crate::Result<Option<PluginSummary>> {
+    let state = State::get().await?;
+    let dir = plugin_dir(&state, plugin_id)?;
+    if !dir.is_dir() {
+        return Ok(None);
+    }
+    let registry = read_state(&state).await?;
+    Ok(Some(summarize(
+        &dir,
+        plugin_id.to_string(),
+        registry.plugins.as_slice(),
+    )))
+}
+
+/// Copy a plugin folder into the plugins directory.
+///
+/// `source` must be a directory holding a valid `manifest.json`; the folder is
+/// placed under the manifest's id, which is also the invariant `list` relies on
+/// to find it again.
+pub async fn install(
+    source: &Path,
+    origin: Option<String>,
+) -> crate::Result<PluginSummary> {
+    let state = State::get().await?;
+    let manifest = PluginManifest::read_from_dir(source)?;
+    let destination = plugin_dir(&state, &manifest.id)?;
+
+    if destination.exists() {
+        return Err(crate::ErrorKind::InputError(format!(
+            "Plugin '{}' is already installed",
+            manifest.id
+        ))
+        .into());
+    }
+
+    io::create_dir_all(&destination).await?;
+    if let Err(error) = copy_dir(source, &destination).await {
+        // A half-copied plugin folder would be picked up by the next scan as a
+        // broken plugin, so clean it up rather than leaving the debris behind.
+        let _ = io::remove_dir_all(&destination).await;
+        return Err(error);
+    }
+
+    let mut registry = read_state(&state).await?;
+    registry.plugins.retain(|record| record.id != manifest.id);
+    registry.plugins.push(PluginRecord {
+        id: manifest.id.clone(),
+        enabled: true,
+        granted: Vec::new(),
+        installed_at: Some(chrono::Utc::now().timestamp()),
+        source: origin,
+    });
+    write_state(&state, &registry).await?;
+
+    tracing::info!(plugin = %manifest.id, "Installed plugin");
+
+    Ok(summarize(
+        &destination,
+        manifest.id.clone(),
+        registry.plugins.as_slice(),
+    ))
+}
+
+pub async fn uninstall(
+    plugin_id: &str,
+    remove_data: bool,
+) -> crate::Result<()> {
+    let state = State::get().await?;
+    let dir = plugin_dir(&state, plugin_id)?;
+    if dir.is_dir() {
+        io::remove_dir_all(&dir).await?;
+    }
+
+    if remove_data {
+        let data = plugin_data_dir(&state, plugin_id)?;
+        if data.is_dir() {
+            io::remove_dir_all(&data).await?;
+        }
+    }
+
+    let mut registry = read_state(&state).await?;
+    registry.plugins.retain(|record| record.id != plugin_id);
+    write_state(&state, &registry).await?;
+
+    tracing::info!(plugin = %plugin_id, "Uninstalled plugin");
+    Ok(())
+}
+
+pub async fn set_enabled(
+    plugin_id: &str,
+    enabled: bool,
+) -> crate::Result<PluginSummary> {
+    let state = State::get().await?;
+    let mut registry = read_state(&state).await?;
+    let record = record_mut(&mut registry, plugin_id);
+    record.enabled = enabled;
+    write_state(&state, &registry).await?;
+
+    require_summary(&state, plugin_id, &registry).await
+}
+
+/// Replace the granted set wholesale.
+///
+/// Every entry is parsed and checked against what the manifest actually
+/// declares, so a bad string from the UI is rejected instead of being stored
+/// and silently failing to match later.
+pub async fn set_granted(
+    plugin_id: &str,
+    granted: Vec<String>,
+) -> crate::Result<PluginSummary> {
+    let state = State::get().await?;
+    let mut registry = read_state(&state).await?;
+
+    let plugin = require_summary(&state, plugin_id, &registry).await?;
+    let manifest = plugin.manifest.as_ref().ok_or_else(|| {
+        crate::ErrorKind::InputError(format!(
+            "Plugin '{plugin_id}' has no readable manifest"
+        ))
+    })?;
+
+    let declared = manifest.parsed_permissions()?;
+    let mut canonical = Vec::with_capacity(granted.len());
+    for raw in &granted {
+        let permission = PluginPermission::parse(raw).map_err(|reason| {
+            crate::ErrorKind::InputError(format!(
+                "Invalid permission '{raw}': {reason}"
+            ))
+        })?;
+        if !declared.contains(&permission) {
+            return Err(crate::ErrorKind::InputError(format!(
+                "Plugin '{plugin_id}' does not declare the permission \
+                 '{permission}'"
+            ))
+            .into());
+        }
+        if !canonical.contains(&permission) {
+            canonical.push(permission);
+        }
+    }
+    canonical.sort_by_key(|permission| permission.to_string());
+
+    let record = record_mut(&mut registry, plugin_id);
+    record.granted = canonical.iter().map(ToString::to_string).collect();
+    write_state(&state, &registry).await?;
+
+    require_summary(&state, plugin_id, &registry).await
+}
+
+pub async fn grant_permission(
+    plugin_id: &str,
+    permission: &str,
+) -> crate::Result<PluginSummary> {
+    let current = require_plugin(plugin_id).await?;
+    let mut granted = current.granted.clone();
+    granted.push(permission.to_string());
+    set_granted(plugin_id, granted).await
+}
+
+pub async fn revoke_permission(
+    plugin_id: &str,
+    permission: &str,
+) -> crate::Result<PluginSummary> {
+    let current = require_plugin(plugin_id).await?;
+    let granted = current
+        .granted
+        .into_iter()
+        .filter(|granted| granted != permission)
+        .collect();
+    set_granted(plugin_id, granted).await
+}
+
+/// The file a UI plugin's `entry` points at, if there is one.
+pub async fn resolve_entry(
+    plugin_id: &str,
+) -> crate::Result<Option<PathBuf>> {
+    let Some(summary) = get(plugin_id).await? else {
+        return Ok(None);
+    };
+    let Some(manifest) = summary.manifest else {
+        return Ok(None);
+    };
+    let Some(entry) = manifest.entry else {
+        return Ok(None);
+    };
+    Ok(Some(Path::new(&summary.path).join(entry)))
+}
+
+async fn require_plugin(plugin_id: &str) -> crate::Result<PluginSummary> {
+    get(plugin_id).await?.ok_or_else(|| {
+        crate::ErrorKind::InputError(format!("Unknown plugin '{plugin_id}'"))
+            .into()
+    })
+}
+
+/// A plugin row for a folder we could not make sense of. It is still listed so
+/// the plugin page can show the problem and offer to remove it.
+fn broken_summary(dir: &Path, dir_name: &str, reason: String) -> PluginSummary {
+    PluginSummary {
+        id: dir_name.to_string(),
+        dir_name: dir_name.to_string(),
+        path: dir.to_string_lossy().to_string(),
+        enabled: false,
+        granted: Vec::new(),
+        pending: Vec::new(),
+        high_risk_pending: Vec::new(),
+        manifest: None,
+        error: Some(reason),
+    }
+}
+
+fn summarize(
+    dir: &Path,
+    dir_name: String,
+    records: &[PluginRecord],
+) -> PluginSummary {
+    let manifest = match PluginManifest::read_from_dir(dir) {
+        Ok(manifest) => manifest,
+        Err(error) => {
+            tracing::warn!(
+                path = %dir.display(),
+                "Plugin folder has no usable manifest: {error}"
+            );
+            return broken_summary(dir, &dir_name, error.to_string());
+        }
+    };
+
+    // `list` and `get` locate a plugin by its folder name, so a mismatch would
+    // make the plugin unreachable through the API while still being listed.
+    if manifest.id != dir_name {
+        return broken_summary(
+            dir,
+            &dir_name,
+            format!(
+                "Plugin id '{}' does not match its folder name '{dir_name}'",
+                manifest.id
+            ),
+        );
+    }
+
+    let declared = match manifest.parsed_permissions() {
+        Ok(declared) => declared,
+        Err(error) => {
+            return broken_summary(dir, &dir_name, error.to_string());
+        }
+    };
+
+    let record = records.iter().find(|record| record.id == manifest.id);
+    let (enabled, granted) = match record {
+        Some(record) => (record.enabled, record.granted.clone()),
+        // A folder with no registry entry is one the user dropped in by hand.
+        // Adopting it with the low-risk defaults keeps that workflow usable
+        // without writing to the registry during a read-only scan.
+        None => (
+            true,
+            declared
+                .iter()
+                .filter(|permission| {
+                    permission.risk() == PermissionRisk::Low
+                })
+                .map(ToString::to_string)
+                .collect(),
+        ),
+    };
+
+    let pending = declared
+        .iter()
+        .map(ToString::to_string)
+        .filter(|permission| !granted.contains(permission))
+        .collect::<Vec<_>>();
+    let high_risk_pending = declared
+        .iter()
+        .filter(|permission| permission.risk() == PermissionRisk::High)
+        .map(ToString::to_string)
+        .filter(|permission| !granted.contains(permission))
+        .collect();
+
+    PluginSummary {
+        id: manifest.id.clone(),
+        dir_name,
+        path: dir.to_string_lossy().to_string(),
+        enabled,
+        granted,
+        pending,
+        high_risk_pending,
+        manifest: Some(manifest),
+        error: None,
+    }
+}
+
+async fn require_summary(
+    state: &State,
+    plugin_id: &str,
+    registry: &PluginStateFile,
+) -> crate::Result<PluginSummary> {
+    let dir = plugin_dir(state, plugin_id)?;
+    if !dir.is_dir() {
+        return Err(crate::ErrorKind::InputError(format!(
+            "Unknown plugin '{plugin_id}'"
+        ))
+        .into());
+    }
+    Ok(summarize(&dir, plugin_id.to_string(), &registry.plugins))
+}
+
+/// The registry entry for `plugin_id`, created on first use.
+fn record_mut<'a>(
+    registry: &'a mut PluginStateFile,
+    plugin_id: &str,
+) -> &'a mut PluginRecord {
+    if let Some(index) = registry
+        .plugins
+        .iter()
+        .position(|record| record.id == plugin_id)
+    {
+        return &mut registry.plugins[index];
+    }
+    registry.plugins.push(PluginRecord {
+        id: plugin_id.to_string(),
+        enabled: true,
+        granted: Vec::new(),
+        installed_at: Some(chrono::Utc::now().timestamp()),
+        source: None,
+    });
+    let index = registry.plugins.len() - 1;
+    &mut registry.plugins[index]
+}
+
+async fn read_state(state: &State) -> crate::Result<PluginStateFile> {
+    let path = state_file(state);
+    let bytes = match io::read(&path).await {
+        Ok(bytes) => bytes,
+        Err(_) => return Ok(PluginStateFile::default()),
+    };
+    match serde_json::from_slice(&bytes) {
+        Ok(registry) => Ok(registry),
+        Err(error) => {
+            // Losing the registry only means permissions get reviewed again,
+            // which is a far better outcome than refusing to start.
+            tracing::warn!(
+                path = %path.display(),
+                "Plugin registry is unreadable, starting from an empty one: \
+                 {error}"
+            );
+            Ok(PluginStateFile::default())
+        }
+    }
+}
+
+async fn write_state(
+    state: &State,
+    registry: &PluginStateFile,
+) -> crate::Result<()> {
+    let path = state_file(state);
+    if let Some(parent) = path.parent() {
+        io::create_dir_all(parent).await?;
+    }
+    io::write(&path, serde_json::to_vec_pretty(registry)?).await?;
+    Ok(())
+}
+
+async fn copy_dir(from: &Path, to: &Path) -> crate::Result<()> {
+    let mut entries = io::read_dir(from).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let source = entry.path();
+        let target = to.join(entry.file_name());
+        let file_type = entry.file_type().await?;
+        if file_type.is_dir() {
+            io::create_dir_all(&target).await?;
+            Box::pin(copy_dir(&source, &target)).await?;
+        } else if file_type.is_file() {
+            io::copy(&source, &target).await?;
+        }
+        // Symlinks are skipped: plugin folders are untrusted, and following one
+        // could copy files from anywhere on the disk into the plugins folder.
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ids_that_could_escape_the_plugins_directory_are_rejected() {
+        for id in ["../../etc", "..", "a/b", "", ".hidden"] {
+            assert!(checked_id(id).is_err(), "id {id} was accepted");
+        }
+        assert_eq!(checked_id("com.example.demo").unwrap(), "com.example.demo");
+    }
+
+    #[test]
+    fn a_record_is_created_once_per_plugin() {
+        let mut registry = PluginStateFile::default();
+        record_mut(&mut registry, "a").enabled = false;
+        record_mut(&mut registry, "a").granted = vec!["style".to_string()];
+        assert_eq!(registry.plugins.len(), 1);
+        assert!(!registry.plugins[0].enabled);
+        assert_eq!(registry.plugins[0].granted, ["style"]);
+    }
+
+    #[test]
+    fn the_registry_round_trips_through_json() {
+        let registry = PluginStateFile {
+            plugins: vec![PluginRecord {
+                id: "com.example.demo".to_string(),
+                enabled: true,
+                granted: vec!["style".to_string()],
+                installed_at: Some(1_700_000_000),
+                source: Some("https://example.com/plugin.zip".to_string()),
+            }],
+        };
+        let encoded = serde_json::to_vec(&registry).unwrap();
+        let decoded: PluginStateFile =
+            serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(decoded.plugins.len(), 1);
+        assert_eq!(decoded.plugins[0].granted, ["style"]);
+    }
+
+    #[test]
+    fn an_empty_registry_file_is_valid() {
+        let decoded: PluginStateFile = serde_json::from_slice(b"{}").unwrap();
+        assert!(decoded.plugins.is_empty());
+    }
+}

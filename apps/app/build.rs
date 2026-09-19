@@ -461,6 +461,24 @@ fn main() {
                     .default_permission(
                         DefaultPermissionRule::AllowAllCommands,
                     ),
+            )
+            .plugin(
+                "plugins",
+                InlinedPlugin::new()
+                    .commands(&[
+                        "plugin_list",
+                        "plugin_get",
+                        "plugin_install",
+                        "plugin_uninstall",
+                        "plugin_set_enabled",
+                        "plugin_set_granted",
+                        "plugin_grant_permission",
+                        "plugin_revoke_permission",
+                        "plugin_open_folder",
+                    ])
+                    .default_permission(
+                        DefaultPermissionRule::AllowAllCommands,
+                    ),
             ),
     )
     .expect("Failed to run tauri-build");

@@ -95,6 +95,10 @@ apps/frontend/src/public/robots.txt
 /test_result.md
 
 packages/tooling-config/script-utils/import-sort.js
+
+# Scratch plugin used while building the plugin system; the real plugin SDK
+# and examples land with that work.
+/plugin-examples/
 /.import-check.py
 /build-release.sh
 /CURRENT-TASK.md

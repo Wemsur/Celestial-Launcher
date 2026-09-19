@@ -1155,6 +1155,7 @@ fn main() {
         .plugin(api::ads::init())
         .plugin(api::friends::init())
         .plugin(api::worlds::init())
+        .plugin(api::plugins::init())
         .invoke_handler(tauri::generate_handler![
             initialize_state,
             is_dev,
