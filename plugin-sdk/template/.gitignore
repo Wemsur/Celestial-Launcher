@@ -1,0 +1,5 @@
+node_modules/
+dist/
+
+# Generated at build time by build/celestial-vue.mjs
+build/.generated/

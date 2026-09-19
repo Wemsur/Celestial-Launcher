@@ -1,39 +1,38 @@
 import vue from '@vitejs/plugin-vue'
-import { resolve } from 'node:path'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 
-import { celestialVue } from './build/celestial-vue.mjs'
+import { celestialVueAlias } from './build/celestial-vue.mjs'
 
-// Builds the plugin into a single ES module the launcher loads at runtime.
-//
-// - `celestialVue()` must come before `vue()` so it claims every `vue` import,
-//   including the ones the SFC compiler emits, and points them at the
-//   launcher's Vue instead of bundling a second Vue.
-// - The output is one self-contained `dist/index.js`; the manifest's `entry`
-//   points at it.
+// Resolved from this config file's own URL: Vite rewrites `import.meta.url` in a
+// bundled config to point at the original file, so this is the plugin project
+// root no matter which directory `vite` was invoked from.
+const projectRoot = fileURLToPath(new URL('.', import.meta.url))
+
 export default defineConfig({
-	plugins: [celestialVue(), vue()],
+	plugins: [vue()],
+	resolve: {
+		// Redirects every `vue` import — including the ones the SFC compiler
+		// emits — to a generated shim that reads the launcher's Vue off a
+		// global. Without it the plugin would either carry a second Vue the
+		// launcher cannot render, or ship a bare `import 'vue'` that fails at
+		// load time.
+		alias: [celestialVueAlias(projectRoot)],
+	},
 	build: {
 		target: 'chrome105',
-		// A plugin is loaded on its own, not code-split, so keep it to one file
-		// with styles applied through `api.styles.add` rather than a CSS asset.
+		// A plugin loads on its own and is not code-split, so it is one file with
+		// no separate CSS asset — styles go through `api.styles.add`.
 		lib: {
-			entry: resolve(__dirname, 'src/index.ts'),
+			entry: join(projectRoot, 'src/index.ts'),
 			formats: ['es'],
 			fileName: () => 'index.js',
 		},
-		rollupOptions: {
-			// `vue` must NOT be external: celestialVue() rewrites it to a tiny
-			// inlined shim that reads the launcher's Vue off the global. Marking
-			// it external instead would leave a bare `import ... from 'vue'` in
-			// the output, which a standalone plugin module cannot resolve at
-			// runtime — exactly the error a plugin then throws on load.
-			output: {
-				inlineDynamicImports: true,
-			},
-		},
-		// Themes and small widgets read better unminified while debugging; flip
-		// this on for a release build if you want.
+		// The bundle gets read by hand when something fails at load time.
+		sourcemap: true,
+		// Themes and small widgets read better unminified while debugging; turn
+		// this on for a release build if you prefer.
 		minify: false,
 	},
 })

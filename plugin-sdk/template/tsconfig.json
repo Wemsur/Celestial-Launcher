@@ -9,10 +9,7 @@
 		"isolatedModules": true,
 		"skipLibCheck": true,
 		"lib": ["ES2022", "DOM", "DOM.Iterable"],
-		"types": [],
-		"paths": {
-			"@celestial/plugin": ["./types/celestial-plugin.d.ts"]
-		}
+		"types": []
 	},
 	"include": ["src", "types", "shims-vue.d.ts", "vite.config.ts"]
 }

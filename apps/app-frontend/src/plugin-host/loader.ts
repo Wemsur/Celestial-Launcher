@@ -280,14 +280,28 @@ async function importActivate(
 	summary: PluginSummary,
 	entry: string,
 ): Promise<PluginModule['activate'] | undefined> {
-	const url = pluginAssetUrl(joinPath(summary.path, entry))
+	const entryPath = joinPath(summary.path, entry)
+	const url = pluginAssetUrl(entryPath)
 	try {
 		const module = (await import(/* @vite-ignore */ url)) as PluginModule
 		return module.activate ?? module.default?.activate
 	} catch (assetError) {
-		const source = await pluginReadEntry(summary.id)
+		let source: string | null = null
+		try {
+			source = await pluginReadEntry(summary.id)
+		} catch {
+			source = null
+		}
 		if (source === null) {
-			throw assetError
+			// The usual cause is an `entry` that does not match where the file
+			// actually is — most often a manifest copied alongside a bundle that
+			// was flattened out of `dist/`. Say the path rather than leaving the
+			// reader to guess from an opaque module-load failure.
+			throw new Error(
+				`The plugin's entry file could not be read at "${entryPath}". ` +
+					`Check that "entry" in manifest.json ("${entry}") points at a file inside the plugin folder. ` +
+					`(the module load itself failed with: ${describeError(assetError).message})`,
+			)
 		}
 		const blobUrl = URL.createObjectURL(
 			new Blob([source], { type: 'text/javascript' }),
@@ -668,6 +682,37 @@ async function reportCrash(
 function describeError(error: unknown): { message: string; stack?: string } {
 	if (error instanceof Error) {
 		return { message: error.message || error.name, stack: error.stack }
+	}
+	if (typeof error === 'string') {
+		return { message: error }
+	}
+	if (error instanceof Event) {
+		// A blocked or failed module load surfaces as an Event in some cases,
+		// and `String(event)` is "[object Event]".
+		return { message: `module load failed (${error.type} event)` }
+	}
+	if (error && typeof error === 'object') {
+		// A failed dynamic import rejects with a plain object rather than an
+		// Error in some webviews. `String(object)` renders as "[object Object]",
+		// which tells whoever reads crash.log nothing at all — so look for the
+		// usual fields, then fall back to serialising the whole thing.
+		const record = error as Record<string, unknown>
+		const stack = typeof record.stack === 'string' ? record.stack : undefined
+		for (const key of ['message', 'error', 'reason', 'detail']) {
+			const value = record[key]
+			if (typeof value === 'string' && value) {
+				return { message: value, stack }
+			}
+		}
+		try {
+			const serialised = JSON.stringify(error)
+			if (serialised && serialised !== '{}') {
+				return { message: serialised, stack }
+			}
+		} catch {
+			// Circular or otherwise unserialisable; fall through.
+		}
+		return { message: `unreadable rejection: ${String(error)}`, stack }
 	}
 	return { message: String(error) }
 }
