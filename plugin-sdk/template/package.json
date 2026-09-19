@@ -1,0 +1,19 @@
+{
+	"name": "celestial-plugin-template",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"description": "Celestial Launcher 插件开发模板",
+	"scripts": {
+		"build": "vite build",
+		"watch": "vite build --watch",
+		"typecheck": "vue-tsc --noEmit"
+	},
+	"devDependencies": {
+		"@vitejs/plugin-vue": "^6.0.3",
+		"typescript": "^5.5.4",
+		"vite": "^8.0.0",
+		"vue": "^3.5.13",
+		"vue-tsc": "^2.1.0"
+	}
+}

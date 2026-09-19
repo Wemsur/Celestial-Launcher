@@ -1,0 +1,18 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"strict": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"isolatedModules": true,
+		"skipLibCheck": true,
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"types": [],
+		"paths": {
+			"@celestial/plugin": ["./types/celestial-plugin.d.ts"]
+		}
+	},
+	"include": ["src", "types", "shims-vue.d.ts", "vite.config.ts"]
+}

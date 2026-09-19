@@ -1,0 +1,12 @@
+{
+	"id": "com.example.my-plugin",
+	"name": "My Plugin",
+	"description": "一个 Celestial Launcher 插件模板：演示 Vue 单文件组件、样式、存储与自定义页面。",
+	"version": "1.0.0",
+	"author": "Your Name",
+	"homepage": "https://example.com",
+	"type": "ui",
+	"api_version": 1,
+	"entry": "dist/index.js",
+	"permissions": ["style", "storage", "slot:sidebar.top", "route"]
+}

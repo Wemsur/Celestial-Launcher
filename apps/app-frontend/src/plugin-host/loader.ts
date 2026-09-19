@@ -25,8 +25,25 @@ import {
 	watch,
 	type Component,
 } from 'vue'
+import * as VueRuntime from 'vue'
 
 import router from '@/routes'
+
+/**
+ * The global a plugin bundle's `vue` imports resolve to.
+ *
+ * A plugin is a standalone module loaded from a blob/asset URL, so a bare
+ * `import ... from 'vue'` in it has nothing to resolve against at runtime, and
+ * bundling its own Vue would give it a different instance the launcher cannot
+ * render. The plugin SDK's build rewrites `vue` to read this global, so a
+ * plugin — including one compiled from `.vue` single-file components — shares
+ * the launcher's exact Vue.
+ */
+const VUE_GLOBAL_KEY = '__CELESTIAL_PLUGIN_VUE__'
+
+function exposeVueForPlugins(): void {
+	;(globalThis as Record<string, unknown>)[VUE_GLOBAL_KEY] ??= VueRuntime
+}
 
 import {
 	HOST_API,
@@ -179,6 +196,7 @@ let observer: MutationObserver | null = null
 let eventBus: PluginEventBus | null = null
 
 export async function loadPlugins(options: LoadPluginsOptions = {}): Promise<void> {
+	exposeVueForPlugins()
 	eventBus = options.events ?? null
 	const summaries = await listPlugins()
 	for (const summary of summaries) {
