@@ -1,0 +1,34 @@
+name: 功能请求
+description: 提出一个功能或者想法
+type: 'feature'
+body:
+  - type: checkboxes
+    attributes:
+      label: 请确认以下事项。
+      options:
+        - label: 我已检查 [现有issue](https://github.com/Wemsur/Celestial-Launcher/issues?q=is%3Aissue) 中是否存在重复的功能请求
+          required: true
+  - type: textarea
+    attributes:
+      label: 你建议的功能是否与某个 Bug 相关？
+      description: 清晰简洁地描述 Bug 是什么。
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: 描述你希望得到的解决方案
+      description: 清晰简洁地描述你希望发生什么。
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: 描述你考虑过的替代方案
+      description: 清晰简洁地描述你考虑过的任何替代解决方案或功能。
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: 附加信息
+      description: 可添加其他的相关背景信息。
+    validations:
+      required: false
