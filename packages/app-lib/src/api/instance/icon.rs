@@ -308,16 +308,6 @@ async fn apply_instance_icon(
                 .into(),
         );
     }
-    crate::state::edit_instance(
-        instance_id,
-        EditInstance {
-            icon_path: Some(icon_path.clone()),
-            icon_config: Some(icon_config),
-            ..EditInstance::default()
-        },
-        &state.pool,
-    )
-        .await?;
     let emit_id = if let Some(info) =
         instance_rows::get_instance_display_info(instance_id, &state.pool)
             .await?
@@ -345,6 +335,7 @@ async fn apply_instance_icon(
             instance_id,
             EditInstance {
                 icon_path: Some(icon_path.clone()),
+                icon_config: Some(icon_config),
                 ..EditInstance::default()
             },
             &state.pool,

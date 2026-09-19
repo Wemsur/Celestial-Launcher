@@ -43,7 +43,7 @@ struct WorldLoadTiming {
 
 impl WorldLoadTiming {
     fn start(stage: &'static str) -> Self {
-        tracing::info!(target: "theseus::worlds::timing", stage, "World load stage started");
+        tracing::trace!(target: "theseus::worlds::timing", stage, "World load stage started");
         Self {
             stage,
             started_at: Instant::now(),
@@ -53,7 +53,7 @@ impl WorldLoadTiming {
 
 impl Drop for WorldLoadTiming {
     fn drop(&mut self) {
-        tracing::info!(
+        tracing::trace!(
             target: "theseus::worlds::timing",
             stage = self.stage,
             elapsed_ms = self.started_at.elapsed().as_secs_f64() * 1000.0,
@@ -243,7 +243,7 @@ pub async fn get_recent_worlds(
         libraries::list_instances_from_json(&state),
     )
     .await?;
-    tracing::info!(target: "theseus::worlds::timing", instance_count = instances.len(), "Recent world scan enumerated instances");
+    tracing::trace!(target: "theseus::worlds::timing", instance_count = instances.len(), "Recent world scan enumerated instances");
     let mut scanned_instances = 0;
     instances.sort_by_key(|x| Reverse(x.last_played));
 
@@ -296,7 +296,7 @@ pub async fn get_recent_worlds(
     if result.len() <= limit {
         result.sort_by_key(|x| Reverse(x.world.last_played));
     }
-    tracing::info!(target: "theseus::worlds::timing", scanned_instances, result_count = result.len(), "Recent world scan succeeded");
+    tracing::trace!(target: "theseus::worlds::timing", scanned_instances, result_count = result.len(), "Recent world scan succeeded");
     Ok(result)
 }
 
@@ -359,7 +359,7 @@ async fn get_all_worlds_in_instance(
     )
     .await?;
 
-    tracing::info!(target: "theseus::worlds::timing", world_count = worlds.len(), "Instance world scan succeeded");
+    tracing::trace!(target: "theseus::worlds::timing", world_count = worlds.len(), "Instance world scan succeeded");
     Ok(())
 }
 
@@ -381,7 +381,7 @@ async fn get_singleplayer_worlds_in_instance(
         }
         tasks.spawn(read_singleplayer_world(world_path).in_current_span());
     }
-    tracing::info!(target: "theseus::worlds::timing", world_count = tasks.len(), "Save enumeration succeeded");
+    tracing::trace!(target: "theseus::worlds::timing", world_count = tasks.len(), "Save enumeration succeeded");
     drop(enumeration_timing);
     let _timing = WorldLoadTiming::start("wait_for_world_reads");
     while let Some(result) = tasks.join_next().await {
@@ -447,7 +447,7 @@ async fn read_singleplayer_world_maybe_locked(
         io::read(world_path.join("level.dat")),
     )
     .await?;
-    tracing::info!(target: "theseus::worlds::timing", compressed_bytes = raw.len(), "World metadata read");
+    tracing::trace!(target: "theseus::worlds::timing", compressed_bytes = raw.len(), "World metadata read");
     let parse_timing = WorldLoadTiming::start("decode_level_dat");
     let (root, _) = quartz_nbt::io::read_nbt(
         &mut Cursor::new(raw),
@@ -531,7 +531,7 @@ async fn get_server_worlds_in_instance(
         &metadata, &state,
     )
     .await?;
-    tracing::info!(target: "theseus::worlds::timing", server_count = servers.len(), "Server records loaded");
+    tracing::trace!(target: "theseus::worlds::timing", server_count = servers.len(), "Server records loaded");
     if servers.is_empty() {
         return Ok(());
     }
