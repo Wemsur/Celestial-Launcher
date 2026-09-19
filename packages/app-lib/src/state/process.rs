@@ -249,9 +249,18 @@ impl ProcessManager {
                 return Err(error);
             }
         };
-        let persisted_process = child_pid.map(|pid| {
-            (i64::from(pid), process.metadata.start_time.timestamp())
-        });
+        // `processes.instance_id` has a foreign key onto `instances(id)`, which a
+        // JSON-backed (`local:`) instance has no row for — persisting one fails
+        // with SQLite 787 and would abort the launch. These instances are still
+        // tracked in memory (`self.processes`) for the running session, so only
+        // cross-restart process recovery is skipped for them.
+        let persisted_process = child_pid
+            .filter(|_| {
+                !crate::state::libraries::is_json_backed_id(instance_id)
+            })
+            .map(|pid| {
+                (i64::from(pid), process.metadata.start_time.timestamp())
+            });
         if let Some((pid, start_time)) = persisted_process {
             let post_exit_command = post_exit_command.as_deref();
             if let Err(error) = sqlx::query!(

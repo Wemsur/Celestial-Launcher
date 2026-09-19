@@ -317,6 +317,13 @@ async fn resolve_instance_identity(
     instance: &str,
     state: &State,
 ) -> Result<(String, String)> {
+    // JSON-aware first: library instances have no `instances` row, so the DB
+    // query below returned nothing for them and every world/server command
+    // rejected a JSON instance with "Unknown instance id or path".
+    if let Some(metadata) = crate::api::instance::get_by_id(instance).await? {
+        return Ok((metadata.instance.id, metadata.instance.path));
+    }
+
     let row = sqlx::query!(
         "
 		SELECT id, path
@@ -521,9 +528,12 @@ async fn get_server_worlds_in_instance(
     worlds: &mut Vec<World>,
 ) -> Result<()> {
     let state = time_world_load("backend_state", State::get()).await?;
+    // JSON-aware lookup: library instances have no `instances` row, so the
+    // DB-only `get_instance` returned None for them and every JSON instance
+    // failed the recent-worlds scan with "Unknown instance".
     let metadata = time_world_load(
         "server_instance_metadata",
-        crate::state::get_instance(instance_id, &state.pool),
+        crate::api::instance::get_by_id(instance_id),
     )
     .await?
     .ok_or_else(|| ErrorKind::InputError("Unknown instance".to_string()))?;
@@ -910,7 +920,7 @@ pub async fn ensure_managed_server_in_instance(
     let state = State::get().await?;
     let (instance_id, _) =
         resolve_instance_identity(instance_id, &state).await?;
-    let metadata = crate::state::get_instance(&instance_id, &state.pool)
+    let metadata = crate::api::instance::get_by_id(&instance_id)
         .await?
         .ok_or_else(|| ErrorKind::InputError("Unknown instance".to_string()))?;
     let data =

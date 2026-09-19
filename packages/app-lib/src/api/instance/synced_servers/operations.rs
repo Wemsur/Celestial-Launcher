@@ -760,6 +760,12 @@ async fn participating(
     metadata: &InstanceMetadata,
     state: &State,
 ) -> crate::Result<bool> {
+    // Server sync is backed by DB tables keyed on `instances(id)`. JSON-backed
+    // instances have no such row, so they can never participate — they keep their
+    // servers in the on-disk `servers.dat` and take the file-based paths instead.
+    if crate::state::libraries::is_json_backed_id(&metadata.instance.id) {
+        return Ok(false);
+    }
     if !instance_option_enabled(metadata, SyncedOption::MultiplayerServers) {
         return Ok(false);
     }

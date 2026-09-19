@@ -45,6 +45,14 @@ async fn replace_modpack_servers(
     servers: Vec<NbtCompound>,
     state: &State,
 ) -> crate::Result<()> {
+    // `instance_servers` and `instance_server_pack_state` both key on
+    // `instances(id)`, which a JSON-backed instance never has (SQLite 787). The
+    // modpack's servers already sit in the instance's on-disk `servers.dat`, and
+    // these instances never participate in server sync, so there is nothing to
+    // record — leave the filesystem copy as the source of truth.
+    if crate::state::libraries::is_json_backed_id(&metadata.instance.id) {
+        return Ok(());
+    }
     let mut local = servers
         .into_iter()
         .enumerate()

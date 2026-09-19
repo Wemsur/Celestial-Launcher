@@ -100,7 +100,13 @@ pub(super) async fn commit_server_state(
         }
     }
     if let Some((instance_id, local)) = local {
-        write_local_rows(&mut tx, instance_id, local).await?;
+        // `instance_servers` has a foreign key onto `instances(id)`; a JSON-backed
+        // (`local:`) instance has no such row, so this write fails with SQLite 787.
+        // Those instances keep their servers in the on-disk `servers.dat` instead
+        // (see `ensure_managed_server`'s non-syncing branch), so skip the DB entirely.
+        if !crate::state::libraries::is_json_backed_id(instance_id) {
+            write_local_rows(&mut tx, instance_id, local).await?;
+        }
     }
     tx.commit().await?;
     Ok(canonical_changed)
@@ -320,6 +326,12 @@ pub(super) async fn begin_server_checkpoint(
     source_revision: i64,
     state: &State,
 ) -> crate::Result<()> {
+    // Both tables here carry a foreign key onto `instances(id)`, which a
+    // JSON-backed instance never has. Server sync is a DB-only feature, so these
+    // instances simply do not checkpoint — their servers live in `servers.dat`.
+    if crate::state::libraries::is_json_backed_id(instance_id) {
+        return Ok(());
+    }
     let mut tx = state.pool.begin().await?;
     sqlx::query!(
         "DELETE FROM instance_server_projection_entries WHERE instance_id = ?",
