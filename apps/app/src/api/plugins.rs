@@ -25,6 +25,13 @@ pub fn init<R: tauri::Runtime>() -> TauriPlugin<R> {
             plugin_grant_permission,
             plugin_revoke_permission,
             plugin_open_folder,
+            plugin_storage_get,
+            plugin_storage_set,
+            plugin_storage_remove,
+            plugin_storage_keys,
+            plugin_crash_log,
+            plugin_report_crash,
+            plugin_read_entry,
         ])
         .build()
 }
@@ -118,4 +125,63 @@ pub async fn plugin_open_folder<R: tauri::Runtime>(
     tokio::fs::create_dir_all(&path).await?;
     crate::api::utils::open_path(app, path).await;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn plugin_storage_get(
+    plugin_id: String,
+    key: String,
+) -> Result<Option<String>> {
+    Ok(plugins::storage_get(&plugin_id, &key).await?)
+}
+
+#[tauri::command]
+pub async fn plugin_storage_set(
+    plugin_id: String,
+    key: String,
+    value: String,
+) -> Result<()> {
+    plugins::storage_set(&plugin_id, &key, value).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn plugin_storage_remove(
+    plugin_id: String,
+    key: String,
+) -> Result<()> {
+    plugins::storage_remove(&plugin_id, &key).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn plugin_storage_keys(plugin_id: String) -> Result<Vec<String>> {
+    Ok(plugins::storage_keys(&plugin_id).await?)
+}
+
+#[tauri::command]
+pub async fn plugin_crash_log(
+    plugin_id: String,
+) -> Result<Option<String>> {
+    Ok(plugins::crash_log(&plugin_id).await?)
+}
+
+/// Called by the loader when a plugin throws. Records the detail and disables
+/// the plugin so it cannot throw again on the next render.
+#[tauri::command]
+pub async fn plugin_report_crash(
+    plugin_id: String,
+    message: String,
+    stack: Option<String>,
+) -> Result<()> {
+    plugins::record_crash(&plugin_id, &message, stack.as_deref()).await?;
+    Ok(())
+}
+
+/// Fallback source for the loader: the asset protocol can refuse a
+/// cross-origin module load, in which case the entry is imported from a blob
+/// URL built out of this text.
+#[tauri::command]
+pub async fn plugin_read_entry(plugin_id: String) -> Result<Option<String>> {
+    Ok(plugins::read_entry(&plugin_id).await?)
 }

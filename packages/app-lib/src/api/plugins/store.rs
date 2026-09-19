@@ -25,6 +25,11 @@ const PLUGINS_DIR: &str = "plugins";
 const PLUGIN_DATA_DIR: &str = "plugin-data";
 const STATE_FILE: &str = "plugins.json";
 
+/// An entry bundle is a compiled plugin, so it is small by nature. The cap only
+/// exists so a hostile folder cannot make the loader read a huge file into
+/// memory before it ever gets a chance to fail validation.
+const MAX_ENTRY_BYTES: u64 = 8 * 1024 * 1024;
+
 pub fn plugins_dir(state: &State) -> PathBuf {
     state.directories.settings_dir.join(PLUGINS_DIR)
 }
@@ -245,9 +250,21 @@ pub async fn set_enabled(
     enabled: bool,
 ) -> crate::Result<PluginSummary> {
     let state = State::get().await?;
+    // Resolve the effective state *before* touching the registry. A plugin with
+    // no entry yet is running on its low-risk defaults, and writing the entry
+    // has to carry those over — otherwise merely disabling and re-enabling a
+    // plugin would revoke the permissions it started with, and it would fail on
+    // the next launch with permission errors instead of working again.
+    let current = require_plugin(plugin_id).await?;
+
     let mut registry = read_state(&state).await?;
+    let had_entry =
+        registry.plugins.iter().any(|record| record.id == plugin_id);
     let record = record_mut(&mut registry, plugin_id);
     record.enabled = enabled;
+    if !had_entry {
+        record.granted = current.granted.clone();
+    }
     write_state(&state, &registry).await?;
 
     require_summary(&state, plugin_id, &registry).await
@@ -321,6 +338,49 @@ pub async fn revoke_permission(
         .filter(|granted| granted != permission)
         .collect();
     set_granted(plugin_id, granted).await
+}
+
+/// Check that `plugin_id` is enabled and has been granted `permission`.
+///
+/// This is the gate every capability behind an IPC boundary goes through. The
+/// frontend side of the host API checks the same list before handing a plugin a
+/// capability at all, but that check is a convenience: this one is the one that
+/// decides, because nothing on the webview side can reach around it.
+pub async fn ensure_granted(
+    plugin_id: &str,
+    permission: &str,
+) -> crate::Result<()> {
+    let summary = require_plugin(plugin_id).await?;
+    if !summary.enabled {
+        return Err(crate::ErrorKind::InputError(format!(
+            "Plugin '{plugin_id}' is disabled"
+        ))
+        .into());
+    }
+
+    let wanted = PluginPermission::parse(permission).map_err(|reason| {
+        crate::ErrorKind::InputError(format!(
+            "Invalid permission '{permission}': {reason}"
+        ))
+    })?;
+
+    // Granted entries carry their scope (`slot:sidebar.top`), so asking for a
+    // bare kind has to match any entry of that kind. An exact string comparison
+    // silently denies a plugin that declared its permission correctly.
+    let granted = summary.granted.iter().any(|entry| {
+        PluginPermission::parse(entry).is_ok_and(|entry| {
+            entry.kind == wanted.kind
+                && (wanted.scope.is_none() || entry.scope == wanted.scope)
+        })
+    });
+
+    if !granted {
+        return Err(crate::ErrorKind::InputError(format!(
+            "Plugin '{plugin_id}' has not been granted '{permission}'"
+        ))
+        .into());
+    }
+    Ok(())
 }
 
 /// The file a UI plugin's `entry` points at, if there is one.
@@ -528,6 +588,29 @@ async fn copy_dir(from: &Path, to: &Path) -> crate::Result<()> {
         // could copy files from anywhere on the disk into the plugins folder.
     }
     Ok(())
+}
+
+/// Read a UI plugin's entry bundle.
+///
+/// The loader prefers to import the file straight over the asset protocol, but
+/// that is a cross-origin module load and can be refused; this is the fallback,
+/// which hands back the source so the loader can import it from a blob URL
+/// instead.
+pub async fn read_entry(plugin_id: &str) -> crate::Result<Option<String>> {
+    let Some(path) = resolve_entry(plugin_id).await? else {
+        return Ok(None);
+    };
+    let size = io::metadata(&path).await?.len();
+    if size > MAX_ENTRY_BYTES {
+        return Err(crate::ErrorKind::InputError(format!(
+            "Plugin '{plugin_id}' has an entry bundle of {size} bytes, which \
+             is over the {} MiB limit",
+            MAX_ENTRY_BYTES / (1024 * 1024)
+        ))
+        .into());
+    }
+    let bytes = io::read(&path).await?;
+    Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
 }
 
 #[cfg(test)]

@@ -475,6 +475,13 @@ fn main() {
                         "plugin_grant_permission",
                         "plugin_revoke_permission",
                         "plugin_open_folder",
+                        "plugin_storage_get",
+                        "plugin_storage_set",
+                        "plugin_storage_remove",
+                        "plugin_storage_keys",
+                        "plugin_crash_log",
+                        "plugin_report_crash",
+                        "plugin_read_entry",
                     ])
                     .default_permission(
                         DefaultPermissionRule::AllowAllCommands,

@@ -197,6 +197,7 @@ import {
 	instanceListQueryOptions,
 	screenshotKeys,
 } from '@/pages/instance/query-options'
+import { loadPlugins } from '@/plugin-host'
 import {
 	appUpdateState,
 	downloadAvailableAppUpdate,
@@ -1056,6 +1057,21 @@ async function setupApp() {
 	stateInitialized.value = true
 	debugStartup('App state initialized')
 	await traceStartupStep('Render initialized app', nextTick)
+
+	// Plugins paint into the launcher's own DOM, so they start only once it has
+	// rendered. Slot containers that are not on screen yet are picked up as they
+	// appear.
+	void loadPlugins({
+		onCrash: (plugin, message) => {
+			addNotification({
+				title: `插件「${plugin.manifest?.name ?? plugin.id}」已停止运行`,
+				text: `该插件抛出错误并已被自动禁用，详情见插件数据目录下的 crash.log。\n${message}`,
+				type: 'error',
+			})
+		},
+	}).catch((error) => {
+		console.error('Failed to load plugins', error)
+	})
 	const isSyncUpdateVersion = version.startsWith('0.20.')
 	if (isSyncUpdateVersion && pending_update_toast_for_version !== version) {
 		markSyncInstancesUpdateNotificationShown()
@@ -2698,6 +2714,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 				<Breadcrumbs />
 			</div>
 			<section data-tauri-drag-region class="flex shrink-0 ml-auto items-center">
+				<div data-plugin-slot="topbar.right" class="flex items-center gap-1"></div>
 				<IconButton
 					v-if="canTranslateContent"
 					:type="translationEnabled ? 'base' : 'quiet'"
@@ -2825,6 +2842,10 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 				:class="{ 'pb-12': !hasPlus }"
 				data-overlayscrollbars-initialize
 			>
+				<!-- Must not sit between #sidebar-teleport-target and
+				     .sidebar-default-content: that rule is an adjacent-sibling
+				     selector, and anything in between hides the whole sidebar. -->
+				<div data-plugin-slot="sidebar.top"></div>
 				<div id="sidebar-teleport-target" class="sidebar-teleport-content"></div>
 				<div class="sidebar-default-content" :class="{ 'sidebar-enabled': sidebarVisible }">
 					<div
