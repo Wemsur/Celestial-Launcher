@@ -108,6 +108,10 @@ pub struct PluginSummary {
     /// user to say yes".
     pub pending: Vec<String>,
     pub high_risk_pending: Vec<String>,
+    /// Every declared permission that needs the user's explicit approval.
+    /// The plugin page marks these, so the classification lives here rather
+    /// than being duplicated in the frontend where it could drift.
+    pub high_risk: Vec<String>,
     pub manifest: Option<PluginManifest>,
     pub error: Option<String>,
 }
@@ -417,6 +421,7 @@ fn broken_summary(dir: &Path, dir_name: &str, reason: String) -> PluginSummary {
         granted: Vec::new(),
         pending: Vec::new(),
         high_risk_pending: Vec::new(),
+        high_risk: Vec::new(),
         manifest: None,
         error: Some(reason),
     }
@@ -486,11 +491,15 @@ fn summarize(
         .map(ToString::to_string)
         .filter(|permission| !granted.contains(permission))
         .collect::<Vec<_>>();
-    let high_risk_pending = declared
+    let high_risk = declared
         .iter()
         .filter(|permission| permission.risk() == PermissionRisk::High)
         .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    let high_risk_pending = high_risk
+        .iter()
         .filter(|permission| !granted.contains(permission))
+        .cloned()
         .collect();
 
     PluginSummary {
@@ -501,6 +510,7 @@ fn summarize(
         granted,
         pending,
         high_risk_pending,
+        high_risk,
         manifest: Some(manifest),
         error: None,
     }

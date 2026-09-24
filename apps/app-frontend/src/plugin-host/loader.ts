@@ -197,7 +197,12 @@ let eventBus: PluginEventBus | null = null
 
 export async function loadPlugins(options: LoadPluginsOptions = {}): Promise<void> {
 	exposeVueForPlugins()
-	eventBus = options.events ?? null
+	// Only overwrite when one was provided: this is called again to apply a
+	// plugin being enabled or disabled, and clearing the bus would silently stop
+	// every existing subscription from receiving events.
+	if (options.events) {
+		eventBus = options.events
+	}
 	const summaries = await listPlugins()
 	for (const summary of summaries) {
 		try {

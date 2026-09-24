@@ -31,6 +31,8 @@ export interface PluginSummary {
 	granted: string[]
 	pending: string[]
 	high_risk_pending: string[]
+	/** Every declared permission that needs the user's explicit approval. */
+	high_risk: string[]
 	manifest: PluginManifest | null
 	error: string | null
 }
