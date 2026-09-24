@@ -77,6 +77,14 @@ declare module '@celestial/plugin' {
 		body: string
 	}
 
+	/** A setting declared in the manifest, rendered by the launcher. */
+	export interface SettingsDefinition {
+		id: string
+		component?: Component
+		props?: Record<string, unknown>
+		render?: () => Node | null | void
+	}
+
 	/**
 	 * The subset of Vue handed to plugins. Prefer these over importing from
 	 * `vue` directly if you are writing plain render functions; either resolves
@@ -137,6 +145,17 @@ declare module '@celestial/plugin' {
 			set(key: string, value: string): Promise<void>
 			remove(key: string): Promise<void>
 			keys(): Promise<string[]>
+		}
+
+		/**
+		 * Values of the settings declared in your manifest, configured by the
+		 * user on the plugin page. Read-only here; ungated. `render` adds custom
+		 * UI to the bottom of your settings modal.
+		 */
+		readonly settings: {
+			get(key: string): Promise<string | null>
+			all(): Promise<Record<string, string>>
+			render(definition: SettingsDefinition): void
 		}
 
 		/** Subscribe to an app event. Requires `event:<type>` for that event. */

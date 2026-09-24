@@ -4,6 +4,22 @@ export type PluginType = 'ui' | 'sidecar'
 
 export type PermissionRisk = 'low' | 'high'
 
+export type PluginSettingType = 'toggle' | 'text' | 'number' | 'select'
+
+export interface PluginSettingOption {
+	value: string
+	label?: string | null
+}
+
+export interface PluginSettingField {
+	key: string
+	label: string
+	description?: string | null
+	type: PluginSettingType
+	default?: string | null
+	options: PluginSettingOption[]
+}
+
 export interface PluginPermission {
 	kind: string
 	scope: string | null
@@ -20,6 +36,7 @@ export interface PluginManifest {
 	api_version: number
 	entry?: string | null
 	permissions: string[]
+	settings: PluginSettingField[]
 	sidecar?: unknown
 }
 

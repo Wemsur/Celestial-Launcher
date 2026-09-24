@@ -75,6 +75,33 @@ pub async fn storage_keys(plugin_id: &str) -> crate::Result<Vec<String>> {
         .collect())
 }
 
+/// Read a plugin's settings values, ungated.
+///
+/// Declared settings are configured by the *user* in the launcher's own plugin
+/// page, so reading and writing them is the launcher's action, not the plugin's
+/// — it does not require the plugin to hold `storage`. Values live in the same
+/// per-plugin file, so a plugin with `storage` sees them through `api.storage`
+/// too, but a plugin that only declares settings need not ask for storage at all.
+pub async fn settings_get_all(
+    plugin_id: &str,
+) -> crate::Result<std::collections::HashMap<String, String>> {
+    let state = State::get().await?;
+    Ok(load(&state, plugin_id).await?.values.into_iter().collect())
+}
+
+/// Write one settings value on the user's behalf (from the plugin page).
+pub async fn settings_set(
+    plugin_id: &str,
+    key: &str,
+    value: String,
+) -> crate::Result<()> {
+    validate_key(key)?;
+    let state = State::get().await?;
+    let mut storage = load(&state, plugin_id).await?;
+    storage.values.insert(key.to_string(), value);
+    save(&state, plugin_id, &storage).await
+}
+
 /// Record a plugin crash and switch the plugin off.
 ///
 /// Reaching a crash at all means the plugin did something the loader could not

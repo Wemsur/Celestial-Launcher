@@ -112,6 +112,20 @@ export function pluginNetworkFetch(
 	})
 }
 
+/** Declared-settings values, read for the plugin page's form. */
+export function pluginSettingsGet(pluginId: string): Promise<Record<string, string>> {
+	return invoke<Record<string, string>>('plugin:plugins|plugin_settings_get', { pluginId })
+}
+
+/** Save one declared-settings value from the plugin page. */
+export function pluginSettingsSet(
+	pluginId: string,
+	key: string,
+	value: string,
+): Promise<void> {
+	return invoke('plugin:plugins|plugin_settings_set', { pluginId, key, value })
+}
+
 /**
  * Turn an absolute path inside the plugins folder into a URL the webview may
  * load. `tauri.conf.json` scopes the asset protocol to `$APPDATA/plugins/**`

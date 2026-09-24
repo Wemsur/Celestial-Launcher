@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TrashIcon, FolderOpenIcon, PlusIcon, TriangleAlertIcon, DownloadIcon } from '@modrinth/assets'
+import { TrashIcon, FolderOpenIcon, PlusIcon, TriangleAlertIcon, DownloadIcon, SettingsIcon } from '@modrinth/assets'
 import {
 	Button,
 	defineMessages,
@@ -23,9 +23,34 @@ import {
 } from '@/plugin-host/ipc'
 import { fetchStorePlugins, type StorePlugin } from '@/plugin-host/store'
 import type { PluginSummary } from '@/plugin-host/types'
+import PluginSettingsModal from './PluginSettingsModal.vue'
 
 const { formatMessage } = useVIntl()
 const { handleError } = injectNotificationManager()
+
+const settingsModal = ref<InstanceType<typeof PluginSettingsModal> | null>(null)
+const settingsTarget = ref<PluginSummary | null>(null)
+
+/**
+ * Human labels for permission strings. A permission is `kind` or `kind:scope`;
+ * the kind is translated and the scope kept verbatim (a slot/host/event name).
+ */
+const PERMISSION_KIND_LABELS: Record<string, string> = {
+	style: '显示样式',
+	storage: '本地存储',
+	slot: '界面插槽',
+	route: '自定义页面',
+	event: '事件监听',
+	hostapi: '启动器接口',
+	region: '界面区域',
+	network: '网络访问',
+}
+
+function permissionLabel(permission: string): string {
+	const [kind, scope] = permission.split(':')
+	const label = PERMISSION_KIND_LABELS[kind] ?? kind
+	return scope ? `${label}：${scope}` : label
+}
 
 const messages = defineMessages({
 	title: {
@@ -64,6 +89,10 @@ const messages = defineMessages({
 	uninstall: {
 		id: 'app.settings.plugins.uninstall',
 		defaultMessage: 'Uninstall',
+	},
+	settings: {
+		id: 'app.settings.plugins.settings',
+		defaultMessage: 'Settings',
 	},
 	crashLog: {
 		id: 'app.settings.plugins.crash-log',
@@ -175,9 +204,13 @@ function setPermission(plugin: PluginSummary, permission: string, granted: boole
 	})
 }
 
-function onPermissionToggle(plugin: PluginSummary, permission: string, event: Event) {
-	const input = event.target as HTMLInputElement
-	void setPermission(plugin, permission, input.checked)
+function onPermissionToggle(plugin: PluginSummary, permission: string) {
+	void setPermission(plugin, permission, !plugin.granted.includes(permission))
+}
+
+function openSettings(plugin: PluginSummary) {
+	settingsTarget.value = plugin
+	settingsModal.value?.show()
 }
 
 function uninstall(plugin: PluginSummary) {
@@ -338,25 +371,26 @@ async function installFromStore(entry: StorePlugin) {
 					<h4 class="m-0 text-sm font-semibold text-contrast">
 						{{ formatMessage(messages.permissions) }}
 					</h4>
-					<label
-						v-for="permission in plugin.manifest.permissions"
-						:key="permission"
-						class="flex items-center gap-2 text-sm"
-					>
-						<input
-							type="checkbox"
-							:checked="plugin.granted.includes(permission)"
+					<div class="flex flex-wrap gap-2">
+						<button
+							v-for="permission in plugin.manifest.permissions"
+							:key="permission"
+							type="button"
 							:disabled="busy === plugin.id"
-							@change="(event) => onPermissionToggle(plugin, permission, event)"
-						/>
-						<code class="text-xs">{{ permission }}</code>
-						<span
-							v-if="plugin.high_risk.includes(permission)"
-							class="text-xs text-warning"
+							class="plugin-permission-tag"
+							:class="{
+								'plugin-permission-tag--granted': plugin.granted.includes(permission),
+								'plugin-permission-tag--high-risk': plugin.high_risk.includes(permission),
+							}"
+							:title="permission"
+							@click="onPermissionToggle(plugin, permission)"
 						>
-							{{ formatMessage(messages.highRisk) }}
-						</span>
-					</label>
+							<span>{{ permissionLabel(permission) }}</span>
+							<span v-if="plugin.high_risk.includes(permission)" class="text-xs opacity-80">
+								· {{ formatMessage(messages.highRisk) }}
+							</span>
+						</button>
+					</div>
 				</div>
 
 				<div v-if="crashLogs[plugin.id]" class="flex flex-col gap-1">
@@ -368,7 +402,7 @@ async function installFromStore(entry: StorePlugin) {
 					>{{ crashLogs[plugin.id] }}</pre>
 				</div>
 
-				<footer class="flex flex-wrap gap-2">
+				<footer class="flex flex-wrap items-center gap-2">
 					<Button
 						size="sm"
 						type="outlined"
@@ -393,6 +427,15 @@ async function installFromStore(entry: StorePlugin) {
 					>
 						<TrashIcon />
 						{{ formatMessage(messages.uninstall) }}
+					</Button>
+					<Button
+						size="sm"
+						class="ml-auto"
+						:disabled="busy === plugin.id || Boolean(plugin.error)"
+						@click="openSettings(plugin)"
+					>
+						<SettingsIcon />
+						{{ formatMessage(messages.settings) }}
 					</Button>
 				</footer>
 			</article>
@@ -464,5 +507,39 @@ async function installFromStore(entry: StorePlugin) {
 				</article>
 			</div>
 		</template>
+
+		<PluginSettingsModal ref="settingsModal" :plugin="settingsTarget" />
 	</section>
 </template>
+
+<style scoped>
+.plugin-permission-tag {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+	padding: 0.25rem 0.625rem;
+	line-height: 1;
+	border-radius: 9999px;
+	border: 1px solid var(--color-button-bg);
+	background: var(--color-button-bg);
+	color: var(--color-secondary);
+	font-size: 0.8125rem;
+	cursor: pointer;
+	transition: transform 0.1s ease;
+}
+.plugin-permission-tag:active {
+	transform: scale(0.95);
+}
+.plugin-permission-tag:disabled {
+	cursor: default;
+	opacity: 0.6;
+}
+.plugin-permission-tag--granted {
+	border-color: var(--color-brand);
+	color: var(--color-brand);
+}
+.plugin-permission-tag--high-risk:not(.plugin-permission-tag--granted) {
+	border-color: var(--color-orange);
+	color: var(--color-orange);
+}
+</style>

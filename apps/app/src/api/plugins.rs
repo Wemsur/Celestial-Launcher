@@ -34,6 +34,8 @@ pub fn init<R: tauri::Runtime>() -> TauriPlugin<R> {
             plugin_report_crash,
             plugin_read_entry,
             plugin_fetch,
+            plugin_settings_get,
+            plugin_settings_set,
         ])
         .build()
 }
@@ -205,4 +207,23 @@ pub async fn plugin_fetch(
     request: plugins::PluginFetchRequest,
 ) -> Result<plugins::PluginFetchResponse> {
     Ok(plugins::fetch(&plugin_id, request).await?)
+}
+
+/// Read a plugin's declared-settings values (for the plugin page's form).
+#[tauri::command]
+pub async fn plugin_settings_get(
+    plugin_id: String,
+) -> Result<std::collections::HashMap<String, String>> {
+    Ok(plugins::settings_get_all(&plugin_id).await?)
+}
+
+/// Save one declared-settings value from the plugin page (the user's action).
+#[tauri::command]
+pub async fn plugin_settings_set(
+    plugin_id: String,
+    key: String,
+    value: String,
+) -> Result<()> {
+    plugins::settings_set(&plugin_id, &key, value).await?;
+    Ok(())
 }

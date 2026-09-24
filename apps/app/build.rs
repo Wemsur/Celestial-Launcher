@@ -484,6 +484,8 @@ fn main() {
                         "plugin_report_crash",
                         "plugin_read_entry",
                         "plugin_fetch",
+                        "plugin_settings_get",
+                        "plugin_settings_set",
                     ])
                     .default_permission(
                         DefaultPermissionRule::AllowAllCommands,

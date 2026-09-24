@@ -30,6 +30,44 @@ pub enum PluginType {
     Sidecar,
 }
 
+/// One declarative setting the launcher renders and stores for a plugin.
+///
+/// Kept intentionally small: the point is to spare the common plugin from
+/// writing its own settings page. A plugin that needs more builds its own UI
+/// with the `route` capability and reads/writes `storage` directly.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PluginSettingField {
+    /// Storage key the value is saved under. Same namespace as `api.storage`,
+    /// so a plugin can read a declared setting with `api.storage.get(key)`.
+    pub key: String,
+    pub label: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    pub r#type: PluginSettingType,
+    /// Default serialised to a string, matching how storage holds everything.
+    #[serde(default)]
+    pub default: Option<String>,
+    /// Options for `select`; ignored otherwise.
+    #[serde(default)]
+    pub options: Vec<PluginSettingOption>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginSettingType {
+    Toggle,
+    Text,
+    Number,
+    Select,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PluginSettingOption {
+    pub value: String,
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
 impl PluginType {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -63,6 +101,10 @@ pub struct PluginManifest {
     /// Requested permissions, as `kind` or `kind:scope` strings.
     #[serde(default)]
     pub permissions: Vec<String>,
+    /// Declarative settings the launcher renders into a form for this plugin.
+    /// The plugin reads the values back through `api.settings`.
+    #[serde(default)]
+    pub settings: Vec<PluginSettingField>,
     /// Sidecar plugins only. Parsed but not yet acted on — the sidecar runtime
     /// lands later, and keeping the field here means a manifest written for it
     /// still round-trips through the model.
@@ -144,6 +186,25 @@ impl PluginManifest {
                     self.id
                 ))
             })?;
+        }
+
+        for field in &self.settings {
+            if field.key.trim().is_empty() {
+                return Err(crate::ErrorKind::InputError(format!(
+                    "Plugin '{}' has a setting with an empty key",
+                    self.id
+                ))
+                .into());
+            }
+            if field.r#type == PluginSettingType::Select
+                && field.options.is_empty()
+            {
+                return Err(crate::ErrorKind::InputError(format!(
+                    "Plugin '{}' setting '{}' is a select but has no options",
+                    self.id, field.key
+                ))
+                .into());
+            }
         }
 
         match self.r#type {

@@ -22,12 +22,12 @@ pub mod permissions;
 pub mod store;
 
 pub use data::{
-    crash_log, record_crash, storage_get, storage_keys, storage_remove,
-    storage_set,
+    crash_log, record_crash, settings_get_all, settings_set, storage_get,
+    storage_keys, storage_remove, storage_set,
 };
 pub use manifest::{
-    CURRENT_API_VERSION, MANIFEST_FILE, PluginManifest, PluginType,
-    is_valid_plugin_id,
+    CURRENT_API_VERSION, MANIFEST_FILE, PluginManifest, PluginSettingField,
+    PluginSettingOption, PluginSettingType, PluginType, is_valid_plugin_id,
 };
 pub use network::{PluginFetchRequest, PluginFetchResponse, fetch};
 pub use permissions::{PermissionKind, PermissionRisk, PluginPermission};

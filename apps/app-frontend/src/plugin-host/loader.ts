@@ -58,6 +58,7 @@ import {
 	pluginNetworkFetch,
 	pluginReadEntry,
 	pluginReportCrash,
+	pluginSettingsGet,
 	pluginStorageGet,
 	pluginStorageKeys,
 	pluginStorageRemove,
@@ -154,6 +155,21 @@ export interface PluginHostApi {
 		remove(key: string): Promise<void>
 		keys(): Promise<string[]>
 	}
+	/**
+	 * Values of the plugin's declared settings (from its manifest), which the
+	 * user configures on the plugin page. Read-only here — writing is the user's
+	 * action. Ungated; declaring a setting is enough.
+	 */
+	readonly settings: {
+		get(key: string): Promise<string | null>
+		all(): Promise<Record<string, string>>
+		/**
+		 * Render custom UI into this plugin's settings modal, below the
+		 * declared fields — for anything the declarative settings cannot
+		 * express. Ungated: it is the plugin's own settings surface.
+		 */
+		render(definition: SlotDefinition): void
+	}
 	readonly events: {
 		/** Returns an unsubscribe function. Auto-cleaned when the plugin unloads. */
 		on(type: PluginEventType, handler: (payload: unknown) => void): () => void
@@ -195,7 +211,8 @@ interface PluginModule {
 interface MountRecord {
 	pluginId: string
 	key: string
-	slotId: PluginSlotId
+	/** A chrome slot id, or a per-plugin settings-modal container id. */
+	slotId: PluginSlotId | string
 	element: HTMLElement
 	container: HTMLElement | null
 	/** Tears down a Vue-rendered slot; absent on the raw-DOM path. */
@@ -432,6 +449,23 @@ function createHostApi(summary: PluginSummary): PluginHostApi {
 						keys: deny('storage', 'storage'),
 					},
 		),
+		// Ungated: declared settings are user-owned config, not a plugin
+		// capability. Reads go through the same per-plugin file as storage.
+		settings: Object.freeze({
+			get: async (key: string) => {
+				const all = await pluginSettingsGet(pluginId)
+				return key in all ? all[key] : null
+			},
+			all: () => pluginSettingsGet(pluginId),
+			render: (definition: SlotDefinition) =>
+				addSlot(
+					pluginId,
+					`plugin-settings:${pluginId}`,
+					definition,
+					granted,
+					{ skipGrantCheck: true },
+				),
+		}),
 		events: Object.freeze(
 			hasKind('event')
 				? {
@@ -617,21 +651,27 @@ function addRoute(pluginId: string, route: PluginRouteDefinition): void {
 
 function addSlot(
 	pluginId: string,
-	slotId: PluginSlotId,
+	slotId: PluginSlotId | string,
 	definition: SlotDefinition,
 	granted: Set<string>,
+	options: { skipGrantCheck?: boolean } = {},
 ): void {
-	if (!PLUGIN_SLOTS.includes(slotId)) {
-		throw new Error(
-			`Unknown slot "${slotId}". Available slots: ${PLUGIN_SLOTS.join(', ')}`,
-		)
-	}
-	// Each slot is granted on its own: declaring `slot:sidebar.top` must not let
-	// a plugin attach to every other slot as well.
-	if (!granted.has(`slot:${slotId}`)) {
-		throw new Error(
-			`Plugin "${pluginId}" cannot use slot "${slotId}": the "slot:${slotId}" permission has not been granted.`,
-		)
+	// The settings modal renders a per-plugin container (`plugin-settings:<id>`)
+	// that is not a named chrome slot and needs no `slot:` grant — it is the
+	// plugin's own settings surface. Every other slot must be known and granted.
+	if (!options.skipGrantCheck) {
+		if (!PLUGIN_SLOTS.includes(slotId as PluginSlotId)) {
+			throw new Error(
+				`Unknown slot "${slotId}". Available slots: ${PLUGIN_SLOTS.join(', ')}`,
+			)
+		}
+		// Each slot is granted on its own: declaring `slot:sidebar.top` must not
+		// let a plugin attach to every other slot as well.
+		if (!granted.has(`slot:${slotId}`)) {
+			throw new Error(
+				`Plugin "${pluginId}" cannot use slot "${slotId}": the "slot:${slotId}" permission has not been granted.`,
+			)
+		}
 	}
 	if (!definition || !definition.id) {
 		throw new Error('A slot needs an id.')
