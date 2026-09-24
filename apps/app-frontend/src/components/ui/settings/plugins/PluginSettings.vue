@@ -17,6 +17,8 @@ import {
 	listPlugins,
 	openPluginFolder,
 	pluginCrashLog,
+	pluginGetHotReload,
+	pluginSetHotReload,
 	setPluginEnabled,
 	setPluginGranted,
 	uninstallPlugin,
@@ -102,6 +104,19 @@ const messages = defineMessages({
 		id: 'app.settings.plugins.applies-immediately',
 		defaultMessage: 'Changes take effect immediately.',
 	},
+	appliesAfterRestart: {
+		id: 'app.settings.plugins.applies-after-restart',
+		defaultMessage: 'Changes take effect after you restart the launcher.',
+	},
+	hotReload: {
+		id: 'app.settings.plugins.hot-reload',
+		defaultMessage: 'Hot reload',
+	},
+	hotReloadDescription: {
+		id: 'app.settings.plugins.hot-reload.description',
+		defaultMessage:
+			'Apply enable, disable, and permission changes to the running launcher immediately. When off, changes take effect after a restart.',
+	},
 	broken: {
 		id: 'app.settings.plugins.broken',
 		defaultMessage: 'Could not load',
@@ -153,6 +168,8 @@ const storeLoading = ref(false)
 const storeError = ref<string | null>(null)
 const storeLoaded = ref(false)
 
+const hotReload = ref(true)
+
 const installedIds = computed(() => new Set(plugins.value.map((plugin) => plugin.id)))
 
 async function reload() {
@@ -166,9 +183,26 @@ async function reload() {
 }
 
 onMounted(reload)
+onMounted(async () => {
+	try {
+		hotReload.value = await pluginGetHotReload()
+	} catch (error) {
+		handleError(error)
+	}
+})
 
-/** Apply a change to the running session without a restart. */
+async function setHotReload(enabled: boolean) {
+	hotReload.value = enabled
+	try {
+		await pluginSetHotReload(enabled)
+	} catch (error) {
+		handleError(error)
+	}
+}
+
+/** Apply a change to the running session without a restart, when hot reload is on. */
 async function applyToSession(pluginId: string) {
+	if (!hotReload.value) return
 	unloadPlugin(pluginId)
 	await loadPlugins()
 }
@@ -386,7 +420,10 @@ async function installFromStore(entry: StorePlugin) {
 							@click="onPermissionToggle(plugin, permission)"
 						>
 							<span>{{ permissionLabel(permission) }}</span>
-							<span v-if="plugin.high_risk.includes(permission)" class="text-xs opacity-80">
+							<span
+								v-if="plugin.high_risk.includes(permission) && !plugin.granted.includes(permission)"
+								class="text-xs opacity-80"
+							>
 								· {{ formatMessage(messages.highRisk) }}
 							</span>
 						</button>
@@ -441,8 +478,30 @@ async function installFromStore(entry: StorePlugin) {
 			</article>
 		</div>
 
+			<div
+				class="mt-4 flex items-center justify-between gap-4 border-0 border-t border-solid border-surface-5 pt-4"
+			>
+				<div class="flex flex-col gap-1 min-w-0">
+					<span class="text-sm font-semibold text-contrast">
+						{{ formatMessage(messages.hotReload) }}
+					</span>
+					<span class="text-xs text-secondary">
+						{{ formatMessage(messages.hotReloadDescription) }}
+					</span>
+				</div>
+				<span class="inline-flex shrink-0">
+					<Toggle
+						id="plugin-hot-reload"
+						:model-value="hotReload"
+						@update:model-value="setHotReload"
+					/>
+				</span>
+			</div>
+
 			<p class="mt-4 mb-0 text-xs text-secondary">
-				{{ formatMessage(messages.appliesImmediately) }}
+				{{
+					formatMessage(hotReload ? messages.appliesImmediately : messages.appliesAfterRestart)
+				}}
 			</p>
 		</template>
 
@@ -541,5 +600,9 @@ async function installFromStore(entry: StorePlugin) {
 .plugin-permission-tag--high-risk:not(.plugin-permission-tag--granted) {
 	border-color: var(--color-orange);
 	color: var(--color-orange);
+}
+.plugin-permission-tag--high-risk.plugin-permission-tag--granted {
+	border-color: #1bd96a;
+	color: #1bd96a;
 }
 </style>

@@ -1613,6 +1613,90 @@
   "app.settings.operating-system.macos": {
     "message": "macOS"
   },
+  "app.settings.plugins.applies-after-restart": {
+    "message": "更改将在重启启动器后生效。"
+  },
+  "app.settings.plugins.applies-immediately": {
+    "message": "更改将立即生效。"
+  },
+  "app.settings.plugins.broken": {
+    "message": "无法加载"
+  },
+  "app.settings.plugins.crash-log": {
+    "message": "查看崩溃日志"
+  },
+  "app.settings.plugins.description": {
+    "message": "插件用于扩展启动器。每个插件都会声明它所需的权限，未经你允许的部分将不会生效。"
+  },
+  "app.settings.plugins.empty": {
+    "message": "尚未安装任何插件。"
+  },
+  "app.settings.plugins.high-risk": {
+    "message": "需要你的授权"
+  },
+  "app.settings.plugins.hot-reload": {
+    "message": "热重载"
+  },
+  "app.settings.plugins.hot-reload.description": {
+    "message": "开启后，启用/停用与权限更改会立即应用到正在运行的启动器；关闭后，更改将在重启后生效。"
+  },
+  "app.settings.plugins.install": {
+    "message": "从文件夹安装"
+  },
+  "app.settings.plugins.loading": {
+    "message": "正在加载插件…"
+  },
+  "app.settings.plugins.open-folder": {
+    "message": "打开插件文件夹"
+  },
+  "app.settings.plugins.permissions": {
+    "message": "权限"
+  },
+  "app.settings.plugins.settings": {
+    "message": "设置"
+  },
+  "app.settings.plugins.settings-modal.done": {
+    "message": "完成"
+  },
+  "app.settings.plugins.settings-modal.none": {
+    "message": "该插件没有可配置的设置。"
+  },
+  "app.settings.plugins.settings-modal.saved": {
+    "message": "更改会在你修改时自动保存。"
+  },
+  "app.settings.plugins.settings-modal.title": {
+    "message": "插件设置"
+  },
+  "app.settings.plugins.store-empty": {
+    "message": "插件商店为空。"
+  },
+  "app.settings.plugins.store-error": {
+    "message": "无法加载插件商店。"
+  },
+  "app.settings.plugins.store-install": {
+    "message": "安装"
+  },
+  "app.settings.plugins.store-installed": {
+    "message": "已安装"
+  },
+  "app.settings.plugins.store-loading": {
+    "message": "正在加载插件商店…"
+  },
+  "app.settings.plugins.store-refresh": {
+    "message": "刷新"
+  },
+  "app.settings.plugins.tab-installed": {
+    "message": "已安装"
+  },
+  "app.settings.plugins.tab-store": {
+    "message": "插件商店"
+  },
+  "app.settings.plugins.title": {
+    "message": "插件"
+  },
+  "app.settings.plugins.uninstall": {
+    "message": "卸载"
+  },
   "app.settings.privacy.ads-consent.intro": {
     "message": "广告使 Modrinth 得以运营，并为创作者报酬提供资金支持。我们的合作伙伴可能会在应用中存储或访问 Cookie，以便实现广告个性化和效果衡量。您可以在下方选择退出或管理您的偏好设置。"
   },
@@ -1685,6 +1769,9 @@
   "app.settings.sidebar.label.instances": {
     "message": "实例设置"
   },
+  "app.settings.sidebar.label.plugins": {
+    "message": "插件"
+  },
   "app.settings.synced-options.choose-sync-source.no-instances-found": {
     "message": "没有找到实例"
   },
@@ -1744,6 +1831,9 @@
   },
   "app.settings.tabs.language": {
     "message": "语言"
+  },
+  "app.settings.tabs.plugins": {
+    "message": "插件"
   },
   "app.settings.tabs.privacy": {
     "message": "隐私"

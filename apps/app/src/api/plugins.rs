@@ -36,6 +36,8 @@ pub fn init<R: tauri::Runtime>() -> TauriPlugin<R> {
             plugin_fetch,
             plugin_settings_get,
             plugin_settings_set,
+            plugin_get_hot_reload,
+            plugin_set_hot_reload,
         ])
         .build()
 }
@@ -225,5 +227,18 @@ pub async fn plugin_settings_set(
     value: String,
 ) -> Result<()> {
     plugins::settings_set(&plugin_id, &key, value).await?;
+    Ok(())
+}
+
+/// Whether plugin state changes are applied to the running launcher live.
+#[tauri::command]
+pub async fn plugin_get_hot_reload() -> Result<bool> {
+    Ok(plugins::get_hot_reload().await?)
+}
+
+/// Turn live application of plugin state changes on or off (the user's action).
+#[tauri::command]
+pub async fn plugin_set_hot_reload(enabled: bool) -> Result<()> {
+    plugins::set_hot_reload(enabled).await?;
     Ok(())
 }

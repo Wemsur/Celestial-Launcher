@@ -38,6 +38,10 @@ const messages = defineMessages({
 		id: 'app.settings.plugins.settings-modal.saved',
 		defaultMessage: 'Changes are saved as you make them.',
 	},
+	done: {
+		id: 'app.settings.plugins.settings-modal.done',
+		defaultMessage: 'Done',
+	},
 })
 
 const fields = computed<PluginSettingField[]>(() => props.plugin?.manifest?.settings ?? [])
@@ -155,7 +159,7 @@ defineExpose({ show, hide })
 
 			<div class="flex items-center justify-between gap-2 pt-2">
 				<span class="text-xs text-secondary">{{ formatMessage(messages.saved) }}</span>
-				<Button @click="hide">{{ formatMessage({ id: 'common.done', defaultMessage: 'Done' }) }}</Button>
+				<Button @click="hide">{{ formatMessage(messages.done) }}</Button>
 			</div>
 		</div>
 	</NewModal>

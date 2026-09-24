@@ -126,6 +126,16 @@ export function pluginSettingsSet(
 	return invoke('plugin:plugins|plugin_settings_set', { pluginId, key, value })
 }
 
+/** Whether plugin state changes apply to the running launcher without a restart. */
+export function pluginGetHotReload(): Promise<boolean> {
+	return invoke<boolean>('plugin:plugins|plugin_get_hot_reload')
+}
+
+/** Turn live application of plugin state changes on or off. */
+export function pluginSetHotReload(enabled: boolean): Promise<void> {
+	return invoke('plugin:plugins|plugin_set_hot_reload', { enabled })
+}
+
 /**
  * Turn an absolute path inside the plugins folder into a URL the webview may
  * load. `tauri.conf.json` scopes the asset protocol to `$APPDATA/plugins/**`

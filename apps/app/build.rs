@@ -486,6 +486,8 @@ fn main() {
                         "plugin_fetch",
                         "plugin_settings_get",
                         "plugin_settings_set",
+                        "plugin_get_hot_reload",
+                        "plugin_set_hot_reload",
                     ])
                     .default_permission(
                         DefaultPermissionRule::AllowAllCommands,

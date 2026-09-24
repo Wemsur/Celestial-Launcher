@@ -32,7 +32,8 @@ pub use manifest::{
 pub use network::{PluginFetchRequest, PluginFetchResponse, fetch};
 pub use permissions::{PermissionKind, PermissionRisk, PluginPermission};
 pub use store::{
-    PluginSummary, ensure_granted, get, grant_permission, install,
-    install_from_url, list, plugin_data_dir, plugins_dir, read_entry,
-    resolve_entry, revoke_permission, set_enabled, set_granted, uninstall,
+    PluginSummary, ensure_granted, get, get_hot_reload, grant_permission,
+    install, install_from_url, list, plugin_data_dir, plugins_dir, read_entry,
+    resolve_entry, revoke_permission, set_enabled, set_granted, set_hot_reload,
+    uninstall,
 };

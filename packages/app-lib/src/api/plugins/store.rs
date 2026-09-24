@@ -82,10 +82,28 @@ pub struct PluginRecord {
     pub source: Option<String>,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct PluginStateFile {
     #[serde(default)]
     plugins: Vec<PluginRecord>,
+    /// Whether enable/disable and permission changes are applied to the running
+    /// launcher without a restart. Defaults to on so existing installs keep the
+    /// behaviour they had before the toggle existed.
+    #[serde(default = "default_hot_reload")]
+    hot_reload: bool,
+}
+
+impl Default for PluginStateFile {
+    fn default() -> Self {
+        Self {
+            plugins: Vec::new(),
+            hot_reload: default_hot_reload(),
+        }
+    }
+}
+
+fn default_hot_reload() -> bool {
+    true
 }
 
 /// A plugin as the plugin page sees it: the manifest, plus what the launcher
@@ -421,7 +439,20 @@ pub async fn set_enabled(
     require_summary(&state, plugin_id, &registry).await
 }
 
-/// Replace the granted set wholesale.
+/// Whether live application of enable/disable and permission changes is on.
+pub async fn get_hot_reload() -> crate::Result<bool> {
+    let state = State::get().await?;
+    Ok(read_state(&state).await?.hot_reload)
+}
+
+/// Turn live application of plugin state changes on or off.
+pub async fn set_hot_reload(enabled: bool) -> crate::Result<()> {
+    let state = State::get().await?;
+    let mut registry = read_state(&state).await?;
+    registry.hot_reload = enabled;
+    write_state(&state, &registry).await?;
+    Ok(())
+}
 ///
 /// Every entry is parsed and checked against what the manifest actually
 /// declares, so a bad string from the UI is rejected instead of being stored
@@ -807,6 +838,7 @@ mod tests {
                 installed_at: Some(1_700_000_000),
                 source: Some("https://example.com/plugin.zip".to_string()),
             }],
+            hot_reload: true,
         };
         let encoded = serde_json::to_vec(&registry).unwrap();
         let decoded: PluginStateFile =
