@@ -19,6 +19,7 @@ pub fn init<R: tauri::Runtime>() -> TauriPlugin<R> {
             plugin_list,
             plugin_get,
             plugin_install,
+            plugin_install_from_url,
             plugin_uninstall,
             plugin_set_enabled,
             plugin_set_granted,
@@ -32,6 +33,7 @@ pub fn init<R: tauri::Runtime>() -> TauriPlugin<R> {
             plugin_crash_log,
             plugin_report_crash,
             plugin_read_entry,
+            plugin_fetch,
         ])
         .build()
 }
@@ -54,6 +56,15 @@ pub async fn plugin_install(
 ) -> Result<PluginSummary> {
     let source = PathBuf::from(path);
     Ok(plugins::install(&source, origin).await?)
+}
+
+/// Download a zipped plugin from the store and install it.
+#[tauri::command]
+pub async fn plugin_install_from_url(
+    url: String,
+    origin: Option<String>,
+) -> Result<PluginSummary> {
+    Ok(plugins::install_from_url(&url, origin).await?)
 }
 
 #[tauri::command]
@@ -184,4 +195,14 @@ pub async fn plugin_report_crash(
 #[tauri::command]
 pub async fn plugin_read_entry(plugin_id: String) -> Result<Option<String>> {
     Ok(plugins::read_entry(&plugin_id).await?)
+}
+
+/// Make a network request on a plugin's behalf, gated on its `network:<host>`
+/// grant. The webview cannot do this itself — CSP boxes in its `fetch`.
+#[tauri::command]
+pub async fn plugin_fetch(
+    plugin_id: String,
+    request: plugins::PluginFetchRequest,
+) -> Result<plugins::PluginFetchResponse> {
+    Ok(plugins::fetch(&plugin_id, request).await?)
 }

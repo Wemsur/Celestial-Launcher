@@ -448,10 +448,12 @@ function openPageContextMenu(event: MouseEvent) {
 				</div>
 			</div>
 		</Modal>
+		<div data-plugin-slot="home.top"></div>
 		<RecentWorldsList
 			v-if="showJumpBackInHome && recentInstances.length > 0"
 			:recent-instances="recentInstances"
 		/>
+		<div data-plugin-slot="home.middle"></div>
 
         <h2 class="m-0 text-2xl font-semibold text-contrast">
             {{ formatMessage(messages.library) }}
@@ -485,6 +487,8 @@ function openPageContextMenu(event: MouseEvent) {
 
 		<!-- Library Section -->
 		<LibrarySection :instances="instances" :library-path="activeTab === 'all' ? undefined : activeTab" />
+
+		<div data-plugin-slot="home.bottom"></div>
 
 		<ContextMenu ref="pageOptions" :label="formatMessage(messages.libraryActionsLabel)" />
 	</div>

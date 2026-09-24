@@ -469,6 +469,7 @@ fn main() {
                         "plugin_list",
                         "plugin_get",
                         "plugin_install",
+                        "plugin_install_from_url",
                         "plugin_uninstall",
                         "plugin_set_enabled",
                         "plugin_set_granted",
@@ -482,6 +483,7 @@ fn main() {
                         "plugin_crash_log",
                         "plugin_report_crash",
                         "plugin_read_entry",
+                        "plugin_fetch",
                     ])
                     .default_permission(
                         DefaultPermissionRule::AllowAllCommands,

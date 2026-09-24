@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TrashIcon, FolderOpenIcon, PlusIcon, TriangleAlertIcon } from '@modrinth/assets'
+import { TrashIcon, FolderOpenIcon, PlusIcon, TriangleAlertIcon, DownloadIcon } from '@modrinth/assets'
 import {
 	Button,
 	defineMessages,
@@ -8,11 +8,12 @@ import {
 	useVIntl,
 } from '@modrinth/ui'
 import { open } from '@tauri-apps/plugin-dialog'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import { loadPlugins, unloadPlugin } from '@/plugin-host'
 import {
 	installPlugin,
+	installPluginFromUrl,
 	listPlugins,
 	openPluginFolder,
 	pluginCrashLog,
@@ -20,6 +21,7 @@ import {
 	setPluginGranted,
 	uninstallPlugin,
 } from '@/plugin-host/ipc'
+import { fetchStorePlugins, type StorePlugin } from '@/plugin-host/store'
 import type { PluginSummary } from '@/plugin-host/types'
 
 const { formatMessage } = useVIntl()
@@ -75,12 +77,54 @@ const messages = defineMessages({
 		id: 'app.settings.plugins.broken',
 		defaultMessage: 'Could not load',
 	},
+	tabInstalled: {
+		id: 'app.settings.plugins.tab-installed',
+		defaultMessage: 'Installed',
+	},
+	tabStore: {
+		id: 'app.settings.plugins.tab-store',
+		defaultMessage: 'Store',
+	},
+	storeLoading: {
+		id: 'app.settings.plugins.store-loading',
+		defaultMessage: 'Loading the plugin store…',
+	},
+	storeError: {
+		id: 'app.settings.plugins.store-error',
+		defaultMessage: 'Could not load the plugin store.',
+	},
+	storeEmpty: {
+		id: 'app.settings.plugins.store-empty',
+		defaultMessage: 'The plugin store is empty.',
+	},
+	storeInstall: {
+		id: 'app.settings.plugins.store-install',
+		defaultMessage: 'Install',
+	},
+	storeInstalled: {
+		id: 'app.settings.plugins.store-installed',
+		defaultMessage: 'Installed',
+	},
+	storeRefresh: {
+		id: 'app.settings.plugins.store-refresh',
+		defaultMessage: 'Refresh',
+	},
 })
+
+type Tab = 'installed' | 'store'
+const tab = ref<Tab>('installed')
 
 const plugins = ref<PluginSummary[]>([])
 const loading = ref(true)
 const busy = ref<string | null>(null)
 const crashLogs = ref<Record<string, string>>({})
+
+const storePlugins = ref<StorePlugin[]>([])
+const storeLoading = ref(false)
+const storeError = ref<string | null>(null)
+const storeLoaded = ref(false)
+
+const installedIds = computed(() => new Set(plugins.value.map((plugin) => plugin.id)))
 
 async function reload() {
 	try {
@@ -164,6 +208,41 @@ async function installFromFolder() {
 		handleError(error)
 	}
 }
+
+async function loadStore(force = false) {
+	if (storeLoading.value) return
+	if (storeLoaded.value && !force) return
+	storeLoading.value = true
+	storeError.value = null
+	try {
+		storePlugins.value = await fetchStorePlugins()
+		storeLoaded.value = true
+	} catch (error) {
+		storeError.value = error instanceof Error ? error.message : String(error)
+	} finally {
+		storeLoading.value = false
+	}
+}
+
+function showStore() {
+	tab.value = 'store'
+	void loadStore()
+}
+
+async function installFromStore(entry: StorePlugin) {
+	if (busy.value) return
+	busy.value = entry.id
+	try {
+		await installPluginFromUrl(entry.download, entry.repo)
+		await loadPlugins()
+		await reload()
+		tab.value = 'installed'
+	} catch (error) {
+		handleError(error)
+	} finally {
+		busy.value = null
+	}
+}
 </script>
 
 <template>
@@ -175,16 +254,34 @@ async function installFromFolder() {
 			{{ formatMessage(messages.description) }}
 		</p>
 
-		<div class="mt-4 flex flex-wrap gap-2">
-			<Button @click="installFromFolder">
-				<PlusIcon />
-				{{ formatMessage(messages.install) }}
-			</Button>
-			<Button type="outlined" @click="openPluginFolder()">
-				<FolderOpenIcon />
-				{{ formatMessage(messages.openFolder) }}
-			</Button>
+		<div class="mt-4 flex gap-2 border-0 border-b border-solid border-surface-5">
+			<button
+				class="border-0 bg-transparent cursor-pointer px-3 py-2 text-sm font-semibold"
+				:class="tab === 'installed' ? 'text-contrast border-b-2 border-solid border-brand' : 'text-secondary'"
+				@click="tab = 'installed'"
+			>
+				{{ formatMessage(messages.tabInstalled) }}
+			</button>
+			<button
+				class="border-0 bg-transparent cursor-pointer px-3 py-2 text-sm font-semibold"
+				:class="tab === 'store' ? 'text-contrast border-b-2 border-solid border-brand' : 'text-secondary'"
+				@click="showStore"
+			>
+				{{ formatMessage(messages.tabStore) }}
+			</button>
 		</div>
+
+		<template v-if="tab === 'installed'">
+			<div class="mt-4 flex flex-wrap gap-2">
+				<Button @click="installFromFolder">
+					<PlusIcon />
+					{{ formatMessage(messages.install) }}
+				</Button>
+				<Button type="outlined" @click="openPluginFolder()">
+					<FolderOpenIcon />
+					{{ formatMessage(messages.openFolder) }}
+				</Button>
+			</div>
 
 		<p v-if="loading" class="mt-6 mb-0 text-secondary">
 			{{ formatMessage(messages.loading) }}
@@ -301,8 +398,71 @@ async function installFromFolder() {
 			</article>
 		</div>
 
-		<p class="mt-4 mb-0 text-xs text-secondary">
-			{{ formatMessage(messages.appliesImmediately) }}
-		</p>
+			<p class="mt-4 mb-0 text-xs text-secondary">
+				{{ formatMessage(messages.appliesImmediately) }}
+			</p>
+		</template>
+
+		<template v-else>
+			<div class="mt-4 flex justify-end">
+				<Button type="outlined" :disabled="storeLoading" @click="loadStore(true)">
+					{{ formatMessage(messages.storeRefresh) }}
+				</Button>
+			</div>
+
+			<p v-if="storeLoading" class="mt-6 mb-0 text-secondary">
+				{{ formatMessage(messages.storeLoading) }}
+			</p>
+			<div
+				v-else-if="storeError"
+				class="mt-6 flex items-start gap-2 text-sm text-danger"
+			>
+				<TriangleAlertIcon class="mt-0.5 shrink-0" />
+				<span class="break-all">
+					{{ formatMessage(messages.storeError) }} {{ storeError }}
+				</span>
+			</div>
+			<p v-else-if="storePlugins.length === 0" class="mt-6 mb-0 text-secondary">
+				{{ formatMessage(messages.storeEmpty) }}
+			</p>
+
+			<div v-else class="mt-6 flex flex-col gap-4">
+				<article
+					v-for="entry in storePlugins"
+					:key="entry.id"
+					class="rounded-xl border border-solid border-surface-5 bg-surface-3 p-4 flex items-start justify-between gap-4"
+				>
+					<div class="min-w-0">
+						<h3 class="m-0 text-lg font-semibold text-contrast">
+							{{ entry.name }}
+						</h3>
+						<p class="m-0 text-sm text-secondary">
+							<span v-if="entry.version">v{{ entry.version }}</span>
+							<span v-if="entry.author"> · {{ entry.author }}</span>
+						</p>
+						<p v-if="entry.description" class="mt-1 mb-0 text-sm text-secondary">
+							{{ entry.description }}
+						</p>
+					</div>
+					<Button
+						v-if="installedIds.has(entry.id)"
+						size="sm"
+						disabled
+					>
+						{{ formatMessage(messages.storeInstalled) }}
+					</Button>
+					<Button
+						v-else
+						size="sm"
+						color="brand"
+						:disabled="busy === entry.id"
+						@click="installFromStore(entry)"
+					>
+						<DownloadIcon />
+						{{ formatMessage(messages.storeInstall) }}
+					</Button>
+				</article>
+			</div>
+		</template>
 	</section>
 </template>

@@ -30,6 +30,9 @@ declare module '@celestial/plugin' {
 		| 'navbar.bottom'
 		| 'sidebar.top'
 		| 'sidebar.bottom'
+		| 'home.top'
+		| 'home.middle'
+		| 'home.bottom'
 
 	/** An app event a plugin may subscribe to. */
 	export type PluginEventType =
@@ -59,6 +62,19 @@ declare module '@celestial/plugin' {
 		path: string
 		name?: string
 		component: Component
+	}
+
+	export interface PluginFetchOptions {
+		method?: string
+		headers?: Record<string, string>
+		body?: string
+	}
+
+	export interface PluginFetchResult {
+		status: number
+		ok: boolean
+		headers: Record<string, string>
+		body: string
 	}
 
 	/**
@@ -140,6 +156,11 @@ declare module '@celestial/plugin' {
 		/** Get a structural region's container. Requires `region:<name>`. */
 		readonly regions: {
 			get(name: PluginRegionId): HTMLElement
+		}
+
+		/** Fetch through the launcher. Requires `network:<host>` for the URL. */
+		readonly net: {
+			fetch(url: string, options?: PluginFetchOptions): Promise<PluginFetchResult>
 		}
 
 		/** Log with a `[plugin:<id>]` prefix. */

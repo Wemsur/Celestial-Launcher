@@ -17,6 +17,7 @@
 
 pub mod data;
 pub mod manifest;
+pub mod network;
 pub mod permissions;
 pub mod store;
 
@@ -28,9 +29,10 @@ pub use manifest::{
     CURRENT_API_VERSION, MANIFEST_FILE, PluginManifest, PluginType,
     is_valid_plugin_id,
 };
+pub use network::{PluginFetchRequest, PluginFetchResponse, fetch};
 pub use permissions::{PermissionKind, PermissionRisk, PluginPermission};
 pub use store::{
-    PluginSummary, ensure_granted, get, grant_permission, install, list,
-    plugin_data_dir, plugins_dir, read_entry, resolve_entry, revoke_permission,
-    set_enabled, set_granted, uninstall,
+    PluginSummary, ensure_granted, get, grant_permission, install,
+    install_from_url, list, plugin_data_dir, plugins_dir, read_entry,
+    resolve_entry, revoke_permission, set_enabled, set_granted, uninstall,
 };

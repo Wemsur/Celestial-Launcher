@@ -224,6 +224,153 @@ pub async fn install(
     ))
 }
 
+/// Cap on a downloaded plugin archive. A plugin bundle is small; an unbounded
+/// download from a store entry is a way to fill the disk.
+const MAX_ARCHIVE_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Download a zipped plugin from a store entry, unpack it, and install it.
+///
+/// The archive is untrusted: entries are checked for path traversal, the total
+/// size is capped, and the unpacked folder still goes through the same manifest
+/// validation as any other install. `origin` is recorded as the plugin's source.
+pub async fn install_from_url(
+    url: &str,
+    origin: Option<String>,
+) -> crate::Result<PluginSummary> {
+    let parsed = url::Url::parse(url).map_err(|error| {
+        crate::ErrorKind::InputError(format!("Invalid download URL: {error}"))
+    })?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(crate::ErrorKind::InputError(
+            "Plugin downloads must be http or https".to_string(),
+        )
+        .into());
+    }
+
+    let state = State::get().await?;
+    let bytes = crate::util::fetch::fetch(
+        url,
+        None,
+        None,
+        None,
+        &state.fetch_semaphore,
+        &state.pool,
+    )
+    .await?;
+
+    let staging = state
+        .directories
+        .settings_dir
+        .join(PLUGINS_DIR)
+        .join(format!(".staging-{}", uuid::Uuid::new_v4()));
+    io::create_dir_all(&staging).await?;
+
+    let result =
+        unpack_and_install(&bytes, &staging, origin.or_else(|| Some(url.to_string())))
+            .await;
+    let _ = io::remove_dir_all(&staging).await;
+    result
+}
+
+/// Extract a plugin zip into `staging`, then install whichever folder holds the
+/// manifest.
+async fn unpack_and_install(
+    bytes: &[u8],
+    staging: &Path,
+    origin: Option<String>,
+) -> crate::Result<PluginSummary> {
+    let bytes = bytes.to_vec();
+    let target = staging.to_path_buf();
+
+    // Zip reading is synchronous CPU/IO work, so keep it off the async runtime.
+    tokio::task::spawn_blocking(move || extract_zip(&bytes, &target)).await??;
+
+    // The manifest may be at the archive root or one level down (a zip made from
+    // a folder). Find it rather than assuming a layout.
+    let manifest_dir = find_manifest_dir(staging).await?.ok_or_else(|| {
+        crate::ErrorKind::InputError(
+            "The downloaded archive has no manifest.json".to_string(),
+        )
+    })?;
+
+    install(&manifest_dir, origin).await
+}
+
+/// Synchronously extract a zip into `dest`, rejecting any entry that would
+/// escape it.
+fn extract_zip(bytes: &[u8], dest: &Path) -> crate::Result<()> {
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes))
+        .map_err(|error| {
+            crate::ErrorKind::InputError(format!("Invalid plugin archive: {error}"))
+        })?;
+
+    let mut total: u64 = 0;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).map_err(|error| {
+            crate::ErrorKind::InputError(format!("Bad archive entry: {error}"))
+        })?;
+
+        // `enclosed_name` returns None for anything with `..` or an absolute
+        // path — exactly the entries that would write outside `dest`.
+        let Some(relative) = entry.enclosed_name() else {
+            return Err(crate::ErrorKind::InputError(format!(
+                "Archive entry '{}' has an unsafe path",
+                entry.name()
+            ))
+            .into());
+        };
+        let out_path = dest.join(&relative);
+
+        if entry.is_dir() {
+            std::fs::create_dir_all(&out_path)?;
+            continue;
+        }
+
+        total = total.saturating_add(entry.size());
+        if total > MAX_ARCHIVE_BYTES {
+            return Err(crate::ErrorKind::InputError(format!(
+                "Plugin archive is larger than {} MiB",
+                MAX_ARCHIVE_BYTES / (1024 * 1024)
+            ))
+            .into());
+        }
+
+        if let Some(parent) = out_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let mut out = std::fs::File::create(&out_path)?;
+        std::io::copy(&mut entry, &mut out)?;
+    }
+
+    Ok(())
+}
+
+/// Locate the folder containing `manifest.json`: the extraction root, or a
+/// single top-level subfolder (a zip built from a plugin directory).
+async fn find_manifest_dir(root: &Path) -> crate::Result<Option<PathBuf>> {
+    if root.join(super::manifest::MANIFEST_FILE).is_file() {
+        return Ok(Some(root.to_path_buf()));
+    }
+
+    let mut entries = io::read_dir(root).await?;
+    let mut only_dir: Option<PathBuf> = None;
+    let mut dir_count = 0;
+    while let Some(entry) = entries.next_entry().await? {
+        if entry.file_type().await?.is_dir() {
+            dir_count += 1;
+            only_dir = Some(entry.path());
+        }
+    }
+
+    if dir_count == 1
+        && let Some(dir) = only_dir
+        && dir.join(super::manifest::MANIFEST_FILE).is_file()
+    {
+        return Ok(Some(dir));
+    }
+    Ok(None)
+}
+
 pub async fn uninstall(
     plugin_id: &str,
     remove_data: bool,

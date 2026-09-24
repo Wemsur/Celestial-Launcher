@@ -55,6 +55,7 @@ import {
 import {
 	listPlugins,
 	pluginAssetUrl,
+	pluginNetworkFetch,
 	pluginReadEntry,
 	pluginReportCrash,
 	pluginStorageGet,
@@ -85,6 +86,9 @@ export const PLUGIN_SLOTS = [
 	'navbar.bottom',
 	'sidebar.top',
 	'sidebar.bottom',
+	'home.top',
+	'home.middle',
+	'home.bottom',
 ] as const
 
 export type PluginSlotId = (typeof PLUGIN_SLOTS)[number]
@@ -161,7 +165,24 @@ export interface PluginHostApi {
 		/** The container element for a region, to restructure in place. */
 		get(name: PluginRegionId): HTMLElement
 	}
+	readonly net: {
+		/** Fetch through the launcher. Requires `network:<host>` for the URL. */
+		fetch(url: string, options?: PluginFetchOptions): Promise<PluginFetchResult>
+	}
 	log(...args: unknown[]): void
+}
+
+export interface PluginFetchOptions {
+	method?: string
+	headers?: Record<string, string>
+	body?: string
+}
+
+export interface PluginFetchResult {
+	status: number
+	ok: boolean
+	headers: Record<string, string>
+	body: string
 }
 
 interface PluginModule {
@@ -432,6 +453,14 @@ function createHostApi(summary: PluginSummary): PluginHostApi {
 				? { get: (name: PluginRegionId) => getRegion(granted, name) }
 				: { get: deny('regions', 'region') },
 		),
+		net: Object.freeze(
+			hasKind('network')
+				? {
+						fetch: (url: string, opts?: PluginFetchOptions) =>
+							pluginFetch(pluginId, url, opts),
+					}
+				: { fetch: deny('net', 'network') },
+		),
 	})
 }
 
@@ -519,6 +548,29 @@ function getRegion(granted: Set<string>, name: PluginRegionId): HTMLElement {
 		throw new Error(`Region "${name}" is not on screen.`)
 	}
 	return element
+}
+
+/**
+ * Fetch through the launcher's Rust side.
+ *
+ * The host is not checked here — the whole point is that the webview cannot
+ * reach the network, so the real check is in Rust against the plugin's
+ * `network:<host>` grant. This wrapper only shapes the call.
+ */
+function pluginFetch(
+	pluginId: string,
+	url: string,
+	options?: PluginFetchOptions,
+): Promise<PluginFetchResult> {
+	if (typeof url !== 'string' || !url) {
+		throw new Error('fetch needs a URL.')
+	}
+	return pluginNetworkFetch(pluginId, {
+		url,
+		method: options?.method,
+		headers: options?.headers,
+		body: options?.body,
+	})
 }
 
 function addStyle(pluginId: string, css: string): void {
@@ -642,6 +694,11 @@ function addSlot(
  * Plugins start loading while the launcher is still rendering, so a container
  * is usually missing on the first pass. Watching the document is what makes a
  * plugin's UI appear once its slot is actually on screen.
+ *
+ * The observer stays live as long as any plugin has a slot mounted, not just
+ * until the first placement: page-level slots (`home.*`) live on a KeepAlive
+ * page that unmounts on navigation and remounts on return, so a placed element
+ * can be detached and a fresh container can reappear at any time.
  */
 function mountPending(): void {
 	for (const record of mounts) {
@@ -658,10 +715,10 @@ function mountPending(): void {
 		record.container = container
 	}
 
-	if (mounts.some((record) => !record.container?.isConnected) && !observer) {
+	if (mounts.length > 0 && !observer) {
 		observer = new MutationObserver(() => mountPending())
 		observer.observe(document.body, { childList: true, subtree: true })
-	} else if (observer && mounts.every((record) => record.container?.isConnected)) {
+	} else if (observer && mounts.length === 0) {
 		observer.disconnect()
 		observer = null
 	}

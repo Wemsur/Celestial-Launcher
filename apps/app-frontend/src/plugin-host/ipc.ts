@@ -22,6 +22,14 @@ export function installPlugin(path: string, origin?: string): Promise<PluginSumm
 	return invoke<PluginSummary>('plugin:plugins|plugin_install', { path, origin: origin ?? null })
 }
 
+/** Download a zipped plugin from a store entry and install it. */
+export function installPluginFromUrl(url: string, origin?: string): Promise<PluginSummary> {
+	return invoke<PluginSummary>('plugin:plugins|plugin_install_from_url', {
+		url,
+		origin: origin ?? null,
+	})
+}
+
 export function uninstallPlugin(pluginId: string, removeData = false): Promise<void> {
 	return invoke('plugin:plugins|plugin_uninstall', { pluginId, removeData })
 }
@@ -77,6 +85,31 @@ export function pluginReportCrash(
  */
 export function pluginReadEntry(pluginId: string): Promise<string | null> {
 	return invoke<string | null>('plugin:plugins|plugin_read_entry', { pluginId })
+}
+
+export interface PluginFetchRequest {
+	url: string
+	method?: string
+	headers?: Record<string, string>
+	body?: string
+}
+
+export interface PluginFetchResponse {
+	status: number
+	ok: boolean
+	headers: Record<string, string>
+	body: string
+}
+
+/** Network request proxied through Rust; host is checked there against grants. */
+export function pluginNetworkFetch(
+	pluginId: string,
+	request: PluginFetchRequest,
+): Promise<PluginFetchResponse> {
+	return invoke<PluginFetchResponse>('plugin:plugins|plugin_fetch', {
+		pluginId,
+		request,
+	})
 }
 
 /**
