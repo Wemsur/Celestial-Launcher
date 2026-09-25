@@ -1,11 +1,148 @@
 name: Git gay release publish
 
+# Builds all three platforms, then collects every installer into one GitHub
+# Release. The tag is taken from apps/app-frontend/package.json "version"
+# (e.g. 3.2.0, no leading "v"). The release is created as a DRAFT so you can
+# edit its name / notes and then publish it yourself.
 on:
   workflow_dispatch:
 
 jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            runner: windows-latest
+            args: --bundles nsis,msi
+            out: target/release/bundle
+          - name: macos
+            runner: macos-latest
+            args: --target universal-apple-darwin
+            out: target/universal-apple-darwin/release/bundle
+          - name: linux
+            runner: ubuntu-22.04
+            args: ''
+            out: target/release/bundle
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      # See celestial-release.yml: the repo carries a symlink with an empty
+      # target that aborts checkout unless git materialises symlinks as files.
+      - name: Disable git symlinks
+        shell: bash
+        run: git config --global core.symlinks false
+
+      - uses: actions/checkout@v5
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.name == 'macos' && 'x86_64-apple-darwin,aarch64-apple-darwin' || '' }}
+
+      - name: Ensure macOS targets
+        if: matrix.name == 'macos'
+        run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
+
+      # theseus.jar's gradle build needs JVM 17+; ubuntu-22.04 defaults to 11.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Linux build dependencies
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - run: corepack enable
+
+      - name: Seed app-lib environment
+        shell: bash
+        run: cp packages/app-lib/.env.prod packages/app-lib/.env
+
+      - run: pnpm install
+
+      - name: Build
+        shell: bash
+        env:
+          TAURI_BUNDLER_DMG_IGNORE_CI: 'true'
+        run: pnpm --filter=@modrinth/app run tauri build ${{ matrix.args }}
+
+      - name: Collect installers
+        shell: bash
+        run: |
+          mkdir -p dist
+          for f in \
+            "${{ matrix.out }}"/nsis/*.exe \
+            "${{ matrix.out }}"/msi/*.msi \
+            "${{ matrix.out }}"/dmg/*.dmg \
+            "${{ matrix.out }}"/macos/*.app.tar.gz \
+            "${{ matrix.out }}"/deb/*.deb \
+            "${{ matrix.out }}"/rpm/*.rpm \
+            "${{ matrix.out }}"/appimage/*.AppImage; do
+            [ -e "$f" ] && cp "$f" dist/
+          done
+          ls -la dist
+
+      - name: Upload build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: CelestialLauncher-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: ignore
+
+  release:
+    name: Publish draft release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          version=$(node -p "require('./apps/app-frontend/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Release tag will be: $version"
+
+      # Pull every platform's installers back into one flat folder.
+      - name: Download all build output
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        shell: bash
+        run: |
+          mkdir -p release-files
+          find artifacts -type f -exec cp {} release-files/ \;
+          ls -la release-files
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Celestial Launcher ${{ steps.version.outputs.version }}
+          draft: true
+          files: release-files/*
+
   publish-gitgay:
     name: Publish draft release to git.gay
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
