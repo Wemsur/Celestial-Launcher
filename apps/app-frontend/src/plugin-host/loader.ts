@@ -22,12 +22,15 @@ import {
 	ref,
 	render,
 	shallowRef,
+	Teleport,
 	watch,
 	type Component,
+	type ComputedRef,
 } from 'vue'
 import * as VueRuntime from 'vue'
 
 import { arch, platform } from '@tauri-apps/plugin-os'
+import { Button, DropdownSelect, Input, Toggle } from '@modrinth/ui'
 
 import router from '@/routes'
 
@@ -101,6 +104,8 @@ export const PLUGIN_SLOTS = [
 	'topbar.right',
 	'navbar.bottom',
 	'sidebar.top',
+	'sidebar.after-jumpback',
+	'sidebar.after-account',
 	'sidebar.bottom',
 	'home.top',
 	'home.middle',
@@ -138,6 +143,8 @@ export interface PluginVueRuntime {
 	readonly watch: typeof watch
 	readonly shallowRef: typeof shallowRef
 	readonly defineComponent: typeof defineComponent
+	/** Render a node elsewhere in the document (e.g. a modal onto `<body>`). */
+	readonly Teleport: typeof Teleport
 	readonly onMounted: typeof onMounted
 	readonly onUnmounted: typeof onUnmounted
 }
@@ -162,7 +169,10 @@ export interface PluginHostApi {
 	readonly router: {
 		push(to: string): void
 		replace(to: string): void
+		/** The current path, as a snapshot. */
 		current(): string
+		/** The current path, reactive — for highlighting an active nav button. */
+		readonly currentPath: ComputedRef<string>
 	}
 	readonly storage: {
 		get(key: string): Promise<string | null>
@@ -225,6 +235,19 @@ export interface PluginHostApi {
 	readonly platform: {
 		readonly os: string
 		readonly arch: string
+	}
+	/**
+	 * The launcher's own UI components, so a plugin's chrome matches the rest of
+	 * the app rather than re-implementing it. Ungated — these only render, they
+	 * grant no capability. (These four read no injected context, so they work in
+	 * a plugin's own mount tree; components that need launcher-wide context, like
+	 * `NewModal`, are not exposed.)
+	 */
+	readonly ui: {
+		readonly Button: Component
+		readonly Input: Component
+		readonly Toggle: Component
+		readonly DropdownSelect: Component
 	}
 	log(...args: unknown[]): void
 }
@@ -417,6 +440,7 @@ const VUE_RUNTIME: PluginVueRuntime = Object.freeze({
 	watch,
 	shallowRef,
 	defineComponent,
+	Teleport,
 	onMounted,
 	onUnmounted,
 })
@@ -477,6 +501,7 @@ function createHostApi(summary: PluginSummary): PluginHostApi {
 				void router.replace(to)
 			},
 			current: () => router.currentRoute.value.fullPath,
+			currentPath: computed(() => router.currentRoute.value.fullPath),
 		}),
 		// Storage is also checked in Rust, which is the check that decides; this
 		// one exists so an undeclared plugin gets the error immediately.
@@ -584,6 +609,12 @@ function createHostApi(summary: PluginSummary): PluginHostApi {
 		platform: Object.freeze({
 			os: platform(),
 			arch: arch(),
+		}),
+		ui: Object.freeze({
+			Button,
+			Input,
+			Toggle,
+			DropdownSelect,
 		}),
 	})
 }

@@ -29,6 +29,8 @@ declare module '@celestial/plugin' {
 		| 'topbar.right'
 		| 'navbar.bottom'
 		| 'sidebar.top'
+		| 'sidebar.after-jumpback'
+		| 'sidebar.after-account'
 		| 'sidebar.bottom'
 		| 'home.top'
 		| 'home.middle'
@@ -128,6 +130,8 @@ declare module '@celestial/plugin' {
 		): WatchStopHandle
 		shallowRef<T>(value: T): ShallowRef<T>
 		defineComponent: typeof import('vue').defineComponent
+		/** Render a node elsewhere in the document, e.g. a modal onto `<body>`. */
+		Teleport: typeof import('vue').Teleport
 		onMounted(hook: () => void): void
 		onUnmounted(hook: () => void): void
 	}
@@ -162,7 +166,10 @@ declare module '@celestial/plugin' {
 		readonly router: {
 			push(to: string): void
 			replace(to: string): void
+			/** The current path, as a snapshot. */
 			current(): string
+			/** The current path, reactive — for highlighting an active nav button. */
+			readonly currentPath: ComputedRef<string>
 		}
 
 		/** Your own key/value storage. Requires the `storage` permission. */
@@ -255,6 +262,19 @@ declare module '@celestial/plugin' {
 		readonly platform: {
 			readonly os: string
 			readonly arch: string
+		}
+
+		/**
+		 * The launcher's own UI components (`@modrinth/ui`), so a plugin's chrome
+		 * matches the rest of the app instead of re-implementing it. Pass them to
+		 * `h(...)`. Ungated — they only render. Only components that need no
+		 * launcher-wide injected context are available.
+		 */
+		readonly ui: {
+			readonly Button: Component
+			readonly Input: Component
+			readonly Toggle: Component
+			readonly DropdownSelect: Component
 		}
 
 		/** Log with a `[plugin:<id>]` prefix. */

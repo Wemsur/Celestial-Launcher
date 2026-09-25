@@ -2860,6 +2860,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 							<RecentWorldsList compact :recent-instances="sidebarRecentInstances" />
 						</suspense>
 					</div>
+					<div data-plugin-slot="sidebar.after-jumpback"></div>
 					<div
 						class="p-4 border-0 border-b-[1px] border-[--brand-gradient-border] border-solid"
 					>
@@ -2870,6 +2871,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 							<AccountsCard ref="accounts" />
 						</suspense>
 					</div>
+					<div data-plugin-slot="sidebar.after-account"></div>
 					<div
 						v-show="showFriendsList"
 						class="p-4 border-0 border-b-[1px] border-[--brand-gradient-border] border-solid"

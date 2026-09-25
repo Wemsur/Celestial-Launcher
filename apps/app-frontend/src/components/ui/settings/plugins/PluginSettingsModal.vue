@@ -12,6 +12,7 @@ import {
 import { computed, ref, watch } from 'vue'
 
 import { pluginSettingsGet, pluginSettingsSet } from '@/plugin-host/ipc'
+import { loadPlugins, unloadPlugin } from '@/plugin-host'
 import type { PluginSettingField, PluginSummary } from '@/plugin-host/types'
 
 const { formatMessage } = useVIntl()
@@ -78,6 +79,14 @@ async function update(field: PluginSettingField, value: string) {
 	values.value = { ...values.value, [field.key]: value }
 	try {
 		await pluginSettingsSet(props.plugin.id, field.key, value)
+		// A toggle usually changes what the plugin registers (which slots/pages
+		// it shows), and that is decided at activation — so reload it. Text
+		// settings are read on use and need no reload (and reloading on every
+		// keystroke would be a storm).
+		if (field.type === 'toggle') {
+			unloadPlugin(props.plugin.id)
+			await loadPlugins()
+		}
 	} catch (error) {
 		handleError(error)
 	}
