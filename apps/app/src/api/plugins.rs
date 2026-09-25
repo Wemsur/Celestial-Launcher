@@ -38,6 +38,15 @@ pub fn init<R: tauri::Runtime>() -> TauriPlugin<R> {
             plugin_settings_set,
             plugin_get_hot_reload,
             plugin_set_hot_reload,
+            plugin_sidecar_ensure,
+            plugin_sidecar_start,
+            plugin_sidecar_request,
+            plugin_sidecar_stop,
+            plugin_sidecar_cleanup,
+            plugin_sidecar_status,
+            plugin_lan_announce,
+            plugin_lan_stop,
+            plugin_lan_cleanup,
         ])
         .build()
 }
@@ -240,5 +249,104 @@ pub async fn plugin_get_hot_reload() -> Result<bool> {
 #[tauri::command]
 pub async fn plugin_set_hot_reload(enabled: bool) -> Result<()> {
     plugins::set_hot_reload(enabled).await?;
+    Ok(())
+}
+
+/// Download, verify, and unpack a sidecar binary. Gated on `sidecar`.
+#[tauri::command]
+pub async fn plugin_sidecar_ensure(
+    plugin_id: String,
+    key: String,
+    url: String,
+    sha512: Option<String>,
+    sha512_url: Option<String>,
+    archive: Option<String>,
+    version: Option<String>,
+) -> Result<()> {
+    plugins::sidecar::ensure(
+        &plugin_id,
+        &key,
+        &url,
+        sha512.as_deref(),
+        sha512_url.as_deref(),
+        archive.as_deref().unwrap_or("tar.gz"),
+        version.as_deref(),
+    )
+    .await?;
+    Ok(())
+}
+
+/// Whether a sidecar is installed for the plugin, and its recorded version.
+#[tauri::command]
+pub async fn plugin_sidecar_status(
+    plugin_id: String,
+    key: String,
+) -> Result<plugins::SidecarStatus> {
+    Ok(plugins::sidecar::status(&plugin_id, &key).await?)
+}
+
+/// Spawn an installed sidecar; returns its handle and (if requested) its port.
+#[tauri::command]
+pub async fn plugin_sidecar_start(
+    plugin_id: String,
+    key: String,
+    args: Vec<String>,
+    port_file: Option<bool>,
+) -> Result<plugins::SidecarStarted> {
+    Ok(plugins::sidecar::start(
+        &plugin_id,
+        &key,
+        args,
+        port_file.unwrap_or(false),
+    )
+    .await?)
+}
+
+/// Proxy a control request to a running sidecar over localhost.
+#[tauri::command]
+pub async fn plugin_sidecar_request(
+    plugin_id: String,
+    handle: u64,
+    request: plugins::SidecarRequest,
+) -> Result<plugins::SidecarResponse> {
+    Ok(plugins::sidecar::request(&plugin_id, handle, request).await?)
+}
+
+#[tauri::command]
+pub async fn plugin_sidecar_stop(
+    plugin_id: String,
+    handle: u64,
+) -> Result<()> {
+    plugins::sidecar::stop(&plugin_id, handle).await?;
+    Ok(())
+}
+
+/// Kill every sidecar a plugin started (called when it unloads).
+#[tauri::command]
+pub async fn plugin_sidecar_cleanup(plugin_id: String) -> Result<()> {
+    plugins::sidecar::cleanup(&plugin_id).await;
+    Ok(())
+}
+
+/// Start announcing a Minecraft LAN world. Gated on `lan`.
+#[tauri::command]
+pub async fn plugin_lan_announce(
+    plugin_id: String,
+    motd: String,
+    port: u16,
+) -> Result<plugins::LanAnnounce> {
+    Ok(plugins::lan::announce(&plugin_id, &motd, port).await?)
+}
+
+#[tauri::command]
+pub async fn plugin_lan_stop(plugin_id: String, handle: u64) -> Result<()> {
+    plugins::lan::stop(&plugin_id, handle).await?;
+    Ok(())
+}
+
+/// Stop every LAN announcer a plugin started (called when it unloads).
+#[tauri::command]
+pub async fn plugin_lan_cleanup(plugin_id: String) -> Result<()> {
+    plugins::lan::cleanup(&plugin_id).await;
     Ok(())
 }

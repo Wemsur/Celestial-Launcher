@@ -136,6 +136,110 @@ export function pluginSetHotReload(enabled: boolean): Promise<void> {
 	return invoke('plugin:plugins|plugin_set_hot_reload', { enabled })
 }
 
+export interface SidecarStarted {
+	handle: number
+	port: number | null
+}
+
+export interface SidecarRequestInit {
+	/** Path plus query string, used verbatim (so repeated query keys work). */
+	path: string
+	method?: string
+	headers?: Record<string, string>
+	body?: string
+}
+
+export interface SidecarResponse {
+	status: number
+	ok: boolean
+	body: string
+}
+
+export interface SidecarStatus {
+	installed: boolean
+	version: string | null
+}
+
+/** Download, verify, and unpack a sidecar binary. Requires `sidecar`. */
+export function pluginSidecarEnsure(
+	pluginId: string,
+	key: string,
+	url: string,
+	options?: { sha512?: string; sha512Url?: string; archive?: string; version?: string },
+): Promise<void> {
+	return invoke('plugin:plugins|plugin_sidecar_ensure', {
+		pluginId,
+		key,
+		url,
+		sha512: options?.sha512 ?? null,
+		sha512Url: options?.sha512Url ?? null,
+		archive: options?.archive ?? null,
+		version: options?.version ?? null,
+	})
+}
+
+/** Whether a sidecar is installed for the plugin, and its recorded version. */
+export function pluginSidecarStatus(pluginId: string, key: string): Promise<SidecarStatus> {
+	return invoke<SidecarStatus>('plugin:plugins|plugin_sidecar_status', { pluginId, key })
+}
+
+/** Spawn an installed sidecar; returns its handle and (if requested) its port. */
+export function pluginSidecarStart(
+	pluginId: string,
+	key: string,
+	args: string[],
+	portFile = false,
+): Promise<SidecarStarted> {
+	return invoke<SidecarStarted>('plugin:plugins|plugin_sidecar_start', {
+		pluginId,
+		key,
+		args,
+		portFile,
+	})
+}
+
+/** Proxy a control request to a running sidecar over localhost. */
+export function pluginSidecarRequest(
+	pluginId: string,
+	handle: number,
+	request: SidecarRequestInit,
+): Promise<SidecarResponse> {
+	return invoke<SidecarResponse>('plugin:plugins|plugin_sidecar_request', {
+		pluginId,
+		handle,
+		request,
+	})
+}
+
+export function pluginSidecarStop(pluginId: string, handle: number): Promise<void> {
+	return invoke('plugin:plugins|plugin_sidecar_stop', { pluginId, handle })
+}
+
+export function pluginSidecarCleanup(pluginId: string): Promise<void> {
+	return invoke('plugin:plugins|plugin_sidecar_cleanup', { pluginId })
+}
+
+/** Start announcing a Minecraft LAN world. Requires `lan`. */
+export function pluginLanAnnounce(
+	pluginId: string,
+	motd: string,
+	port: number,
+): Promise<{ handle: number }> {
+	return invoke<{ handle: number }>('plugin:plugins|plugin_lan_announce', {
+		pluginId,
+		motd,
+		port,
+	})
+}
+
+export function pluginLanStop(pluginId: string, handle: number): Promise<void> {
+	return invoke('plugin:plugins|plugin_lan_stop', { pluginId, handle })
+}
+
+export function pluginLanCleanup(pluginId: string): Promise<void> {
+	return invoke('plugin:plugins|plugin_lan_cleanup', { pluginId })
+}
+
 /**
  * Turn an absolute path inside the plugins folder into a URL the webview may
  * load. `tauri.conf.json` scopes the asset protocol to `$APPDATA/plugins/**`

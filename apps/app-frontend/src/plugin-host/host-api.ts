@@ -13,6 +13,7 @@
  * security boundary. The boundary that decides is still in Rust.
  */
 
+import { get_default_user, users } from '@/helpers/auth'
 import { get as getInstance, list as listInstances } from '@/helpers/instance'
 import { library_list } from '@/helpers/library'
 
@@ -37,6 +38,19 @@ export const HOST_API: Record<string, HostApiFn> = {
 		return getInstance(instanceId)
 	},
 	'library.list': () => library_list(),
+	// The active Minecraft account's username, resolved from the default-user
+	// UUID and the account list. Just the name — not the full credentials.
+	'auth.default_username': async () => {
+		const uuid = await get_default_user()
+		if (!uuid) return null
+		const list = await users()
+		if (!Array.isArray(list)) return null
+		const match = list.find(
+			(user) => (user as { profile?: { id?: unknown } })?.profile?.id === uuid,
+		) as { profile?: { name?: unknown } } | undefined
+		const name = match?.profile?.name
+		return typeof name === 'string' ? name : null
+	},
 }
 
 export const HOST_API_NAMES = Object.freeze(Object.keys(HOST_API))

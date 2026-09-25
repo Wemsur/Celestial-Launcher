@@ -123,7 +123,7 @@ pub async fn fetch(
 }
 
 /// Whether any of the plugin's granted `network:` permissions covers `host`.
-async fn ensure_host_granted(
+pub(super) async fn ensure_host_granted(
     plugin_id: &str,
     host: &str,
 ) -> crate::Result<()> {

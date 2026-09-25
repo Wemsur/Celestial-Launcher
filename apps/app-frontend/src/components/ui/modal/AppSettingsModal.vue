@@ -186,6 +186,7 @@ const tabs = [
 		category: tabCategories.plugins,
 		icon: PlugIcon,
 		content: PluginSettings,
+		badge: commonMessages.beta,
 	},
 ]
 

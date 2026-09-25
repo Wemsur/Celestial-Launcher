@@ -16,21 +16,25 @@
 //! only ever acts on a [`PluginSummary`] this module produced.
 
 pub mod data;
+pub mod lan;
 pub mod manifest;
 pub mod network;
 pub mod permissions;
+pub mod sidecar;
 pub mod store;
 
 pub use data::{
     crash_log, record_crash, settings_get_all, settings_set, storage_get,
     storage_keys, storage_remove, storage_set,
 };
+pub use lan::LanAnnounce;
 pub use manifest::{
     CURRENT_API_VERSION, MANIFEST_FILE, PluginManifest, PluginSettingField,
     PluginSettingOption, PluginSettingType, PluginType, is_valid_plugin_id,
 };
 pub use network::{PluginFetchRequest, PluginFetchResponse, fetch};
 pub use permissions::{PermissionKind, PermissionRisk, PluginPermission};
+pub use sidecar::{SidecarRequest, SidecarResponse, SidecarStarted, SidecarStatus};
 pub use store::{
     PluginSummary, ensure_granted, get, get_hot_reload, grant_permission,
     install, install_from_url, list, plugin_data_dir, plugins_dir, read_entry,

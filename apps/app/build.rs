@@ -488,6 +488,15 @@ fn main() {
                         "plugin_settings_set",
                         "plugin_get_hot_reload",
                         "plugin_set_hot_reload",
+                        "plugin_sidecar_ensure",
+                        "plugin_sidecar_start",
+                        "plugin_sidecar_request",
+                        "plugin_sidecar_stop",
+                        "plugin_sidecar_cleanup",
+                        "plugin_sidecar_status",
+                        "plugin_lan_announce",
+                        "plugin_lan_stop",
+                        "plugin_lan_cleanup",
                     ])
                     .default_permission(
                         DefaultPermissionRule::AllowAllCommands,

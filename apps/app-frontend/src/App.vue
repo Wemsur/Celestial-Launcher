@@ -2589,6 +2589,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			>
 				<ImageIcon />
 			</NavButton>
+			<div data-plugin-slot="navbar.bottom" class="flex flex-col gap-[0.25rem]"></div>
 <!--			<NavButton
 				v-tooltip.right="formatMessage(messages.modrinthHosting)"
 				to="/hosting/manage"

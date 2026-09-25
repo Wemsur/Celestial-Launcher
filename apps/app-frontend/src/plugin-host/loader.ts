@@ -27,6 +27,8 @@ import {
 } from 'vue'
 import * as VueRuntime from 'vue'
 
+import { arch, platform } from '@tauri-apps/plugin-os'
+
 import router from '@/routes'
 
 /**
@@ -55,14 +57,27 @@ import {
 import {
 	listPlugins,
 	pluginAssetUrl,
+	pluginLanAnnounce,
+	pluginLanCleanup,
+	pluginLanStop,
 	pluginNetworkFetch,
 	pluginReadEntry,
 	pluginReportCrash,
 	pluginSettingsGet,
+	pluginSidecarCleanup,
+	pluginSidecarEnsure,
+	pluginSidecarRequest,
+	pluginSidecarStart,
+	pluginSidecarStatus,
+	pluginSidecarStop,
 	pluginStorageGet,
 	pluginStorageKeys,
 	pluginStorageRemove,
 	pluginStorageSet,
+	type SidecarRequestInit,
+	type SidecarResponse,
+	type SidecarStarted,
+	type SidecarStatus,
 } from './ipc'
 import type { PluginSummary } from './types'
 
@@ -185,6 +200,32 @@ export interface PluginHostApi {
 		/** Fetch through the launcher. Requires `network:<host>` for the URL. */
 		fetch(url: string, options?: PluginFetchOptions): Promise<PluginFetchResult>
 	}
+	/**
+	 * Download and run a native sidecar binary, then talk to it over localhost.
+	 * The most powerful capability a plugin can hold — it runs native code.
+	 * Requires `sidecar` (and `network:<host>` for the download host).
+	 */
+	readonly sidecar: {
+		ensure(
+			key: string,
+			url: string,
+			options?: { sha512?: string; sha512Url?: string; archive?: string; version?: string },
+		): Promise<void>
+		start(key: string, args: string[], portFile?: boolean): Promise<SidecarStarted>
+		request(handle: number, request: SidecarRequestInit): Promise<SidecarResponse>
+		stop(handle: number): Promise<void>
+		status(key: string): Promise<SidecarStatus>
+	}
+	/** Announce a Minecraft LAN world on the local network. Requires `lan`. */
+	readonly lan: {
+		announce(motd: string, port: number): Promise<{ handle: number }>
+		stop(handle: number): Promise<void>
+	}
+	/** The host OS and architecture. Ungated. */
+	readonly platform: {
+		readonly os: string
+		readonly arch: string
+	}
 	log(...args: unknown[]): void
 }
 
@@ -277,6 +318,11 @@ export function unloadPlugin(pluginId: string): void {
 	for (const element of document.querySelectorAll(`style[data-plugin="${cssEscape(pluginId)}"]`)) {
 		element.remove()
 	}
+	// Kill any native sidecars and LAN announcers this plugin started; a plugin
+	// that is unloaded must not leave a native process or a multicast beacon
+	// running. Fire-and-forget: unloadPlugin is synchronous.
+	void pluginSidecarCleanup(pluginId).catch(() => {})
+	void pluginLanCleanup(pluginId).catch(() => {})
 	instances.delete(pluginId)
 }
 
@@ -495,6 +541,50 @@ function createHostApi(summary: PluginSummary): PluginHostApi {
 					}
 				: { fetch: deny('net', 'network') },
 		),
+		sidecar: Object.freeze(
+			hasKind('sidecar')
+				? {
+						ensure: (
+							key: string,
+							url: string,
+							options?: {
+								sha512?: string
+								sha512Url?: string
+								archive?: string
+								version?: string
+							},
+						) => pluginSidecarEnsure(pluginId, key, url, options),
+						start: (key: string, args: string[], portFile?: boolean) =>
+							pluginSidecarStart(pluginId, key, args, portFile ?? false),
+						request: (handle: number, request: SidecarRequestInit) =>
+							pluginSidecarRequest(pluginId, handle, request),
+						stop: (handle: number) => pluginSidecarStop(pluginId, handle),
+						status: (key: string) => pluginSidecarStatus(pluginId, key),
+					}
+				: {
+						ensure: deny('sidecar', 'sidecar'),
+						start: deny('sidecar', 'sidecar'),
+						request: deny('sidecar', 'sidecar'),
+						stop: deny('sidecar', 'sidecar'),
+						status: deny('sidecar', 'sidecar'),
+					},
+		),
+		lan: Object.freeze(
+			hasKind('lan')
+				? {
+						announce: (motd: string, port: number) =>
+							pluginLanAnnounce(pluginId, motd, port),
+						stop: (handle: number) => pluginLanStop(pluginId, handle),
+					}
+				: {
+						announce: deny('lan', 'lan'),
+						stop: deny('lan', 'lan'),
+					},
+		),
+		platform: Object.freeze({
+			os: platform(),
+			arch: arch(),
+		}),
 	})
 }
 
@@ -636,11 +726,32 @@ function addRoute(pluginId: string, route: PluginRouteDefinition): void {
 	if (route.component === undefined || route.component === null) {
 		throw new Error(`Route "${route.path}" needs a component.`)
 	}
-	if (router.resolve(route.path).matched.length > 0) {
-		throw new Error(`Route path "${route.path}" is already taken.`)
-	}
 
 	const name = `plugin:${pluginId}:${route.path}`
+
+	// Drop a route this same plugin registered under the same name on an earlier
+	// activation that failed partway through. Without this, one throw after
+	// `routes.add` would leave the route registered and block every retry for
+	// the rest of the session.
+	for (let index = pluginRoutes.length - 1; index >= 0; index -= 1) {
+		if (pluginRoutes[index].name === name) {
+			router.removeRoute(name)
+			pluginRoutes.splice(index, 1)
+		}
+	}
+
+	// Compare by exact path against every existing record rather than
+	// `router.resolve(...).matched`, which also reports a match for the
+	// launcher's parametrised routes (`/:projectType(...)/:id/...`) and would
+	// reject a plugin path like `/plugin/terracotta` with no real clash.
+	if (router.getRoutes().some((record) => record.path === route.path)) {
+		throw new Error(
+			`Route path "${route.path}" is already taken. Launcher routes use ` +
+				`reserved prefixes like "/plugin/:id" (Modrinth project pages) — ` +
+				`register yours under a distinct path such as "/plugins/<your-id>".`,
+		)
+	}
+
 	router.addRoute({
 		path: route.path,
 		name,

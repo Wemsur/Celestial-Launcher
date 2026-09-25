@@ -1211,6 +1211,15 @@ fn main() {
                     );
                 }
 
+                // Kill any plugin-spawned native sidecars and stop LAN
+                // announcers so nothing outlives the launcher.
+                if matches!(&event, tauri::RunEvent::ExitRequested { .. }) {
+                    tauri::async_runtime::block_on(async {
+                        theseus::plugins::sidecar::shutdown_all().await;
+                        theseus::plugins::lan::shutdown_all().await;
+                    });
+                }
+
                 #[cfg(feature = "updater")]
                 if matches!(&event, tauri::RunEvent::Exit) {
                     let update_data = app.state::<PendingUpdateData>().inner();

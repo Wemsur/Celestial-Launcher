@@ -77,6 +77,32 @@ declare module '@celestial/plugin' {
 		body: string
 	}
 
+	export interface SidecarStarted {
+		handle: number
+		/** The port the sidecar reported via its port file, if one was requested. */
+		port: number | null
+	}
+
+	export interface SidecarRequestInit {
+		/** Path plus query string, sent verbatim (so repeated query keys work). */
+		path: string
+		method?: string
+		headers?: Record<string, string>
+		body?: string
+	}
+
+	export interface SidecarResponse {
+		status: number
+		ok: boolean
+		body: string
+	}
+
+	export interface SidecarStatus {
+		installed: boolean
+		/** The version recorded when the sidecar was installed, if any. */
+		version: string | null
+	}
+
 	/** A setting declared in the manifest, rendered by the launcher. */
 	export interface SettingsDefinition {
 		id: string
@@ -180,6 +206,55 @@ declare module '@celestial/plugin' {
 		/** Fetch through the launcher. Requires `network:<host>` for the URL. */
 		readonly net: {
 			fetch(url: string, options?: PluginFetchOptions): Promise<PluginFetchResult>
+		}
+
+		/**
+		 * Download and run a native sidecar binary, then talk to it over
+		 * localhost. The most powerful thing a plugin can do — native code
+		 * outside the webview. Requires `sidecar`, plus `network:<host>` for the
+		 * download host. Sidecars are killed when the plugin unloads and on exit.
+		 */
+		readonly sidecar: {
+			/**
+			 * Ensure a sidecar is downloaded, verified, and unpacked under `key`.
+			 * `archive` is `'tar.gz'` (default), `'zip'`, or `'none'`. Idempotent.
+			 */
+			ensure(
+				key: string,
+				url: string,
+				options?: {
+					sha512?: string
+					sha512Url?: string
+					archive?: string
+					version?: string
+				},
+			): Promise<void>
+			/**
+			 * Spawn the sidecar. With `portFile`, the launcher rewrites the
+			 * `{{PORT_FILE}}` token in `args` to a file it then polls for the
+			 * `{"port":N}` the sidecar writes, returning that port.
+			 */
+			start(key: string, args: string[], portFile?: boolean): Promise<SidecarStarted>
+			/** Send a control request to the running sidecar over 127.0.0.1. */
+			request(handle: number, request: SidecarRequestInit): Promise<SidecarResponse>
+			stop(handle: number): Promise<void>
+			/** Whether the sidecar is installed, and its recorded version. */
+			status(key: string): Promise<SidecarStatus>
+		}
+
+		/**
+		 * Announce a Minecraft "open to LAN" world on the local network so the
+		 * user's own Minecraft client discovers it. Requires `lan`.
+		 */
+		readonly lan: {
+			announce(motd: string, port: number): Promise<{ handle: number }>
+			stop(handle: number): Promise<void>
+		}
+
+		/** The host OS and architecture, e.g. `{ os: 'windows', arch: 'x86_64' }`. Ungated. */
+		readonly platform: {
+			readonly os: string
+			readonly arch: string
 		}
 
 		/** Log with a `[plugin:<id>]` prefix. */

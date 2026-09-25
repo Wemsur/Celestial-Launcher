@@ -46,6 +46,8 @@ const PERMISSION_KIND_LABELS: Record<string, string> = {
 	hostapi: '启动器接口',
 	region: '界面区域',
 	network: '网络访问',
+	sidecar: '运行本地程序',
+	lan: '局域网联机',
 }
 
 function permissionLabel(permission: string): string {

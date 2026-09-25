@@ -39,6 +39,12 @@ pub enum PermissionKind {
     Event,
     /// Call one of the launcher's exposed host APIs.
     HostApi,
+    /// Download and run a native sidecar binary, and talk to it over
+    /// localhost. The single biggest capability a plugin can hold — it runs
+    /// native code outside the webview sandbox.
+    Sidecar,
+    /// Announce a Minecraft LAN game over UDP multicast on the local network.
+    Lan,
 }
 
 impl PermissionKind {
@@ -52,6 +58,8 @@ impl PermissionKind {
             Self::Region => "region",
             Self::Event => "event",
             Self::HostApi => "hostapi",
+            Self::Sidecar => "sidecar",
+            Self::Lan => "lan",
         }
     }
 
@@ -65,6 +73,8 @@ impl PermissionKind {
             "region" => Self::Region,
             "event" => Self::Event,
             "hostapi" => Self::HostApi,
+            "sidecar" => Self::Sidecar,
+            "lan" => Self::Lan,
             _ => return None,
         })
     }
@@ -73,7 +83,10 @@ impl PermissionKind {
     /// bare, so `storage:foo` is a manifest mistake worth reporting rather than
     /// quietly accepting a scope that will never be checked against anything.
     fn requires_scope(self) -> bool {
-        !matches!(self, Self::Storage | Self::Style | Self::Route)
+        !matches!(
+            self,
+            Self::Storage | Self::Style | Self::Route | Self::Sidecar | Self::Lan
+        )
     }
 
     pub fn risk(self) -> PermissionRisk {
@@ -83,7 +96,11 @@ impl PermissionKind {
             | Self::Slot
             | Self::Route
             | Self::Event => PermissionRisk::Low,
-            Self::Network | Self::Region | Self::HostApi => PermissionRisk::High,
+            Self::Network
+            | Self::Region
+            | Self::HostApi
+            | Self::Sidecar
+            | Self::Lan => PermissionRisk::High,
         }
     }
 }
@@ -200,6 +217,8 @@ mod tests {
             ("storage", PermissionKind::Storage),
             ("style", PermissionKind::Style),
             ("route", PermissionKind::Route),
+            ("sidecar", PermissionKind::Sidecar),
+            ("lan", PermissionKind::Lan),
         ] {
             assert_eq!(
                 PluginPermission::parse(raw),
@@ -263,5 +282,19 @@ mod tests {
             PluginPermission::parse("network:example.com").unwrap().risk(),
             PermissionRisk::High
         );
+        assert_eq!(
+            PluginPermission::parse("sidecar").unwrap().risk(),
+            PermissionRisk::High
+        );
+        assert_eq!(
+            PluginPermission::parse("lan").unwrap().risk(),
+            PermissionRisk::High
+        );
+    }
+
+    #[test]
+    fn bare_only_kinds_reject_a_scope() {
+        assert!(PluginPermission::parse("sidecar:terracotta").is_err());
+        assert!(PluginPermission::parse("lan:4445").is_err());
     }
 }
