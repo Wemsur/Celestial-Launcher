@@ -972,6 +972,91 @@ pub async fn read_entry(plugin_id: &str) -> crate::Result<Option<String>> {
     Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
 }
 
+/// A client that does not follow redirects, so [`latest_release_tag`] can read
+/// the `Location` header GitHub returns for `releases/latest` rather than
+/// downloading the release page it points at.
+static NO_REDIRECT_CLIENT: std::sync::LazyLock<reqwest::Client> =
+    std::sync::LazyLock::new(|| {
+        reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(std::time::Duration::from_secs(15))
+            .read_timeout(std::time::Duration::from_secs(30))
+            .user_agent(crate::launcher_user_agent())
+            .build()
+            .expect("client configuration should be valid")
+    });
+
+/// The tag of a GitHub repository's latest published release, e.g. `v1.2.0`.
+///
+/// This reads the redirect that `github.com/<owner>/<repo>/releases/latest`
+/// issues to the concrete tag page, not the REST API, so it does not count
+/// against the API's unauthenticated hourly rate limit. `None` means the repo
+/// has no published release, or the request failed — update detection then
+/// simply shows nothing, which is the right silent default for a background
+/// check.
+pub async fn latest_release_tag(
+    repo: &str,
+) -> crate::Result<Option<String>> {
+    // `repo` is `owner/name` from a store entry (third-party data). Reject
+    // anything that could point the URL somewhere other than that repo.
+    if !is_valid_owner_repo(repo) {
+        return Err(crate::ErrorKind::InputError(format!(
+            "Invalid repository '{repo}': expected 'owner/name'"
+        ))
+        .into());
+    }
+
+    let url = format!("https://github.com/{repo}/releases/latest");
+    let response = match NO_REDIRECT_CLIENT.get(&url).send().await {
+        Ok(response) => response,
+        Err(error) => {
+            tracing::debug!(repo, "Latest-release check failed: {error}");
+            return Ok(None);
+        }
+    };
+
+    // A published release redirects to `.../releases/tag/<tag>`; a repo with no
+    // release redirects to the releases index, which has no `/tag/` segment.
+    // Either way the tag is read out of the `Location`, and its absence is
+    // treated as "no release".
+    let location = response
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .and_then(|value| value.to_str().ok());
+    Ok(location.and_then(tag_from_location))
+}
+
+/// Whether `repo` is a plain `owner/name` pair safe to interpolate into a URL.
+fn is_valid_owner_repo(repo: &str) -> bool {
+    let mut parts = repo.split('/');
+    let (Some(owner), Some(name), None) =
+        (parts.next(), parts.next(), parts.next())
+    else {
+        return false;
+    };
+    let segment_ok = |segment: &str| {
+        !segment.is_empty()
+            && segment.len() <= 100
+            && segment.chars().all(|character| {
+                character.is_ascii_alphanumeric()
+                    || matches!(character, '.' | '-' | '_')
+            })
+    };
+    segment_ok(owner) && segment_ok(name)
+}
+
+/// Pull the tag out of a `releases/tag/<tag>` redirect target, ignoring any
+/// query or fragment. Works for both absolute and relative `Location` values.
+fn tag_from_location(location: &str) -> Option<String> {
+    let (_, tail) = location.rsplit_once("/releases/tag/")?;
+    let tag = tail
+        .split(['?', '#'])
+        .next()
+        .unwrap_or(tail)
+        .trim_end_matches('/');
+    (!tag.is_empty()).then(|| tag.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -18,7 +18,8 @@ export interface StorePlugin {
 	name: string
 	description?: string
 	author?: string
-	version?: string
+	/** `owner/name` of the plugin's GitHub repo; drives update detection. */
+	github?: string
 	/** The plugin's own page/repo, shown as a link. */
 	repo?: string
 	/** Direct download of the packaged plugin (a .zip). */
@@ -101,7 +102,7 @@ function normalizeEntry(raw: unknown): StorePlugin | null {
 		download,
 		description: str(record.description),
 		author: str(record.author),
-		version: str(record.version),
+		github: str(record.github),
 		repo: str(record.repo),
 		icon: str(record.icon),
 		apiVersion:

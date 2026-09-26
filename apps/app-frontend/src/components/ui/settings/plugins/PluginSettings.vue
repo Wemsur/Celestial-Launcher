@@ -18,6 +18,7 @@ import {
 	openPluginFolder,
 	pluginCrashLog,
 	pluginGetHotReload,
+	pluginLatestRelease,
 	pluginSetHotReload,
 	setPluginEnabled,
 	setPluginGranted,
@@ -200,15 +201,48 @@ function isNewerVersion(candidate: string, current: string): boolean {
 	return false
 }
 
-/** For each installed plugin, the store entry offering a newer version, if any. */
+/**
+ * Latest release tag per `owner/name`, filled lazily from the store index.
+ * A session memo: empty string marks "checked, no release" so a repo is not
+ * queried twice, and it is not persisted — a restart re-checks.
+ */
+const latestTags = ref<Record<string, string>>({})
+const tagsInFlight = new Set<string>()
+
+/** Query one repo's latest release tag once per session. Best-effort, silent. */
+async function ensureLatestTag(repo: string) {
+	if (repo in latestTags.value || tagsInFlight.has(repo)) return
+	tagsInFlight.add(repo)
+	try {
+		const tag = await pluginLatestRelease(repo)
+		latestTags.value[repo] = tag ?? ''
+	} catch {
+		// Update detection is best-effort; a failed check just shows no version.
+	} finally {
+		tagsInFlight.delete(repo)
+	}
+}
+
+/** The known latest tag for a store entry's repo, if one has been fetched. */
+function latestTag(entry: StorePlugin): string | undefined {
+	const tag = entry.github ? latestTags.value[entry.github] : undefined
+	return tag ? tag : undefined
+}
+
+/**
+ * For each installed plugin, the store entry offering a newer release, keyed by
+ * plugin id. The newer version is decided by comparing the plugin's local
+ * manifest version against its repo's latest release tag.
+ */
 const updates = computed(() => {
 	const byId = new Map(storePlugins.value.map((entry) => [entry.id, entry]))
-	const result = new Map<string, StorePlugin>()
+	const result = new Map<string, { entry: StorePlugin; tag: string }>()
 	for (const plugin of plugins.value) {
 		const installed = plugin.manifest?.version
 		const entry = byId.get(plugin.id)
-		if (installed && entry?.version && isNewerVersion(entry.version, installed)) {
-			result.set(plugin.id, entry)
+		const tag = entry ? latestTag(entry) : undefined
+		if (installed && entry && tag && isNewerVersion(tag, installed)) {
+			result.set(plugin.id, { entry, tag })
 		}
 	}
 	return result
@@ -332,6 +366,11 @@ async function loadStore(force = false) {
 	try {
 		storePlugins.value = await fetchStorePlugins()
 		storeLoaded.value = true
+		// Kick off a latest-release check per repo so both tabs can show the
+		// current version and flag updates. Memoised, so this is cheap on reload.
+		for (const entry of storePlugins.value) {
+			if (entry.github) void ensureLatestTag(entry.github)
+		}
 	} catch (error) {
 		storeError.value = error instanceof Error ? error.message : String(error)
 	} finally {
@@ -434,7 +473,7 @@ function updateFromStore(plugin: PluginSummary, entry: StorePlugin) {
 							v-if="updates.get(plugin.id)"
 							class="mt-1 inline-flex items-center gap-1 rounded-full bg-brand-highlight px-2 py-0.5 text-xs font-semibold text-brand"
 						>
-							{{ formatMessage(messages.hasUpdate) }} · v{{ updates.get(plugin.id)?.version }}
+							{{ formatMessage(messages.hasUpdate) }} · {{ updates.get(plugin.id)?.tag }}
 						</span>
 					</div>
 					<span class="inline-flex shrink-0">
@@ -508,7 +547,7 @@ function updateFromStore(plugin: PluginSummary, entry: StorePlugin) {
 						size="sm"
 						color="brand"
 						:disabled="busy === plugin.id"
-						@click="updateFromStore(plugin, updates.get(plugin.id)!)"
+						@click="updateFromStore(plugin, updates.get(plugin.id)!.entry)"
 					>
 						<DownloadIcon />
 						{{ formatMessage(messages.update) }}
@@ -612,7 +651,7 @@ function updateFromStore(plugin: PluginSummary, entry: StorePlugin) {
 							{{ entry.name }}
 						</h3>
 						<p class="m-0 text-sm text-secondary">
-							<span v-if="entry.version">v{{ entry.version }}</span>
+							<span v-if="latestTag(entry)">{{ latestTag(entry) }}</span>
 							<span v-if="entry.author"> · {{ entry.author }}</span>
 						</p>
 						<p v-if="entry.description" class="mt-1 mb-0 text-sm text-secondary">

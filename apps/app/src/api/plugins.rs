@@ -21,6 +21,7 @@ pub fn init<R: tauri::Runtime>() -> TauriPlugin<R> {
             plugin_install,
             plugin_install_from_url,
             plugin_update_from_url,
+            plugin_latest_release,
             plugin_uninstall,
             plugin_set_enabled,
             plugin_set_granted,
@@ -90,6 +91,17 @@ pub async fn plugin_update_from_url(
     origin: Option<String>,
 ) -> Result<PluginSummary> {
     Ok(plugins::update_from_url(&url, origin).await?)
+}
+
+/// The tag of a store plugin's latest GitHub release, for update detection.
+///
+/// `repo` is `owner/name`. Returns `None` when the repo has no published
+/// release or the check could not be made, so a background check stays silent.
+#[tauri::command]
+pub async fn plugin_latest_release(
+    repo: String,
+) -> Result<Option<String>> {
+    Ok(plugins::latest_release_tag(&repo).await?)
 }
 
 #[tauri::command]

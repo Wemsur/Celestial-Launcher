@@ -41,6 +41,15 @@ export function updatePluginFromUrl(url: string, origin?: string): Promise<Plugi
 	})
 }
 
+/**
+ * The tag of a store plugin's latest GitHub release (`owner/name`), or null
+ * when the repo has no published release. Read from the `releases/latest`
+ * redirect, so it does not spend the GitHub API rate limit.
+ */
+export function pluginLatestRelease(repo: string): Promise<string | null> {
+	return invoke<string | null>('plugin:plugins|plugin_latest_release', { repo })
+}
+
 export function uninstallPlugin(pluginId: string, removeData = false): Promise<void> {
 	return invoke('plugin:plugins|plugin_uninstall', { pluginId, removeData })
 }
