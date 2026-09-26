@@ -874,6 +874,42 @@ async fn run_silent_msi(path: String) -> Result<(), String> {
     Ok(())
 }
 
+// 拉取 release 元数据（latest release JSON）。放在 Rust 里而非前端 fetch，是为了
+// 绕开 webview 的 CORS 限制：自部署的 Gitea / CDN 未必回 Access-Control-Allow-Origin，
+// 前端 fetch 会 "Failed to fetch"，而 reqwest 不受 CORS 约束。返回原始 JSON 字符串，
+// 由前端解析。
+#[tauri::command]
+async fn fetch_release_metadata(url: String) -> Result<String, String> {
+    // 与 download_and_run_msi 一致，带浏览器式 UA 以绕过 git.gay (Forgejo) 的 WAF。
+    let client = reqwest::Client::builder()
+        .user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+             (KHTML, like Gecko) CelestialLauncher/updater",
+        )
+        .build()
+        .map_err(|e| format!("Client build failed: {}", e))?;
+
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    let status = resp.status();
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| format!("Read body failed: {}", e))?;
+
+    if !status.is_success() {
+        // 把状态码和响应片段一起带回前端，方便打印详细的跳过原因。
+        let snippet: String = body.chars().take(200).collect();
+        return Err(format!("HTTP {}: {}", status.as_u16(), snippet));
+    }
+
+    Ok(body)
+}
+
 // 下载 NSIS 安装包到缓存目录，返回文件名
 #[tauri::command]
 async fn download_and_run_msi(
@@ -1189,6 +1225,7 @@ fn main() {
             do_import_and_restart,
             run_silent_msi,
             download_and_run_msi,
+            fetch_release_metadata,
             install_cached_msi,
         ]);
 

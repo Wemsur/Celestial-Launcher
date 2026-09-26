@@ -2058,6 +2058,7 @@ let downloadingUpdateNotificationId = null
 // git.gay download the auto path uses.
 let pendingUpdateAssetUrl = null
 let pendingUpdateVersion = null
+let pendingUpdateSourceLabel = null
 
 const {
 	metered,
@@ -2264,7 +2265,7 @@ async function checkCelestialUpdates() {
             return
         }
 
-        const { latestVersion, asset } = result
+        const { latestVersion, asset, source } = result
         const isExistingUpdate = latestVersion === availableUpdate.value?.version
 
         if (isExistingUpdate) {
@@ -2280,13 +2281,14 @@ async function checkCelestialUpdates() {
         availableUpdate.value = { rid: 0, version: latestVersion }
         pendingUpdateAssetUrl = asset.browser_download_url
         pendingUpdateVersion = latestVersion
+        pendingUpdateSourceLabel = source.label
 
-        console.log(`Update ${latestVersion} is available.`)
+        console.log(`Update ${latestVersion} is available. (源: ${source.label})`)
 
         metered.value = await isNetworkMetered()
         if (!metered.value) {
             console.log('Starting download of update')
-            downloadCelestialUpdate(asset.browser_download_url, latestVersion)
+            downloadCelestialUpdate(asset.browser_download_url, latestVersion, source.label)
         } else {
             console.log('Metered connection detected, not auto-downloading update.')
             markAppUpdateActionable(latestVersion)
@@ -2338,11 +2340,12 @@ async function downloadAvailableUpdate() {
 	return downloadCelestialUpdate(
 		pendingUpdateAssetUrl,
 		pendingUpdateVersion ?? availableUpdate.value?.version ?? '',
+		pendingUpdateSourceLabel ?? undefined,
 	)
 }
 
-async function downloadCelestialUpdate(assetUrl, version) {
-    console.log(`Downloading update ${version}`)
+async function downloadCelestialUpdate(assetUrl, version, sourceLabel) {
+    console.log(`Downloading update ${version}${sourceLabel ? ` (源: ${sourceLabel})` : ''}`)
     downloading.value = true
     // The settings modal reads the version from the download-progress provider
     // (injectAppUpdateDownloadProgress().version), which is this ref; without it
@@ -2358,7 +2361,7 @@ async function downloadCelestialUpdate(assetUrl, version) {
     }).id
 
     try {
-        await downloadAndRunRelease(assetUrl, version)
+        await downloadAndRunRelease(assetUrl, version, sourceLabel)
     } catch (e) {
         downloading.value = false
         appUpdateDownload.progress.value = 0
