@@ -83,7 +83,21 @@ jobs:
         shell: bash
         run: cp packages/app-lib/.env.prod packages/app-lib/.env
 
-      - run: pnpm install
+      # Linux ARM64：workerd 有原生二进制，正常全量安装。
+      - name: Install dependencies (linux)
+        if: matrix.name == 'linux-arm64'
+        run: pnpm install
+
+      # Windows ARM64：workerd（web 前端 wrangler 的传递 devDep）没有 win-arm64
+      # 二进制，其 postinstall 会抛 "Unsupported platform: win32 arm64" 让整个
+      # install 失败。app 构建用不到 workerd，故跳过所有依赖脚本，再单独 rebuild
+      # 构建真正需要的 esbuild（vite 依赖，支持 win-arm64）。
+      - name: Install dependencies (windows)
+        if: matrix.name == 'windows-arm64'
+        shell: bash
+        run: |
+          pnpm install --ignore-scripts
+          pnpm rebuild esbuild
 
       - name: Build
         shell: bash
