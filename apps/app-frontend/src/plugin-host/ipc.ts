@@ -49,6 +49,10 @@ export function setPluginGranted(pluginId: string, granted: string[]): Promise<P
 	return invoke<PluginSummary>('plugin:plugins|plugin_set_granted', { pluginId, granted })
 }
 
+export function setPluginPinnedPages(pluginId: string, pages: string[]): Promise<PluginSummary> {
+	return invoke<PluginSummary>('plugin:plugins|plugin_set_pinned_pages', { pluginId, pages })
+}
+
 export function grantPluginPermission(pluginId: string, permission: string): Promise<PluginSummary> {
 	return invoke<PluginSummary>('plugin:plugins|plugin_grant_permission', { pluginId, permission })
 }

@@ -1,6 +1,7 @@
 export {
 	PLUGIN_SLOTS,
 	loadPlugins,
+	sidebarPages,
 	unloadPlugin,
 	unloadPlugins,
 	type PluginEventBus,
@@ -8,6 +9,7 @@ export {
 	type PluginRouteDefinition,
 	type PluginSlotId,
 	type PluginVueRuntime,
+	type SidebarPageEntry,
 	type SlotDefinition,
 } from './loader'
 export {

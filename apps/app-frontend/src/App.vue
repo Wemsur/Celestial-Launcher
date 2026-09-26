@@ -105,6 +105,7 @@ import ModpackAlreadyInstalledModal from '@/components/ui/modal/ModpackAlreadyIn
 import ModrinthAccountRequiredModal from '@/components/ui/modal/ModrinthAccountRequiredModal.vue'
 import UpdateToPlayModal from '@/components/ui/modal/UpdateToPlayModal.vue'
 import NavButton from '@/components/ui/NavButton.vue'
+import PluginAppsLauncher from '@/components/ui/PluginAppsLauncher.vue'
 import OnboardingChecklist from '@/components/ui/onboarding-checklist/index.vue'
 import PrideFundraiserBanner from '@/components/ui/PrideFundraiserBanner.vue'
 import PromotionWrapper from '@/components/ui/PromotionWrapper.vue'
@@ -2593,6 +2594,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 				<ImageIcon />
 			</NavButton>
 			<div data-plugin-slot="navbar.bottom" class="flex flex-col gap-[0.25rem]"></div>
+			<PluginAppsLauncher />
 <!--			<NavButton
 				v-tooltip.right="formatMessage(messages.modrinthHosting)"
 				to="/hosting/manage"

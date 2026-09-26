@@ -132,7 +132,31 @@ export interface PluginRouteDefinition {
 	path: string
 	name?: string
 	component: unknown
+	/**
+	 * Whether this page takes part in the sidebar apps drawer. Default `true`.
+	 * `false` makes it a pure route, reachable only by navigation, with no icon
+	 * anywhere.
+	 */
+	sidebar?: boolean
+	/** Label shown under the icon in the drawer and as the nav tooltip. */
+	title?: string
+	/** SVG markup for the page's icon, rendered by the launcher. */
+	icon?: string
 }
+
+/** A plugin page that opted into the sidebar apps drawer. */
+export interface SidebarPageEntry {
+	pluginId: string
+	path: string
+	title: string
+	icon: string
+}
+
+/**
+ * Every sidebar-enabled plugin page, in registration order. Reactive so the
+ * nav rail's apps launcher re-renders as plugins load and unload.
+ */
+export const sidebarPages = reactive<SidebarPageEntry[]>([])
 
 /** The slice of Vue a plugin is given. */
 export interface PluginVueRuntime {
@@ -330,6 +354,11 @@ export function unloadPlugin(pluginId: string): void {
 		if (pluginRoutes[index].pluginId === pluginId) {
 			router.removeRoute(pluginRoutes[index].name)
 			pluginRoutes.splice(index, 1)
+		}
+	}
+	for (let index = sidebarPages.length - 1; index >= 0; index -= 1) {
+		if (sidebarPages[index].pluginId === pluginId) {
+			sidebarPages.splice(index, 1)
 		}
 	}
 	for (let index = eventSubscriptions.length - 1; index >= 0; index -= 1) {
@@ -789,6 +818,26 @@ function addRoute(pluginId: string, route: PluginRouteDefinition): void {
 		component: route.component as Component,
 	})
 	pluginRoutes.push({ pluginId, name })
+
+	// A page opts into the apps drawer unless it explicitly declares otherwise.
+	// Re-registering the same path (e.g. a retried activation) replaces the old
+	// entry rather than duplicating it.
+	for (let index = sidebarPages.length - 1; index >= 0; index -= 1) {
+		if (
+			sidebarPages[index].pluginId === pluginId &&
+			sidebarPages[index].path === route.path
+		) {
+			sidebarPages.splice(index, 1)
+		}
+	}
+	if (route.sidebar !== false) {
+		sidebarPages.push({
+			pluginId,
+			path: route.path,
+			title: route.title ?? route.path,
+			icon: typeof route.icon === 'string' ? route.icon : '',
+		})
+	}
 }
 
 function addSlot(

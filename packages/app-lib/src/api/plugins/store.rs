@@ -80,6 +80,10 @@ pub struct PluginRecord {
     /// Where the plugin came from, when it was installed by the launcher.
     #[serde(default)]
     pub source: Option<String>,
+    /// Route paths of the plugin's sidebar pages the user pinned to the left
+    /// nav rail. Empty means every page is collapsed into the apps drawer.
+    #[serde(default)]
+    pub pinned_pages: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -132,6 +136,10 @@ pub struct PluginSummary {
     pub high_risk: Vec<String>,
     pub manifest: Option<PluginManifest>,
     pub error: Option<String>,
+    /// Route paths of this plugin's sidebar pages currently pinned to the nav
+    /// rail. Everything else declared as a sidebar page lives in the drawer.
+    #[serde(default)]
+    pub pinned_pages: Vec<String>,
 }
 
 impl PluginSummary {
@@ -230,6 +238,7 @@ pub async fn install(
         granted: Vec::new(),
         installed_at: Some(chrono::Utc::now().timestamp()),
         source: origin,
+        pinned_pages: Vec::new(),
     });
     write_state(&state, &registry).await?;
 
@@ -359,6 +368,7 @@ pub async fn update(
             granted: Vec::new(),
             installed_at: Some(chrono::Utc::now().timestamp()),
             source: origin,
+            pinned_pages: Vec::new(),
         });
     }
     write_state(&state, &registry).await?;
@@ -647,6 +657,32 @@ pub async fn revoke_permission(
     set_granted(plugin_id, granted).await
 }
 
+/// Persist which of a plugin's sidebar pages are pinned to the nav rail.
+///
+/// The paths are route paths declared by the plugin at runtime, so there is
+/// nothing in the manifest to validate them against; the list is just
+/// de-duplicated and stored. An unknown path harmlessly matches no page.
+pub async fn set_pinned_pages(
+    plugin_id: &str,
+    pages: Vec<String>,
+) -> crate::Result<PluginSummary> {
+    let state = State::get().await?;
+    let mut registry = read_state(&state).await?;
+
+    let mut canonical: Vec<String> = Vec::with_capacity(pages.len());
+    for path in pages {
+        if !canonical.contains(&path) {
+            canonical.push(path);
+        }
+    }
+
+    let record = record_mut(&mut registry, plugin_id);
+    record.pinned_pages = canonical;
+    write_state(&state, &registry).await?;
+
+    require_summary(&state, plugin_id, &registry).await
+}
+
 /// Check that `plugin_id` is enabled and has been granted `permission`.
 ///
 /// This is the gate every capability behind an IPC boundary goes through. The
@@ -727,6 +763,7 @@ fn broken_summary(dir: &Path, dir_name: &str, reason: String) -> PluginSummary {
         high_risk: Vec::new(),
         manifest: None,
         error: Some(reason),
+        pinned_pages: Vec::new(),
     }
 }
 
@@ -768,6 +805,8 @@ fn summarize(
 
     let record = records.iter().find(|record| record.id == manifest.id);
     let enabled = record.map(|record| record.enabled).unwrap_or(true);
+    let pinned_pages =
+        record.map(|record| record.pinned_pages.clone()).unwrap_or_default();
     let mut granted = record
         .map(|record| record.granted.clone())
         .unwrap_or_default();
@@ -816,6 +855,7 @@ fn summarize(
         high_risk,
         manifest: Some(manifest),
         error: None,
+        pinned_pages,
     }
 }
 
@@ -852,6 +892,7 @@ fn record_mut<'a>(
         granted: Vec::new(),
         installed_at: Some(chrono::Utc::now().timestamp()),
         source: None,
+        pinned_pages: Vec::new(),
     });
     let index = registry.plugins.len() - 1;
     &mut registry.plugins[index]

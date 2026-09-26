@@ -52,4 +52,6 @@ export interface PluginSummary {
 	high_risk: string[]
 	manifest: PluginManifest | null
 	error: string | null
+	/** Route paths of this plugin's sidebar pages pinned to the nav rail. */
+	pinned_pages: string[]
 }

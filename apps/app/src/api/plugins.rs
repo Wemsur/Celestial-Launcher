@@ -24,6 +24,7 @@ pub fn init<R: tauri::Runtime>() -> TauriPlugin<R> {
             plugin_uninstall,
             plugin_set_enabled,
             plugin_set_granted,
+            plugin_set_pinned_pages,
             plugin_grant_permission,
             plugin_revoke_permission,
             plugin_open_folder,
@@ -114,6 +115,14 @@ pub async fn plugin_set_granted(
     granted: Vec<String>,
 ) -> Result<PluginSummary> {
     Ok(plugins::set_granted(&plugin_id, granted).await?)
+}
+
+#[tauri::command]
+pub async fn plugin_set_pinned_pages(
+    plugin_id: String,
+    pages: Vec<String>,
+) -> Result<PluginSummary> {
+    Ok(plugins::set_pinned_pages(&plugin_id, pages).await?)
 }
 
 #[tauri::command]

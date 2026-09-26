@@ -1613,6 +1613,39 @@
   "app.settings.operating-system.macos": {
     "message": "macOS"
   },
+  "app.plugin-apps.title": {
+    "message": "更多功能"
+  },
+  "app.plugin-apps.manage": {
+    "message": "管理"
+  },
+  "app.plugin-apps.added": {
+    "message": "已添加功能"
+  },
+  "app.plugin-apps.not-added": {
+    "message": "未添加功能"
+  },
+  "app.plugin-apps.add": {
+    "message": "添加到左侧栏"
+  },
+  "app.plugin-apps.remove": {
+    "message": "移出左侧栏"
+  },
+  "app.plugin-apps.cancel": {
+    "message": "取消"
+  },
+  "app.plugin-apps.confirm": {
+    "message": "确定"
+  },
+  "app.plugin-apps.none-added": {
+    "message": "还没有固定任何功能。"
+  },
+  "app.plugin-apps.all-added": {
+    "message": "所有功能都已固定。"
+  },
+  "app.plugin-apps.all-pinned": {
+    "message": "所有功能都已固定在左侧栏。"
+  },
   "app.settings.plugins.applies-after-restart": {
     "message": "更改将在重启启动器后生效。"
   },
