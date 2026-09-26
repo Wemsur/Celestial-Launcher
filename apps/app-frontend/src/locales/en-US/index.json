@@ -1656,7 +1656,7 @@
     "message": "Oldest"
   },
   "app.settings.app-version": {
-    "message": "Celestial Launcher {version}"
+    "message": "Celestial v{version}"
   },
   "app.settings.default-instance-options.environment-variables.description": {
     "message": "Environment variables set when launching an instance."

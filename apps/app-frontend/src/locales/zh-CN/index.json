@@ -1512,7 +1512,7 @@
     "message": "从旧到新"
   },
   "app.settings.app-version": {
-    "message": "Celestial Launcher {version}"
+    "message": "Celestial v{version}"
   },
   "app.settings.default-instance-options.environment-variables.description": {
     "message": "启动实例时设置的环境变量。"
