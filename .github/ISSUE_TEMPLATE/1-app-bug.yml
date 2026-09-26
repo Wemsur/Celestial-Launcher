@@ -1,29 +1,27 @@
-name: 🎮 Bug with Modrinth App
-description: For issues with Modrinth App.
+name: Bug 报告
+description: 用于报告 Celestial Launcher 的 Bug。
 labels: [app]
 type: 'bug'
 body:
   - type: checkboxes
     attributes:
-      label: Please confirm the following.
+      label: 请确认以下事项。
       options:
-        - label: I checked the [existing issues](https://github.com/modrinth/code/issues?q=is%3Aissue) for duplicate problems
+        - label: 我已检查 [现有issue](https://github.com/Wemsur/Celestial-Launcher/issues?q=is%3Aissue) 中是否存在重复 Bug
           required: true
-        - label: I have tried resolving the issue using the [support portal](https://support.modrinth.com)
-          required: true
-        - label: I have ensured my Modrinth App installation is up to date
+        - label: 我已确保我的 Celestial Launcher 安装是最新版本
           required: true
   - type: input
     id: version
     attributes:
-      label: What version of the Modrinth App are you using?
-      description: Find this in ⚙️ Settings (bottom right) -> After Modrinth App (bottom left)
+      label: 你正在使用哪个版本的 Celestial Launcher？
+      description: 可在设置中找到
     validations:
       required: true
   - type: dropdown
     id: oses
     attributes:
-      label: What operating systems are you seeing the problem on?
+      label: 你在哪些操作系统上遇到此 Bug？
       multiple: true
       options:
         - Windows
@@ -31,30 +29,30 @@ body:
         - Linux
   - type: textarea
     attributes:
-      label: Describe the bug
-      description: A clear and concise description of what the bug is. Include screenshots if applicable.
+      label: 描述该 Bug
+      description: 清晰简洁地描述这个 Bug 是什么。如果可以，请附上截图。
     validations:
       required: true
   - type: textarea
     attributes:
-      label: Steps to reproduce
-      description: Steps to reproduce the behavior.
+      label: 复现步骤
+      description: 复现该行为的步骤。
       placeholder: |
-        1. Go to '...'
-        2. Click on '...'
-        3. Scroll down to '...'
-        4. See error
+        1. 转到“...”
+        2. 点击“...”
+        3. 向下滚动到“...”
+        4. 发现 Bug
     validations:
       required: false
   - type: textarea
     attributes:
-      label: Expected behavior
-      description: A clear and concise description of what you expected to happen.
+      label: 预期行为
+      description: 清晰简洁地描述你预期发生什么。
     validations:
       required: false
   - type: textarea
     attributes:
-      label: Additional context
-      description: Add any other context about the problem here.
+      label: 附加信息
+      description: 在此添加关于该Bug的其他信息。
     validations:
       required: false
