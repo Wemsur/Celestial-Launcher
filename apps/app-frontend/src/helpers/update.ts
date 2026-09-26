@@ -1,6 +1,7 @@
 import { getVersion } from '@tauri-apps/api/app'
 import {invoke} from "@tauri-apps/api/core";
 import { listen } from '@tauri-apps/api/event'
+import { arch as osArch, type as osType } from '@tauri-apps/plugin-os'
 
 import {
     appUpdateState,
@@ -61,11 +62,50 @@ function compareVersions(a: string, b: string): number {
     return a3 - b3
 }
 
-/** 按平台选择最优安装文件：优先 .msi，其次 .exe */
-function selectAsset(assets: ReleaseAsset[]): ReleaseAsset | null {
-    const byExtn = (ext: string) =>
-        assets.find(a => a.name.toLowerCase().endsWith(ext))
-    return byExtn('.exe') ?? byExtn('.msi') ?? assets[0] ?? null
+/** 当前设备平台，token 与发布产物命名规范对齐（os=windows/macos/linux，
+ *  arch=x64/arm64/universal）。发布产物命名：
+ *  CelestialLauncher-<version>-<os>-<arch>[-setup].<ext> */
+interface PlatformInfo {
+    os: string
+    /** 归一化架构 token：x86_64→x64、aarch64→arm64；其余原样。 */
+    arch: string
+    label: string
+}
+
+function currentPlatform(): PlatformInfo {
+    const os = osType() // 'windows' | 'macos' | 'linux' | ...
+    const rawArch = osArch() // 'x86_64' | 'aarch64' | ...
+    const arch = rawArch === 'x86_64' ? 'x64' : rawArch === 'aarch64' ? 'arm64' : rawArch
+    return { os, arch, label: `${os}-${arch}` }
+}
+
+// 每个 OS 的安装包偏好顺序（小写扩展名，靠前优先）。
+const PREFERRED_EXT: Record<string, string[]> = {
+    windows: ['.exe', '.msi'], // NSIS -setup.exe 优先，其次 msi
+    macos: ['.dmg', '.app.tar.gz'], // dmg 手动安装优先，tar 是更新包
+    linux: ['.appimage', '.deb', '.rpm'],
+}
+
+/**
+ * 按当前平台从 release 资产里挑安装包。
+ * 依据规范化文件名里的 `-<os>-` 和 `-<arch>` 段做匹配：macOS 是 universal 包，
+ * 只匹配 os；其它平台 os + arch 都要命中。命不中返回 null（宁可不更新也不装错架构）。
+ */
+function selectAsset(assets: ReleaseAsset[], platform: PlatformInfo): ReleaseAsset | null {
+    const exts = PREFERRED_EXT[platform.os] ?? []
+    const matchesPlatform = (name: string) => {
+        const n = name.toLowerCase()
+        if (!n.includes(`-${platform.os}-`)) return false
+        if (platform.os === 'macos') return true // universal 包，不区分架构
+        return n.includes(`-${platform.arch}`)
+    }
+    for (const ext of exts) {
+        const found = assets.find(
+            (a) => matchesPlatform(a.name) && a.name.toLowerCase().endsWith(ext),
+        )
+        if (found) return found
+    }
+    return null
 }
 
 /**
@@ -81,12 +121,13 @@ export async function checkForUpdate(): Promise<{
     source: UpdateSource
 } | null> {
     const currentVersion = await getVersion()
+    const platform = currentPlatform()
 
     // 记录每个源的结局，最后打印一份总表，方便看清"为什么选了 B 而不是 A"。
     const trail: { source: UpdateSource; outcome: string }[] = []
 
     console.log(
-        `[updater] 开始检查更新，当前版本 ${currentVersion}，优先级顺序: ${UPDATE_SOURCES.map(
+        `[updater] 开始检查更新，当前版本 ${currentVersion}，平台 ${platform.label}，优先级顺序: ${UPDATE_SOURCES.map(
             (s) => s.id,
         ).join(' → ')}`,
     )
@@ -150,9 +191,9 @@ export async function checkForUpdate(): Promise<{
             return null
         }
 
-        const asset = selectAsset(release.assets)
+        const asset = selectAsset(release.assets, platform)
         if (!asset) {
-            const reason = `版本 ${latestVersion} 有更新，但该源没有匹配的安装包（assets: ${
+            const reason = `版本 ${latestVersion} 有更新，但没有匹配当前平台 ${platform.label} 的安装包（assets: ${
                 release.assets?.map((a) => a.name).join(', ') || '空'
             }）`
             console.warn(`${prefix}: ✗ 跳过 — ${reason}`)

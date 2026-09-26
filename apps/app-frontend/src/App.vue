@@ -2259,6 +2259,12 @@ function showUpdateDownloadedPopup() {
 }
 
 async function checkCelestialUpdates() {
+    // 自更新的下载/安装（download_and_run_msi / install_cached_msi）目前是 Windows
+    // NSIS/MSI 专用逻辑，暂时只在 Windows 上启用这套检查，避免 macOS/Linux 误触。
+    if (type() !== 'windows') {
+        console.log(`[updater] 非 Windows 平台（${type()}），跳过 Celestial 自更新检查`)
+        return
+    }
     async function performCheck() {
         const result = await checkForUpdate()
         if (!result) {
