@@ -35,9 +35,17 @@ jobs:
           - name: windows-arm64
             runner: windows-11-arm
             args: --bundles nsis,msi
+            # theseus.jar 的 gradle 构建要求 Java 17 工具链（languageVersion=17）。
+            # Temurin 不发布 win-arm64 的 17；Zulu（Azul）有，故 Windows 用 Zulu 17。
+            java_distribution: zulu
+            java_version: '17'
           - name: linux-arm64
             runner: ubuntu-24.04-arm
             args: --bundles deb,rpm,appimage
+            # ubuntu-24.04-arm 自带 JDK 17，gradle 会自动探测到；这里装 21 仅为
+            # 保险（21 也满足其它步骤）。此腿已验证可用，保持不变。
+            java_distribution: temurin
+            java_version: '21'
 
     runs-on: ${{ matrix.runner }}
 
@@ -53,12 +61,12 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      # theseus.jar 的 gradle 构建需要 JVM 17+。ARM64 runner 的 Temurin 没有 17，
-      # 最低是 21 LTS，21 满足 "17+"。
+      # theseus.jar 的 gradle 构建需要 Java 17 工具链。发行版/版本按平台在 matrix
+      # 里指定（Windows→Zulu 17，Linux→Temurin 21 + 镜像自带 17）。
       - uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: '21'
+          distribution: ${{ matrix.java_distribution }}
+          java-version: ${{ matrix.java_version }}
 
       - uses: Swatinem/rust-cache@v2
         with:
