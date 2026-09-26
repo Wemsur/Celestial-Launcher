@@ -1665,7 +1665,7 @@
     "message": "尚未安装任何插件。"
   },
   "app.settings.plugins.high-risk": {
-    "message": "需要你的授权"
+    "message": "点击以授权"
   },
   "app.settings.plugins.hot-reload": {
     "message": "热重载"

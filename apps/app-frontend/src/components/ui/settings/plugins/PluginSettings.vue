@@ -90,7 +90,7 @@ const messages = defineMessages({
 	},
 	highRisk: {
 		id: 'app.settings.plugins.high-risk',
-		defaultMessage: 'needs your approval',
+		defaultMessage: 'click to approve',
 	},
 	uninstall: {
 		id: 'app.settings.plugins.uninstall',
