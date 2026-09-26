@@ -22,6 +22,7 @@ import {
 	setPluginEnabled,
 	setPluginGranted,
 	uninstallPlugin,
+	updatePluginFromUrl,
 } from '@/plugin-host/ipc'
 import { fetchStorePlugins, type StorePlugin } from '@/plugin-host/store'
 import type { PluginSummary } from '@/plugin-host/types'
@@ -155,6 +156,14 @@ const messages = defineMessages({
 		id: 'app.settings.plugins.store-refresh',
 		defaultMessage: 'Refresh',
 	},
+	hasUpdate: {
+		id: 'app.settings.plugins.has-update',
+		defaultMessage: 'Update available',
+	},
+	update: {
+		id: 'app.settings.plugins.update',
+		defaultMessage: 'Update',
+	},
 })
 
 type Tab = 'installed' | 'store'
@@ -174,6 +183,37 @@ const hotReload = ref(true)
 
 const installedIds = computed(() => new Set(plugins.value.map((plugin) => plugin.id)))
 
+/** Numeric, dotted-version comparison; true when `candidate` is newer than `current`. */
+function isNewerVersion(candidate: string, current: string): boolean {
+	const parse = (value: string) =>
+		value
+			.split(/[.\-+ _]/)
+			.map((part) => Number.parseInt(part, 10))
+			.filter((part) => !Number.isNaN(part))
+	const a = parse(candidate)
+	const b = parse(current)
+	for (let i = 0; i < Math.max(a.length, b.length); i++) {
+		const x = a[i] ?? 0
+		const y = b[i] ?? 0
+		if (x !== y) return x > y
+	}
+	return false
+}
+
+/** For each installed plugin, the store entry offering a newer version, if any. */
+const updates = computed(() => {
+	const byId = new Map(storePlugins.value.map((entry) => [entry.id, entry]))
+	const result = new Map<string, StorePlugin>()
+	for (const plugin of plugins.value) {
+		const installed = plugin.manifest?.version
+		const entry = byId.get(plugin.id)
+		if (installed && entry?.version && isNewerVersion(entry.version, installed)) {
+			result.set(plugin.id, entry)
+		}
+	}
+	return result
+})
+
 async function reload() {
 	try {
 		plugins.value = await listPlugins()
@@ -185,6 +225,12 @@ async function reload() {
 }
 
 onMounted(reload)
+onMounted(() => {
+	// Fetch the store index in the background so the installed tab can flag
+	// plugins that have a newer version available. Failures stay silent here;
+	// they only surface when the user opens the store tab.
+	void loadStore()
+})
 onMounted(async () => {
 	try {
 		hotReload.value = await pluginGetHotReload()
@@ -312,6 +358,15 @@ async function installFromStore(entry: StorePlugin) {
 		busy.value = null
 	}
 }
+
+function updateFromStore(plugin: PluginSummary, entry: StorePlugin) {
+	return withBusy(plugin.id, async () => {
+		unloadPlugin(plugin.id)
+		await updatePluginFromUrl(entry.download, entry.repo)
+		await loadPlugins()
+		await reload()
+	})
+}
 </script>
 
 <template>
@@ -375,6 +430,12 @@ async function installFromStore(entry: StorePlugin) {
 							<span v-if="plugin.manifest?.version">v{{ plugin.manifest.version }}</span>
 							<span v-if="plugin.manifest?.author"> · {{ plugin.manifest.author }}</span>
 						</p>
+						<span
+							v-if="updates.get(plugin.id)"
+							class="mt-1 inline-flex items-center gap-1 rounded-full bg-brand-highlight px-2 py-0.5 text-xs font-semibold text-brand"
+						>
+							{{ formatMessage(messages.hasUpdate) }} · v{{ updates.get(plugin.id)?.version }}
+						</span>
 					</div>
 					<span class="inline-flex shrink-0">
 						<Toggle
@@ -442,6 +503,16 @@ async function installFromStore(entry: StorePlugin) {
 				</div>
 
 				<footer class="flex flex-wrap items-center gap-2">
+					<Button
+						v-if="updates.get(plugin.id)"
+						size="sm"
+						color="brand"
+						:disabled="busy === plugin.id"
+						@click="updateFromStore(plugin, updates.get(plugin.id)!)"
+					>
+						<DownloadIcon />
+						{{ formatMessage(messages.update) }}
+					</Button>
 					<Button
 						size="sm"
 						type="outlined"
@@ -549,7 +620,17 @@ async function installFromStore(entry: StorePlugin) {
 						</p>
 					</div>
 					<Button
-						v-if="installedIds.has(entry.id)"
+						v-if="updates.get(entry.id)"
+						size="sm"
+						color="brand"
+						:disabled="busy === entry.id"
+						@click="updateFromStore(plugins.find((plugin) => plugin.id === entry.id)!, entry)"
+					>
+						<DownloadIcon />
+						{{ formatMessage(messages.update) }}
+					</Button>
+					<Button
+						v-else-if="installedIds.has(entry.id)"
 						size="sm"
 						disabled
 					>

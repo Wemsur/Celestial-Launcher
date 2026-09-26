@@ -20,6 +20,7 @@ pub fn init<R: tauri::Runtime>() -> TauriPlugin<R> {
             plugin_get,
             plugin_install,
             plugin_install_from_url,
+            plugin_update_from_url,
             plugin_uninstall,
             plugin_set_enabled,
             plugin_set_granted,
@@ -78,6 +79,16 @@ pub async fn plugin_install_from_url(
     origin: Option<String>,
 ) -> Result<PluginSummary> {
     Ok(plugins::install_from_url(&url, origin).await?)
+}
+
+/// Download a zipped plugin from the store and update an installed copy,
+/// keeping its enabled state and granted permissions.
+#[tauri::command]
+pub async fn plugin_update_from_url(
+    url: String,
+    origin: Option<String>,
+) -> Result<PluginSummary> {
+    Ok(plugins::update_from_url(&url, origin).await?)
 }
 
 #[tauri::command]

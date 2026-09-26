@@ -30,6 +30,17 @@ export function installPluginFromUrl(url: string, origin?: string): Promise<Plug
 	})
 }
 
+/**
+ * Download a zipped plugin from a store entry and update the installed copy,
+ * keeping its enabled state and granted permissions.
+ */
+export function updatePluginFromUrl(url: string, origin?: string): Promise<PluginSummary> {
+	return invoke<PluginSummary>('plugin:plugins|plugin_update_from_url', {
+		url,
+		origin: origin ?? null,
+	})
+}
+
 export function uninstallPlugin(pluginId: string, removeData = false): Promise<void> {
 	return invoke('plugin:plugins|plugin_uninstall', { pluginId, removeData })
 }

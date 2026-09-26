@@ -314,6 +314,131 @@ async fn unpack_and_install(
     install(&manifest_dir, origin).await
 }
 
+/// Replace an already-installed plugin's files from `source`, keeping the
+/// plugin's enabled state and granted permissions.
+///
+/// Unlike `install`, the plugin is expected to already exist: this is the
+/// update path. The registry record is preserved so an update never silently
+/// re-prompts for permissions the user already approved.
+pub async fn update(
+    source: &Path,
+    origin: Option<String>,
+) -> crate::Result<PluginSummary> {
+    let state = State::get().await?;
+    let manifest = PluginManifest::read_from_dir(source)?;
+    let destination = plugin_dir(&state, &manifest.id)?;
+
+    if !destination.exists() {
+        return Err(crate::ErrorKind::InputError(format!(
+            "Plugin '{}' is not installed, so there is nothing to update",
+            manifest.id
+        ))
+        .into());
+    }
+
+    // Swap the folder contents: the bundle (index.js + manifest.json) lives
+    // here, while plugin data and storage sit in separate directories, so
+    // replacing this folder wholesale keeps user state intact.
+    io::remove_dir_all(&destination).await?;
+    io::create_dir_all(&destination).await?;
+    if let Err(error) = copy_dir(source, &destination).await {
+        let _ = io::remove_dir_all(&destination).await;
+        return Err(error);
+    }
+
+    let mut registry = read_state(&state).await?;
+    if let Some(record) =
+        registry.plugins.iter_mut().find(|record| record.id == manifest.id)
+    {
+        record.installed_at = Some(chrono::Utc::now().timestamp());
+        record.source = origin;
+    } else {
+        registry.plugins.push(PluginRecord {
+            id: manifest.id.clone(),
+            enabled: true,
+            granted: Vec::new(),
+            installed_at: Some(chrono::Utc::now().timestamp()),
+            source: origin,
+        });
+    }
+    write_state(&state, &registry).await?;
+
+    tracing::info!(plugin = %manifest.id, "Updated plugin");
+
+    Ok(summarize(
+        &destination,
+        manifest.id.clone(),
+        registry.plugins.as_slice(),
+    ))
+}
+
+/// Download a zipped plugin from a store entry and update the installed copy.
+///
+/// Same untrusted-archive handling as `install_from_url`; the difference is the
+/// installed plugin's enabled/granted state survives the swap.
+pub async fn update_from_url(
+    url: &str,
+    origin: Option<String>,
+) -> crate::Result<PluginSummary> {
+    let parsed = url::Url::parse(url).map_err(|error| {
+        crate::ErrorKind::InputError(format!("Invalid download URL: {error}"))
+    })?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(crate::ErrorKind::InputError(
+            "Plugin downloads must be http or https".to_string(),
+        )
+        .into());
+    }
+
+    let state = State::get().await?;
+    let bytes = crate::util::fetch::fetch(
+        url,
+        None,
+        None,
+        None,
+        &state.fetch_semaphore,
+        &state.pool,
+    )
+    .await?;
+
+    let staging = state
+        .directories
+        .settings_dir
+        .join(PLUGINS_DIR)
+        .join(format!(".staging-{}", uuid::Uuid::new_v4()));
+    io::create_dir_all(&staging).await?;
+
+    let result = unpack_and_update(
+        &bytes,
+        &staging,
+        origin.or_else(|| Some(url.to_string())),
+    )
+    .await;
+    let _ = io::remove_dir_all(&staging).await;
+    result
+}
+
+/// Extract a plugin zip into `staging`, then update whichever folder holds the
+/// manifest.
+async fn unpack_and_update(
+    bytes: &[u8],
+    staging: &Path,
+    origin: Option<String>,
+) -> crate::Result<PluginSummary> {
+    let bytes = bytes.to_vec();
+    let target = staging.to_path_buf();
+
+    tokio::task::spawn_blocking(move || extract_zip(&bytes, &target)).await??;
+
+    let manifest_dir = find_manifest_dir(staging).await?.ok_or_else(|| {
+        crate::ErrorKind::InputError(
+            "The downloaded archive has no manifest.json".to_string(),
+        )
+    })?;
+
+    update(&manifest_dir, origin).await
+}
+
 /// Synchronously extract a zip into `dest`, rejecting any entry that would
 /// escape it.
 fn extract_zip(bytes: &[u8], dest: &Path) -> crate::Result<()> {

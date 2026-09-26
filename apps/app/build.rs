@@ -470,6 +470,7 @@ fn main() {
                         "plugin_get",
                         "plugin_install",
                         "plugin_install_from_url",
+                        "plugin_update_from_url",
                         "plugin_uninstall",
                         "plugin_set_enabled",
                         "plugin_set_granted",
