@@ -53,23 +53,25 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      # theseus.jar 的 gradle 构建需要 JVM 17+。
+      # theseus.jar 的 gradle 构建需要 JVM 17+。ARM64 runner 的 Temurin 没有 17，
+      # 最低是 21 LTS，21 满足 "17+"。
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.name }}
 
-      # rpm 是为了让 `--bundles rpm` 有 rpmbuild 可用（24.04 镜像不自带）。
+      # librsvg2/webkit 是构建依赖；rpm 提供 rpmbuild（24.04 镜像不自带）；
+      # xdg-utils 提供 AppImage 打包所需的 xdg-mime。
       - name: Install Linux build dependencies
         if: matrix.name == 'linux-arm64'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev rpm
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev rpm xdg-utils
 
       - uses: actions/setup-node@v4
         with:
