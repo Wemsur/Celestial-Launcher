@@ -1479,6 +1479,8 @@ watch(
 				const locale = preferences.localization.locale
 				let settingsChanged = false
 
+				const behavior = preferences.behavior
+
 				if (i18n.global.locale.value !== locale) {
 					await setLocale(locale)
 				}
