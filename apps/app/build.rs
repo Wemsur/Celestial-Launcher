@@ -475,6 +475,7 @@ fn main() {
                         "plugin_uninstall",
                         "plugin_set_enabled",
                         "plugin_set_granted",
+                        "plugin_set_pinned_pages",
                         "plugin_grant_permission",
                         "plugin_revoke_permission",
                         "plugin_open_folder",
