@@ -408,6 +408,11 @@ export function createContentInstall(opts: {
 	let modpackAlreadyInstalledModalRef: ModpackAlreadyInstalledModalRef | null = null
 	let incompatibilityWarningModalRef: ModalRef | null = null
 	let currentProject: Labrinth.Projects.v2.Project | null = null
+	/**
+	 * A content source install waiting for the user to pick an instance. Its
+	 * download is written by the source, so only the instance id matters here.
+	 */
+	let currentSourceInstall: ((instanceId: string) => Promise<void>) | null = null
 	let currentVersions: Labrinth.Versions.v2.Version[] = []
 	let currentCallback: ContentInstallCallback = () => {}
 	let instanceMap: Record<string, InstallTargetInstance> = {}
@@ -487,7 +492,11 @@ export function createContentInstall(opts: {
 		defaultTab.value = 'existing'
 
 		let projectInfoPromise: Promise<unknown> = Promise.resolve()
-		if (hints?.showProjectInfo) {
+		// `hints?.showProjectInfo` is only ever true for a Modrinth project. A
+		// content source has no project page, team or icon here, and looking one up
+		// by a synthetic id would throw before the instance list was built —
+		// leaving an empty modal that looks like the install path itself broke.
+		if (hints?.showProjectInfo && project.id) {
 			projectInfo.value = {
 				title: project.title,
 				iconUrl: project.icon_url,
@@ -585,11 +594,21 @@ export function createContentInstall(opts: {
 			.catch(() => {})
 
 		try {
-			const candidates = await get_install_candidates(
-				project.id,
-				project.project_type,
-				getInstallTargets(versions),
-			)
+			// `get_install_candidates` derives loader and version compatibility from
+			// the content's versions; with nothing in the project (a source-provided
+			// entry) there is nothing to derive from, so the raw instance list is used
+			// and every instance counts as compatible.
+			const candidates = project.versions?.length
+				? await get_install_candidates(
+						project.id,
+						project.project_type,
+						getInstallTargets(versions),
+					)
+				: (await list()).map((instance) => ({
+						...instance,
+						installed: false,
+						compatible: true,
+					}))
 			const newInstanceMap: Record<string, InstallTargetInstance> = {}
 			const newInstances: ContentInstallInstance[] = candidates.map((instance) => {
 				newInstanceMap[instance.id] = instance
@@ -616,6 +635,59 @@ export function createContentInstall(opts: {
 		}
 		await gameVersionMetadataPromise
 		await projectInfoPromise
+	}
+
+	/**
+	 * Open the instance picker for a content source entry.
+	 *
+	 * This is the same modal Modrinth installs through, entered without a project
+	 * behind it: the source downloads and installs on its own once an instance is
+	 * chosen, so all the picker needs is a plain list of instances — no version
+	 * compatibility, no project page, no "create a new instance" tab.
+	 */
+	async function showSourceInstallModal(
+		install: (instanceId: string) => Promise<void>,
+		info?: {
+			title: string
+			iconUrl?: string
+			link?: string
+		},
+	) {
+		currentProject = null
+		currentVersions = []
+		currentCallback = () => {}
+		currentSourceInstall = install
+		instanceMap = {}
+		projectInfo.value = info ?? null
+
+		instances.value = []
+		loading.value = true
+		defaultTab.value = 'existing'
+
+		await nextTick()
+		modalRef?.show()
+		trackEvent('ProjectInstallStart', { source: 'ContentSourceModal' })
+
+		try {
+			const candidates = await list()
+			instanceMap = Object.fromEntries(
+				candidates.map((instance) => [
+					instance.id,
+					{ ...instance, installed: false, compatible: true },
+				]),
+			)
+			instances.value = candidates.map((instance) => ({
+				id: instance.id,
+				name: instance.name,
+				iconUrl: getInstanceIconUrl(instance.icon_path),
+				installed: false,
+				compatible: true,
+			}))
+		} catch (err) {
+			opts.handleError(err)
+		} finally {
+			loading.value = false
+		}
 	}
 
 	async function prepareNewInstance(projectId: string) {
@@ -655,7 +727,30 @@ export function createContentInstall(opts: {
 	async function handleInstallToInstance(instance: ContentInstallInstance) {
 		const selectedInstance = instanceMap[instance.id]
 		const storeInstance = instances.value.find((i) => i.id === instance.id)
-		if (!currentProject || !selectedInstance) {
+		if (!selectedInstance) {
+			opts.handleError('No instance selected')
+			return
+		}
+
+		// A content source install: there is no project to resolve a version from,
+		// so the choice of instance *is* the whole confirmation step. The download
+		// is done by the source through the launcher's install path.
+		if (currentSourceInstall) {
+			const run = currentSourceInstall
+			currentSourceInstall = null
+			modalRef?.hide()
+			if (storeInstance) storeInstance.installing = true
+			try {
+				await run(instance.id)
+			} catch (err) {
+				opts.handleError(err)
+			} finally {
+				const fresh = instances.value.find((i) => i.id === instance.id)
+				if (fresh) fresh.installing = false
+			}
+			return
+		}
+		if (!currentProject) {
 			opts.handleError('No project or instance found')
 			return
 		}
@@ -865,6 +960,7 @@ export function createContentInstall(opts: {
 	}
 
 	function handleCancel() {
+		currentSourceInstall = null
 		currentCallback?.()
 	}
 
@@ -1003,6 +1099,7 @@ export function createContentInstall(opts: {
 		handleInstallToInstance,
 		handleCreateAndInstall,
 		prepareNewInstance,
+		showSourceInstallModal,
 		handleNavigate,
 		handleCancel,
 		setContentInstallModal(ref: ModalRef) {

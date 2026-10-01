@@ -90,7 +90,7 @@ const { handleError, addNotification } = injectNotificationManager()
 const { formatMessage } = useVIntl()
 const { installingServerProjects, playServerProject, showAddServerToInstanceModal } =
     injectServerInstall()
-const { install: installVersion } = injectContentInstall()
+const { install: installVersion, showSourceInstallModal } = injectContentInstall()
 const queryClient = useQueryClient()
 const debugLog = useDebugLogger('Browse')
 
@@ -990,22 +990,17 @@ function getCardActions(
     if (foreign) {
         const isInstalling = installingProjectIds.value.has(result.project_id)
         const installType = (result.project_types?.[0] ?? currentProjectType) as ContentType
-        // A skin belongs to the launcher; everything else needs an instance.
-        const needsInstance = installType !== 'skin'
-        const blocked = needsInstance && !instance.value
+        // Without an instance in context the click opens the instance picker,
+        // exactly as a Modrinth row does, so the button is never dead.
         return [
             {
                 key: 'install',
                 label: formatMessage(
-                    isInstalling
-                        ? messages.installingToServer
-                        : blocked
-                            ? messages.addToAnInstance
-                            : commonMessages.installButton,
+                    isInstalling ? messages.installingToServer : commonMessages.installButton,
                 ),
                 icon: isInstalling ? SpinnerIcon : PlusIcon,
                 iconClass: isInstalling ? 'animate-spin' : undefined,
-                disabled: isInstalling || blocked,
+                disabled: isInstalling,
                 color: 'brand',
                 type: 'outlined',
                 onClick: () => installForeignContent(result, foreign, installType),
@@ -1183,7 +1178,14 @@ function getCardActions(
  * a source never writes to an instance itself. A skin lands in the launcher's
  * own skins folder, everything else in the instance the user is browsing.
  */
-async function installForeignContent(
+/**
+ * Install a row that came from a content source.
+ *
+ * With no instance in context this opens the same instance picker a Modrinth row
+ * opens — a source does not know what an instance is, so choosing one stays the
+ * launcher's job either way — and the install runs once a choice is made.
+ */
+function installForeignContent(
     result: Labrinth.Search.v3.ResultSearchProject,
     source: { sourceId: string; id: string },
     installType: ContentType,
@@ -1194,21 +1196,39 @@ async function installForeignContent(
         return
     }
 
-    const needsInstance = installType !== 'skin'
-    if (needsInstance && !instance.value) {
-        handleError(new Error('请先选择一个实例，再安装该内容。'))
+    // A skin belongs to the launcher rather than to an instance, so it needs no
+    // picker; everything else installs into an instance.
+    if (installType !== 'skin' && !instance.value) {
+        void showSourceInstallModal(
+            (instanceId) => runForeignInstall(result, source, installType, instanceId),
+            { title: result.name, iconUrl: result.icon_url ?? undefined },
+        ).catch((error: unknown) => handleError(toError(error)))
         return
     }
 
+    void runForeignInstall(result, source, installType, instance.value?.id)
+}
+
+/** Resolve the download and hand it to the launcher's install path. */
+async function runForeignInstall(
+    result: Labrinth.Search.v3.ResultSearchProject,
+    source: { sourceId: string; id: string },
+    installType: ContentType,
+    targetInstanceId?: string,
+) {
     const sourceName =
         selectableSources().find((candidate) => candidate.id === source.sourceId)?.name ??
         source.sourceId
+    const provider = sourceProvider(source.sourceId)
+    if (!provider?.resolveDownload) {
+        throw new Error('该内容源不支持直接下载。')
+    }
 
     setProjectInstalling(result.project_id, true)
     try {
         const descriptor = await provider.resolveDownload(source.id)
         const installed = await installSourceContent(
-            needsInstance ? instance.value?.id : undefined,
+            targetInstanceId,
             installType,
             descriptor,
             {
@@ -1225,7 +1245,7 @@ async function installForeignContent(
             type: 'success',
         })
     } catch (error) {
-        handleError(toError(error))
+        throw toError(error)
     } finally {
         setProjectInstalling(result.project_id, false)
     }
