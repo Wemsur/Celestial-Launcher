@@ -27,6 +27,7 @@ import { contentSourceErrors } from '@/content-sources/registry'
 import { fetchStoreSources, type StoreContentSource } from '@/content-sources/store'
 import type { ContentType, SourceCapabilities, SourceSummary } from '@/content-sources/types'
 
+import { toError } from '@/helpers/errors'
 import ContentSourceMultiplierModal from './ContentSourceMultiplierModal.vue'
 import SourceConfigModal from './SourceConfigModal.vue'
 
@@ -217,7 +218,7 @@ function runtimeError(source: SourceSummary): string | null {
 
 /** `handleError` wants an Error; a thrown value is not necessarily one. */
 function reportError(error: unknown) {
-	handleError(error instanceof Error ? error : new Error(String(error)))
+	handleError(toError(error))
 }
 
 async function reload() {

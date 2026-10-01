@@ -18,6 +18,7 @@ import {
 } from '@/content-sources/ipc'
 import { sourceProvider } from '@/content-sources/registry'
 import type { ContentType, ContentVersion, UpdateQueryItem } from '@/content-sources/types'
+import { toError } from '@/helpers/errors'
 
 const props = defineProps<{
 	instanceId: string
@@ -100,7 +101,7 @@ async function reload() {
 	try {
 		records.value = await listInstalledSourceContent(props.instanceId)
 	} catch (error) {
-		handleError(error instanceof Error ? error : new Error(String(error)))
+		handleError(toError(error))
 	} finally {
 		loading.value = false
 	}
@@ -214,7 +215,7 @@ async function applyVersion(record: SourceContentRecord, versionId?: string) {
 		// Whatever was checked is now stale.
 		checks.value = {}
 	} catch (error) {
-		handleError(error instanceof Error ? error : new Error(String(error)))
+		handleError(toError(error))
 	} finally {
 		busyId.value = null
 	}
@@ -243,7 +244,7 @@ async function toggleVersions(record: SourceContentRecord) {
 		}
 		openVersionsFor.value = record.id
 	} catch (error) {
-		handleError(error instanceof Error ? error : new Error(String(error)))
+		handleError(toError(error))
 	} finally {
 		busyId.value = null
 	}
@@ -255,7 +256,7 @@ async function forget(record: SourceContentRecord) {
 		await forgetInstalledSourceContent(props.instanceId, record.id)
 		await reload()
 	} catch (error) {
-		handleError(error instanceof Error ? error : new Error(String(error)))
+		handleError(toError(error))
 	} finally {
 		busyId.value = null
 	}

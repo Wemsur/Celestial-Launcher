@@ -2,13 +2,8 @@
 import { defineMessages, MultiSelect, useVIntl } from '@modrinth/ui'
 import { computed } from 'vue'
 
-import { selectableSources, sourceSupportsType } from '@/content-sources/catalog'
+import { selectableSources } from '@/content-sources/catalog'
 import { isSourceActive, setSourceActive } from '@/content-sources/preferences'
-
-const props = defineProps<{
-	/** The content type being browsed; sources that cannot serve it are greyed. */
-	contentType: string
-}>()
 
 const { formatMessage } = useVIntl()
 
@@ -30,33 +25,21 @@ const messages = defineMessages({
 const sources = computed(() => selectableSources())
 
 /**
- * A source that does not serve the current content type is shown disabled
- * rather than hidden, so the picker is stable across tabs.
+ * Every installed source is offered, whatever the current tab shows. A source is
+ * never disabled for serving something else: the tab row follows the selection
+ * (only the selected sources' types appear), so hiding a source here would put
+ * the type it serves out of reach — a world-only source could never be selected
+ * from a mods tab, and its tab would never appear.
  */
 const options = computed(() =>
-	sources.value.map((source) => ({
-		value: source.id,
-		label: source.name,
-		disabled: !sourceSupportsType(source, props.contentType),
-	})),
+	sources.value.map((source) => ({ value: source.id, label: source.name })),
 )
 
-/**
- * Only sources that serve the current type take part, but toggling writes back
- * to every source — so turning a source off in one tab leaves it off in the
- * others rather than being silently re-enabled.
- */
 const selected = computed<string[]>({
 	get: () =>
-		sources.value
-			.filter(
-				(source) =>
-					sourceSupportsType(source, props.contentType) && isSourceActive(source.id),
-			)
-			.map((source) => source.id),
+		sources.value.filter((source) => isSourceActive(source.id)).map((source) => source.id),
 	set: (next: string[]) => {
 		for (const source of sources.value) {
-			if (!sourceSupportsType(source, props.contentType)) continue
 			setSourceActive(source.id, next.includes(source.id))
 		}
 	},

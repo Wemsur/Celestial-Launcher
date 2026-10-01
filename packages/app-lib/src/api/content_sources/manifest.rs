@@ -29,15 +29,27 @@ pub const CURRENT_API_VERSION: u32 = 1;
 
 /// The launcher's closed set of content types. A source may only serve these;
 /// how each one is installed is the launcher's business, not the source's.
+///
+/// The wire names are spelled out rather than derived: `rename_all` would turn
+/// `ResourcePack` into `resource_pack` and `DataPack` into `data_pack`, while
+/// the launcher's own vocabulary — and therefore every plugin manifest — uses
+/// `resourcepack` and `datapack`. A source declaring the former names would fail
+/// to load with a serde error that says nothing about the real problem.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub enum ContentType {
+    #[serde(rename = "mod")]
     Mod,
+    #[serde(rename = "modpack")]
     Modpack,
+    #[serde(rename = "resourcepack")]
     ResourcePack,
+    #[serde(rename = "shader")]
     Shader,
+    #[serde(rename = "datapack")]
     DataPack,
+    #[serde(rename = "world")]
     World,
+    #[serde(rename = "skin")]
     Skin,
 }
 
@@ -214,7 +226,14 @@ impl ContentSourceManifest {
     }
 
     pub fn parse(bytes: &[u8]) -> crate::Result<Self> {
-        let manifest: Self = serde_json::from_slice(bytes)?;
+        // A bare serde message ("unknown variant `resourcepack`") says nothing
+        // about which file it came from, and a source author reads this error in
+        // the source manager, not in a debugger.
+        let manifest: Self = serde_json::from_slice(bytes).map_err(|error| {
+            crate::ErrorKind::InputError(format!(
+                "{MANIFEST_FILE} is not valid: {error}"
+            ))
+        })?;
         manifest.validate()?;
         Ok(manifest)
     }
@@ -418,5 +437,49 @@ mod tests {
             "content_types": []
         }"#;
         assert!(ContentSourceManifest::parse(json.as_bytes()).is_err());
+    }
+
+    #[test]
+    fn content_type_wire_names_match_the_launcher_vocabulary() {
+        for (json, expected) in [
+            ("\"mod\"", ContentType::Mod),
+            ("\"modpack\"", ContentType::Modpack),
+            ("\"resourcepack\"", ContentType::ResourcePack),
+            ("\"shader\"", ContentType::Shader),
+            ("\"datapack\"", ContentType::DataPack),
+            ("\"world\"", ContentType::World),
+            ("\"skin\"", ContentType::Skin),
+        ] {
+            let parsed: ContentType = serde_json::from_str(json).unwrap();
+            assert_eq!(parsed, expected, "{json} should parse");
+            assert_eq!(
+                serde_json::to_string(&expected).unwrap(),
+                json,
+                "round trip"
+            );
+        }
+    }
+
+    /// A derived `rename_all` spells these `resource_pack` and `data_pack`,
+    /// which no manifest writes; the derivation would reject every source that
+    /// serves them, with an error that names neither the field nor the cause.
+    #[test]
+    fn the_derived_snake_case_names_are_not_accepted() {
+        assert!(serde_json::from_str::<ContentType>("\"resource_pack\"").is_err());
+        assert!(serde_json::from_str::<ContentType>("\"data_pack\"").is_err());
+    }
+
+    #[test]
+    fn a_manifest_serving_every_loose_type_parses() {
+        let json = r#"{
+            "id": "example",
+            "name": "Example",
+            "version": "1.0.0",
+            "entry": "index.js",
+            "content_types": ["mod", "resourcepack", "shader", "datapack", "world"]
+        }"#;
+        let manifest =
+            ContentSourceManifest::parse(json.as_bytes()).unwrap();
+        assert_eq!(manifest.content_types.len(), 5);
     }
 }

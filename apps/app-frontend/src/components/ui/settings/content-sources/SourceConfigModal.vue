@@ -15,6 +15,7 @@ import { computed, ref } from 'vue'
 import { sourceSettingsSet, sourceStorageGet, sourceStorageSet } from '@/content-sources/ipc'
 import { loadContentSources } from '@/content-sources/loader'
 import type { ManualEntryField, SourceSettingField, SourceSummary } from '@/content-sources/types'
+import { toError } from '@/helpers/errors'
 
 const props = defineProps<{ source: SourceSummary | null }>()
 
@@ -123,7 +124,7 @@ async function load() {
 
 		entries.value = parseEntries(await sourceStorageGet(source.id, MANUAL_ENTRIES_KEY))
 	} catch (error) {
-		handleError(error instanceof Error ? error : new Error(String(error)))
+		handleError(toError(error))
 	} finally {
 		loading.value = false
 	}
@@ -167,7 +168,7 @@ async function saveAllSettings() {
 		// way a plugin is reloaded after its settings change.
 		await loadContentSources()
 	} catch (error) {
-		handleError(error instanceof Error ? error : new Error(String(error)))
+		handleError(toError(error))
 	}
 }
 
@@ -187,7 +188,7 @@ async function persistEntries() {
 	try {
 		await sourceStorageSet(source.id, MANUAL_ENTRIES_KEY, JSON.stringify(rows))
 	} catch (error) {
-		handleError(error instanceof Error ? error : new Error(String(error)))
+		handleError(toError(error))
 	}
 }
 

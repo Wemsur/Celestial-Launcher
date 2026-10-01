@@ -172,8 +172,10 @@ function getProjectCardTags(result: Labrinth.Search.v3.ResultSearchProject, disp
 		<!--
 			Platform-specific controls for the tab row (the app puts its content
 			source picker here). Empty on the web, where the slot is unused.
+			`ml-auto` keeps it at the right edge even when NavTabs hides itself
+			for having a single tab, so the picker never disappears with it.
 		-->
-		<div v-if="$slots['tabs-actions']" class="shrink-0">
+		<div v-if="$slots['tabs-actions']" class="ml-auto shrink-0">
 			<slot name="tabs-actions" />
 		</div>
 	</div>

@@ -63,6 +63,7 @@ import { sourceProvider } from '@/content-sources/registry'
 import SourceSelector from '@/content-sources/SourceSelector.vue'
 import type { ContentQuery, ContentSort, ContentType } from '@/content-sources/types'
 import { get_project, get_search_results_v3, get_version_many } from '@/helpers/cache.js'
+import { toError } from '@/helpers/errors'
 import {
     get_installed_project_ids as getInstalledProjectIds,
     getInstanceIconUrl,
@@ -708,17 +709,21 @@ watch(
 )
 
 /**
- * Whether any active source serves a content type. Used to keep a tab that
- * could only ever come back empty out of the tab row.
+ * Every content type the currently selected sources can serve. The tab row shows
+ * exactly these: a type no selected source serves would only ever come back
+ * empty, and a type missing from the row could not be reached at all.
  */
+const activeContentTypes = computed<Set<string>>(() => {
+    const types = new Set<string>()
+    for (const source of selectableSources()) {
+        if (!source.available || !isSourceActive(source.id)) continue
+        for (const type of source.contentTypes) types.add(type)
+    }
+    return types
+})
+
 function hasSourceFor(type: ContentType): boolean {
-    return selectableSources().some(
-        (source) =>
-            source.available &&
-            isSourceActive(source.id) &&
-            sourceSupportsType(source, type) &&
-            (source.id !== MODRINTH_SOURCE_ID || MODRINTH_CONTENT_TYPES.includes(type)),
-    )
+    return activeContentTypes.value.has(type)
 }
 
 const selectableProjectTypes = computed(() => {
@@ -780,33 +785,35 @@ const selectableProjectTypes = computed(() => {
         {
             label: formatMessage(messages.modpacksProjectType),
             href: `/browse/modpack${detail}${suffix}`,
-            shown: modpacks,
+            shown: modpacks && hasSourceFor('modpack'),
         },
         {
             label: formatMessage(messages.modsProjectType),
             href: `/browse/mod${detail}${suffix}`,
-            shown: mods,
+            shown: mods && hasSourceFor('mod'),
         },
         {
             label: formatMessage(messages.resourcePacksProjectType),
             href: `/browse/resourcepack${detail}${suffix}`,
+            shown: hasSourceFor('resourcepack'),
         },
         {
             label: formatMessage(messages.dataPacksProjectType),
             href: `/browse/datapack${detail}${suffix}`,
-            shown: dataPacks,
+            shown: dataPacks && hasSourceFor('datapack'),
         },
         {
             label: formatMessage(messages.shadersProjectType),
             href: `/browse/shader${detail}${suffix}`,
+            shown: hasSourceFor('shader'),
         },
-        // A world is installed into the instance's saves folder, so the tab only
-        // makes sense with an instance chosen; a skin belongs to the launcher,
-        // so it is the other way round.
+        // A world is browsable with or without an instance; installing one
+        // needs an instance, and the card says so when there is none. A skin
+        // belongs to the launcher, so its tab is the other way round.
         {
             label: formatMessage(messages.worldsProjectType),
             href: `/browse/world${detail}${suffix}`,
-            shown: !!instance.value && hasSourceFor('world'),
+            shown: hasSourceFor('world'),
         },
         {
             label: formatMessage(messages.skinsProjectType),
@@ -1218,7 +1225,7 @@ async function installForeignContent(
             type: 'success',
         })
     } catch (error) {
-        handleError(error instanceof Error ? error : new Error(String(error)))
+        handleError(toError(error))
     } finally {
         setProjectInstalling(result.project_id, false)
     }
@@ -1756,7 +1763,7 @@ provideBrowseManager({
             <div class="browse-list-content flex flex-col gap-3 p-6">
                 <BrowsePageLayout>
                     <template #tabs-actions>
-                        <SourceSelector :content-type="projectType" />
+                        <SourceSelector />
                     </template>
                     <template #after>
                         <ContextMenu ref="contextMenuRef" :label="formatMessage(messages.projectActionsLabel)">
