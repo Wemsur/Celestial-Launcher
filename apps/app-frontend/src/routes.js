@@ -88,6 +88,13 @@ export default new createRouter({
 						},
 					],
 				},
+				{
+					// A project from a content source, shown inside the discover split
+					// pane the same way a Modrinth one is.
+					path: 's/:sourceId/:projectId',
+					name: 'DiscoverSplitSourceProject',
+					component: () => import('@/pages/SourceProject.vue'),
+				},
 			],
 		},
 		{
@@ -148,6 +155,12 @@ export default new createRouter({
 				const rest = to.params.rest ? `/${[].concat(to.params.rest).join('/')}` : ''
 				return `/project/${to.params.id}${rest}${to.hash}`
 			},
+		},
+		{
+			// A project from a content source, at full width (no split view).
+			path: '/source/:sourceId/:projectId',
+			name: 'SourceProject',
+			component: () => import('@/pages/SourceProject.vue'),
 		},
 		{
 			path: '/project/:id',

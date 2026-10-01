@@ -7,7 +7,23 @@
 	-->
 	<ReadyTransition :pending="loading" :duration="0">
 		<ContentPageLayout :highlighted-item-id="highlightedItemId">
+			<template #toolbar-actions>
+				<Button
+					type="quiet"
+					class="!text-sm !font-medium"
+					@click="sourceContentModal?.show()"
+				>
+					<CompassIcon />
+					{{ formatMessage(messages.sourceContentButton) }}
+				</Button>
+			</template>
 			<template #modals>
+				<SourceContentModal
+					ref="sourceContentModal"
+					:instance-id="instance.id"
+					:game-version="instance.game_version"
+					:loader="instance.loader"
+				/>
 				<SyncedContentModal ref="syncedContentModal" />
 				<UnknownFileWarningModal
 					ref="unknownFileWarningModal"
@@ -96,9 +112,16 @@
 
 <script setup lang="ts">
 import type { Labrinth } from '@modrinth/api-client'
-import { ClipboardCopyIcon, FolderOpenIcon, LockIcon, LockOpenIcon } from '@modrinth/assets'
+import {
+	ClipboardCopyIcon,
+	CompassIcon,
+	FolderOpenIcon,
+	LockIcon,
+	LockOpenIcon,
+} from '@modrinth/assets'
 import {
 	type BulkOperationStatus,
+	Button,
 	type ButtonMenuOption,
 	commonMessages,
 	ConfirmDisableModal,
@@ -131,6 +154,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ExportModal from '@/components/ui/ExportModal.vue'
+import SourceContentModal from '@/components/ui/instance/SourceContentModal.vue'
 import SyncedContentModal from '@/components/ui/instance/SyncedContentModal.vue'
 import ShareModalWrapper from '@/components/ui/modal/ShareModalWrapper.vue'
 import { useManagedContentPolicy } from '@/composables/instances/use-managed-content-policy'
@@ -211,6 +235,10 @@ const messages = defineMessages({
 	unfreezeContent: {
 		id: 'app.instance.mods.unfreeze-content',
 		defaultMessage: 'Unfreeze version',
+	},
+	sourceContentButton: {
+		id: 'app.instance.content.source-content',
+		defaultMessage: 'Content sources',
 	},
 	contentTypeProject: {
 		id: 'app.instance.mods.content-type-project',
@@ -1545,6 +1573,7 @@ async function handleShareItems(
 }
 
 const syncedContentModal = ref<InstanceType<typeof SyncedContentModal>>()
+const sourceContentModal = ref<InstanceType<typeof SourceContentModal>>()
 const packActions = useSyncedPackActions(instance, syncedContentModal, canMutateContent, () =>
 	refreshContentState('must_revalidate'),
 )

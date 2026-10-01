@@ -49,6 +49,19 @@ import {
     openProjectsInSplitView,
     useSplitView,
 } from '@/composables/use-split-view.ts'
+import { fromSearchResult, type SourcedSearchResult, toSearchResult } from '@/content-sources/adapter'
+import { type ActiveSourceQuery, searchAcrossSources } from '@/content-sources/aggregate'
+import {
+    MODRINTH_CONTENT_TYPES,
+    type SelectableSource,
+    selectableSources,
+    sourceSupportsType,
+} from '@/content-sources/catalog'
+import { installSourceContent } from '@/content-sources/ipc'
+import { isSourceActive, MODRINTH_SOURCE_ID, sourcePreferences } from '@/content-sources/preferences'
+import { sourceProvider } from '@/content-sources/registry'
+import SourceSelector from '@/content-sources/SourceSelector.vue'
+import type { ContentQuery, ContentSort, ContentType } from '@/content-sources/types'
 import { get_project, get_search_results_v3, get_version_many } from '@/helpers/cache.js'
 import {
     get_installed_project_ids as getInstalledProjectIds,
@@ -72,7 +85,7 @@ import {
     provideServerInstallContent,
 } from '@/providers/setup/server-install-content'
 
-const { handleError } = injectNotificationManager()
+const { handleError, addNotification } = injectNotificationManager()
 const { formatMessage } = useVIntl()
 const { installingServerProjects, playServerProject, showAddServerToInstanceModal } =
     injectServerInstall()
@@ -632,6 +645,8 @@ const messages = defineMessages({
     },
     shadersProjectType: { id: 'app.browse.project-type.shaders', defaultMessage: 'Shaders' },
     serversProjectType: { id: 'app.browse.project-type.servers', defaultMessage: 'Servers' },
+    worldsProjectType: { id: 'app.browse.project-type.worlds', defaultMessage: 'Worlds' },
+    skinsProjectType: { id: 'app.browse.project-type.skins', defaultMessage: 'Skins' },
     providedByInstance: {
         id: 'search.filter.locked.instance',
         defaultMessage: 'Provided by the instance',
@@ -691,6 +706,20 @@ watch(
         }
     },
 )
+
+/**
+ * Whether any active source serves a content type. Used to keep a tab that
+ * could only ever come back empty out of the tab row.
+ */
+function hasSourceFor(type: ContentType): boolean {
+    return selectableSources().some(
+        (source) =>
+            source.available &&
+            isSourceActive(source.id) &&
+            sourceSupportsType(source, type) &&
+            (source.id !== MODRINTH_SOURCE_ID || MODRINTH_CONTENT_TYPES.includes(type)),
+    )
+}
 
 const selectableProjectTypes = computed(() => {
     let dataPacks = false,
@@ -770,6 +799,19 @@ const selectableProjectTypes = computed(() => {
         {
             label: formatMessage(messages.shadersProjectType),
             href: `/browse/shader${detail}${suffix}`,
+        },
+        // A world is installed into the instance's saves folder, so the tab only
+        // makes sense with an instance chosen; a skin belongs to the launcher,
+        // so it is the other way round.
+        {
+            label: formatMessage(messages.worldsProjectType),
+            href: `/browse/world${detail}${suffix}`,
+            shown: !!instance.value && hasSourceFor('world'),
+        },
+        {
+            label: formatMessage(messages.skinsProjectType),
+            href: `/browse/skin${detail}${suffix}`,
+            shown: !instance.value && hasSourceFor('skin'),
         },
         {
             label: formatMessage(messages.serversProjectType),
@@ -932,6 +974,36 @@ function getCardActions(
 ): CardAction[] {
     if (currentProjectType === 'server') {
         return getServerCardActions(result)
+    }
+
+    // A row from a content source has no Modrinth project behind it: it is
+    // installed by asking its source for a download and handing that to the
+    // launcher, which decides where the file goes.
+    const foreign = (result as SourcedSearchResult).__source
+    if (foreign) {
+        const isInstalling = installingProjectIds.value.has(result.project_id)
+        const installType = (result.project_types?.[0] ?? currentProjectType) as ContentType
+        // A skin belongs to the launcher; everything else needs an instance.
+        const needsInstance = installType !== 'skin'
+        const blocked = needsInstance && !instance.value
+        return [
+            {
+                key: 'install',
+                label: formatMessage(
+                    isInstalling
+                        ? messages.installingToServer
+                        : blocked
+                            ? messages.addToAnInstance
+                            : commonMessages.installButton,
+                ),
+                icon: isInstalling ? SpinnerIcon : PlusIcon,
+                iconClass: isInstalling ? 'animate-spin' : undefined,
+                disabled: isInstalling || blocked,
+                color: 'brand',
+                type: 'outlined',
+                onClick: () => installForeignContent(result, foreign, installType),
+            },
+        ]
     }
 
     const projectResult = result as Labrinth.Search.v3.ResultSearchProject & {
@@ -1097,6 +1169,61 @@ function getCardActions(
     ]
 }
 
+/**
+ * Install a row that came from a content source.
+ *
+ * The source is asked for a download, and the launcher performs the install —
+ * a source never writes to an instance itself. A skin lands in the launcher's
+ * own skins folder, everything else in the instance the user is browsing.
+ */
+async function installForeignContent(
+    result: Labrinth.Search.v3.ResultSearchProject,
+    source: { sourceId: string; id: string },
+    installType: ContentType,
+) {
+    const provider = sourceProvider(source.sourceId)
+    if (!provider?.resolveDownload) {
+        handleError(new Error('该内容源不支持直接下载。'))
+        return
+    }
+
+    const needsInstance = installType !== 'skin'
+    if (needsInstance && !instance.value) {
+        handleError(new Error('请先选择一个实例，再安装该内容。'))
+        return
+    }
+
+    const sourceName =
+        selectableSources().find((candidate) => candidate.id === source.sourceId)?.name ??
+        source.sourceId
+
+    setProjectInstalling(result.project_id, true)
+    try {
+        const descriptor = await provider.resolveDownload(source.id)
+        const installed = await installSourceContent(
+            needsInstance ? instance.value?.id : undefined,
+            installType,
+            descriptor,
+            {
+                sourceId: source.sourceId,
+                projectId: source.id,
+                name: result.name,
+                iconUrl: result.icon_url ?? undefined,
+            },
+        )
+        void queryClient.invalidateQueries({ queryKey: instanceKeys.all })
+        addNotification({
+            title: `已安装「${result.name}」`,
+            text: `来自内容源「${sourceName}」，位置：${installed.relative_path}`,
+            type: 'success',
+        })
+    } catch (error) {
+        handleError(error instanceof Error ? error : new Error(String(error)))
+    } finally {
+        setProjectInstalling(result.project_id, false)
+    }
+}
+
 function onSearchResultInstalled(id: string) {
     if (isServerContext.value) {
         markServerProjectInstalled(id)
@@ -1117,10 +1244,223 @@ function onSearchResultsInstalled(ids: string[]) {
     newlyInstalled.value = Array.from(new Set([...newlyInstalled.value, ...ids]))
 }
 
+/** Pull the neutral request fields back out of the query string Modrinth got. */
+function parseRequestParams(requestParams: string): {
+    limit: number
+    sort: ContentSort
+    query: string
+    page: number
+} {
+    const params = new URLSearchParams(
+        requestParams.startsWith('?') ? requestParams.slice(1) : requestParams,
+    )
+    const limit = Number(params.get('limit')) || 20
+    const sort = (params.get('index') ?? 'relevance') as ContentSort
+    const query = params.get('query') ?? ''
+    const offset = Number(params.get('offset')) || 0
+    return { limit, sort, query, page: Math.floor(offset / limit) + 1 }
+}
+
+/** The game version and loader a source should filter by, when there is one. */
+function queryContext(): { gameVersion?: string; loader?: string } {
+    if (isServerContext.value) {
+        return {
+            gameVersion: serverContextServerData.value?.mc_version ?? undefined,
+            loader: serverContextServerData.value?.loader ?? undefined,
+        }
+    }
+    return {
+        gameVersion: instance.value?.game_version ?? undefined,
+        loader: instance.value?.loader ?? undefined,
+    }
+}
+
+/**
+ * Every source taking part in this request: the built-in Modrinth path when it
+ * is enabled and serves the type, plus each content source that is loaded,
+ * enabled and serves the type.
+ */
+function activeSourceQueries(requestParams: string): ActiveSourceQuery[] {
+    const type = projectType.value
+    const sources: ActiveSourceQuery[] = []
+
+    // Modrinth only serves the five types it owns; a world or a skin is asked
+    // of the plugin sources alone.
+    if (
+        isSourceActive(MODRINTH_SOURCE_ID) &&
+        MODRINTH_CONTENT_TYPES.includes(type as ContentType)
+    ) {
+        sources.push({
+            sourceId: MODRINTH_SOURCE_ID,
+            query: () => searchModrinth(requestParams, type),
+        })
+    }
+
+    for (const source of selectableSources()) {
+        if (
+            source.id === MODRINTH_SOURCE_ID ||
+            !source.available ||
+            !isSourceActive(source.id) ||
+            !sourceSupportsType(source, type)
+        ) {
+            continue
+        }
+        const provider = sourceProvider(source.id)
+        if (!provider) continue
+        const run = provider.search ?? provider.browse
+        if (!run) continue
+        sources.push({
+            sourceId: source.id,
+            query: (request) =>
+                run.call(provider, {
+                    query: request.query,
+                    contentType: request.contentType,
+                    gameVersion: request.gameVersion,
+                    loader: request.loader,
+                    sort: request.sort,
+                    page: request.page,
+                    limit: request.limit,
+                } satisfies ContentQuery),
+        })
+    }
+
+    return sources
+}
+
+// Raw Modrinth hits, keyed by project id for this request. A merged row that
+// came from Modrinth is rendered from its original hit, so installed badges,
+// detail caching and install actions all keep working unchanged.
+let modrinthHits = new Map<
+    string,
+    Labrinth.Search.v3.ResultSearchProject & { installed?: boolean }
+>()
+
+async function searchModrinth(requestParams: string, contentType: string) {
+    const rawResults = await queryClient.fetchQuery({
+        queryKey: ['search', 'v3', requestParams],
+        queryFn: () =>
+            get_search_results_v3(requestParams, 'must_revalidate') as Promise<{
+                result: Labrinth.Search.v3.SearchResults & {
+                    hits: (Labrinth.Search.v3.ResultSearchProject & { installed?: boolean })[]
+                }
+            } | null>,
+        staleTime: 30_000,
+    })
+
+    if (!rawResults) return { items: [], total: 0 }
+
+    for (const hit of rawResults.result.hits) {
+        for (const identifier of [hit.project_id, hit.slug]) {
+            if (identifier) {
+                queryClient.setQueryData(['projects', 'summary', identifier], hit)
+            }
+        }
+        modrinthHits.set(hit.project_id, hit)
+    }
+
+    return {
+        items: rawResults.result.hits.map((hit) => fromSearchResult(hit, contentType)),
+        total: rawResults.result.total_hits ?? rawResults.result.hits.length,
+    }
+}
+
+/** Sources that failed during the last search, so the notice is not repeated. */
+let lastFailureKey = ''
+
+function reportSourceFailures(failures: { sourceId: string; message: string }[]) {
+    const key = failures
+        .map((failure) => failure.sourceId)
+        .sort()
+        .join(',')
+    if (key === lastFailureKey) return
+    lastFailureKey = key
+
+    for (const failure of failures) {
+        const name =
+            selectableSources().find((source) => source.id === failure.sourceId)?.name ??
+            failure.sourceId
+        handleError(new Error(`内容源「${name}」请求失败：${failure.message}`))
+    }
+}
+
 async function search(requestParams: string) {
     debugLog('searching v3', requestParams)
     const isServer = projectType.value === 'server'
 
+    // Server browsing has no content sources; it stays exactly as it was.
+    if (isServer) {
+        return searchServers(requestParams)
+    }
+
+    const request = parseRequestParams(requestParams)
+    const context = queryContext()
+    modrinthHits = new Map()
+    const sources = activeSourceQueries(requestParams)
+
+    const merged = await searchAcrossSources(sources, {
+        query: request.query,
+        contentType: projectType.value as ContentQuery['contentType'],
+        sort: request.sort,
+        page: request.page,
+        limit: request.limit,
+        gameVersion: context.gameVersion,
+        loader: context.loader,
+    })
+
+    reportSourceFailures(merged.failures)
+
+    const sourceNames = new Map(
+        selectableSources().map((source: SelectableSource) => [source.id, source.name]),
+    )
+
+    const hits = merged.items.map((item) => {
+        // A Modrinth row is rendered from its original hit: the neutral round
+        // trip drops fields the card, the detail pane and the installer need.
+        if (item.card.sourceId === MODRINTH_SOURCE_ID) {
+            const raw = modrinthHits.get(item.card.id)
+            if (raw) return withInstalledFlag(raw)
+        }
+
+        const shared = item.offers.length > 1
+        const others = item.offers
+            .map((offer) => sourceNames.get(offer.sourceId) ?? offer.sourceId)
+            .filter((name) => name !== sourceNames.get(item.card.sourceId))
+        const label =
+            sourceNames.get(item.card.sourceId) ??
+            item.card.sourceId
+
+        return toSearchResult(item.card, {
+            sourceLabel: shared ? `${label} +${item.offers.length - 1}` : label,
+            shared,
+            otherSources: others,
+        })
+    })
+
+    return {
+        projectHits: hits,
+        serverHits: [],
+        total_hits: merged.total,
+        per_page: request.limit,
+    }
+}
+
+/** Stamp the installed badge onto a Modrinth hit, as the single-source path did. */
+function withInstalledFlag(
+    hit: Labrinth.Search.v3.ResultSearchProject & { installed?: boolean },
+) {
+    const mapped = { ...hit }
+    if (instance.value || isServerContext.value || projectType.value === 'modpack') {
+        const installedIds =
+            isServerContext.value && projectType.value !== 'modpack'
+                ? serverContentProjectIds.value
+                : new Set([...newlyInstalled.value, ...(installedProjectIds.value ?? [])])
+        mapped.installed = installedIds.has(hit.project_id)
+    }
+    return mapped
+}
+
+/** Server browsing, unchanged from the single-source path. */
+async function searchServers(requestParams: string) {
     const rawResults = await queryClient.fetchQuery({
         queryKey: ['search', 'v3', requestParams],
         queryFn: () =>
@@ -1133,12 +1473,7 @@ async function search(requestParams: string) {
     })
 
     if (!rawResults) {
-        return {
-            projectHits: [],
-            serverHits: [],
-            total_hits: 0,
-            per_page: 20,
-        }
+        return { projectHits: [], serverHits: [], total_hits: 0, per_page: 20 }
     }
 
     for (const hit of rawResults.result.hits) {
@@ -1149,37 +1484,12 @@ async function search(requestParams: string) {
         }
     }
 
-    if (isServer) {
-        const hits = rawResults.result.hits ?? []
-        updateServerHits(hits)
-        return {
-            projectHits: [],
-            serverHits: hits,
-            total_hits: rawResults.result.total_hits ?? 0,
-            per_page: rawResults.result.hits_per_page,
-        }
-    }
-
-    const hits = rawResults.result.hits.map((hit) => {
-        const mapped: Labrinth.Search.v3.ResultSearchProject & { installed?: boolean } = {
-            ...hit,
-        }
-
-        if (instance.value || isServerContext.value || projectType.value === 'modpack') {
-            const installedIds =
-                isServerContext.value && projectType.value !== 'modpack'
-                    ? serverContentProjectIds.value
-                    : new Set([...newlyInstalled.value, ...(installedProjectIds.value ?? [])])
-            mapped.installed = installedIds.has(hit.project_id)
-        }
-
-        return mapped
-    })
-
+    const hits = rawResults.result.hits ?? []
+    updateServerHits(hits)
     return {
-        projectHits: hits,
-        serverHits: [],
-        total_hits: rawResults.result.total_hits,
+        projectHits: [],
+        serverHits: hits,
+        total_hits: rawResults.result.total_hits ?? 0,
         per_page: rawResults.result.hits_per_page,
     }
 }
@@ -1205,6 +1515,13 @@ const searchState = useBrowseSearch({
         ai: instanceHideInstalled.value ? 'true' : undefined,
         shi: serverHideInstalled.value ? 'true' : undefined,
     }),
+})
+
+// Turning a source on or off (or changing a multiplier, which reorders the
+// merged list) has to re-run the search; the shared search state cannot see the
+// preference store on its own.
+watch(sourcePreferences, () => {
+    void searchState.refreshSearch()
 })
 
 watch(
@@ -1293,6 +1610,27 @@ function getProjectDetailLocation(idOrSlug: string | undefined) {
     }
 }
 
+/**
+ * Where a card's detail link goes. A row from a content source has no Modrinth
+ * project behind it, so it opens the source's own page instead.
+ */
+function projectLocationFor(result: Labrinth.Search.v3.ResultSearchProject) {
+    const foreign = (result as SourcedSearchResult).__source
+    if (!foreign) {
+        return getProjectDetailLocation(result.project_id ?? result.slug)
+    }
+
+    const sourceId = encodeURIComponent(foreign.sourceId)
+    const projectId = encodeURIComponent(foreign.id)
+    if (splitViewActive.value || openProjectsInSplitView.value) {
+        return {
+            path: `/browse/${String(route.params.projectType ?? projectType.value)}/s/${sourceId}/${projectId}`,
+            query: browseListLocation(route).query,
+        }
+    }
+    return { path: `/source/${sourceId}/${projectId}`, query: getProjectBrowseQuery() }
+}
+
 const advancedFiltersCollapsed = computed({
     get: () => appSettings.getFeatureFlag('advanced_filters_collapsed'),
     set: (value) => {
@@ -1348,7 +1686,7 @@ provideBrowseManager({
     advancedFiltersCollapsed,
     dismissedPhotosensitivityFilterWarning,
     getProjectLink: (result: Labrinth.Search.v3.ResultSearchProject) =>
-        getProjectDetailLocation(result.project_id ?? result.slug),
+        projectLocationFor(result),
     getServerProjectLink: (result: Labrinth.Search.v3.ResultSearchProject) =>
         getProjectDetailLocation(result.slug ?? result.project_id),
     selectableProjectTypes,
@@ -1417,6 +1755,9 @@ provideBrowseManager({
         <div class="browse-list-pane">
             <div class="browse-list-content flex flex-col gap-3 p-6">
                 <BrowsePageLayout>
+                    <template #tabs-actions>
+                        <SourceSelector :content-type="projectType" />
+                    </template>
                     <template #after>
                         <ContextMenu ref="contextMenuRef" :label="formatMessage(messages.projectActionsLabel)">
                             <template #open_link="{ option }">

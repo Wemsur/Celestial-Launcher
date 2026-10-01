@@ -123,6 +123,7 @@
 		"mr-auth:default",
 		"onboarding-checklist:default",
 		"plugins:default",
+		"content-sources:default",
 		"instance:default",
 		"install:default",
 		"process:default",

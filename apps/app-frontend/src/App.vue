@@ -199,6 +199,7 @@ import {
 	screenshotKeys,
 } from '@/pages/instance/query-options'
 import { loadPlugins } from '@/plugin-host'
+import { loadContentSources } from '@/content-sources/loader'
 import {
 	appUpdateState,
 	downloadAvailableAppUpdate,
@@ -1073,6 +1074,21 @@ async function setupApp() {
 		},
 	}).catch((error) => {
 		console.error('Failed to load plugins', error)
+	})
+
+	// Content sources are data providers, not UI: they answer content queries
+	// rather than painting into the launcher, so they can start as soon as the
+	// app is up. A source that throws is disabled and reported.
+	void loadContentSources({
+		onCrash: (source, message) => {
+			addNotification({
+				title: `内容源「${source.manifest?.name ?? source.id}」已停止运行`,
+				text: `该内容源抛出错误并已被自动禁用，详情见内容源管理界面。\n${message}`,
+				type: 'error',
+			})
+		},
+	}).catch((error) => {
+		console.error('Failed to load content sources', error)
 	})
 	const isSyncUpdateVersion = version.startsWith('0.20.')
 	if (isSyncUpdateVersion && pending_update_toast_for_version !== version) {

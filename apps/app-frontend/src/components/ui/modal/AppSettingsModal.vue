@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
 	CoffeeIcon,
+	CompassIcon,
 	GaugeIcon,
 	HeartHandshakeIcon,
 	LanguagesIcon,
@@ -35,6 +36,7 @@ import PrivacySettings from '@/components/ui/settings/account/PrivacySettings.vu
 import ProfileSettings from '@/components/ui/settings/account/ProfileSettings.vue'
 import SocialSettings from '@/components/ui/settings/account/SocialSettings.vue'
 import AccountsSettings from '@/components/ui/settings/AccountsSettings.vue'
+import ContentSourceSettings from '@/components/ui/settings/content-sources/ContentSourceSettings.vue'
 import AppearanceSettings from '@/components/ui/settings/display/AppearanceSettings.vue'
 import BehaviorSettings from '@/components/ui/settings/display/BehaviorSettings.vue'
 import FeatureFlagSettings from '@/components/ui/settings/display/FeatureFlagSettings.vue'
@@ -81,7 +83,7 @@ const tabCategories = defineMessages({
 	},
 	plugins: {
 		id: 'app.settings.sidebar.label.plugins',
-		defaultMessage: 'Plugins',
+		defaultMessage: 'Launcher',
 	},
 })
 
@@ -186,6 +188,16 @@ const tabs = [
 		category: tabCategories.plugins,
 		icon: PlugIcon,
 		content: PluginSettings,
+		badge: commonMessages.beta,
+	},
+	{
+		name: defineMessage({
+			id: 'app.settings.tabs.content-sources',
+			defaultMessage: 'Content sources',
+		}),
+		category: tabCategories.plugins,
+		icon: CompassIcon,
+		content: ContentSourceSettings,
 		badge: commonMessages.beta,
 	},
 ]

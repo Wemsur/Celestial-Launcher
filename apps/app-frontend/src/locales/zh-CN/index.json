@@ -269,6 +269,15 @@
   "app.browse.back-to-instance": {
     "message": "返回实例"
   },
+  "app.browse.content-sources.placeholder": {
+    "message": "内容源"
+  },
+  "app.browse.content-sources.search": {
+    "message": "搜索内容源"
+  },
+  "app.browse.content-sources.select-all": {
+    "message": "全部内容源"
+  },
   "app.browse.discover-project-type": {
     "message": "探索{projectType}"
   },
@@ -301,6 +310,12 @@
   },
   "app.browse.project-type.shaders": {
     "message": "光影"
+  },
+  "app.browse.project-type.skins": {
+    "message": "皮肤"
+  },
+  "app.browse.project-type.worlds": {
+    "message": "世界"
   },
   "app.browse.server-instance-content-warning": {
     "message": "加入服务器时，添加内容可能会破坏兼容性。当更新服务器实例内容时，任何添加的内容也将丢失。"
@@ -559,6 +574,9 @@
   },
   "app.instance.content.managed-content.shared-header": {
     "message": "共享内容"
+  },
+  "app.instance.content.source-content": {
+    "message": "内容源内容"
   },
   "app.instance.modpack-already-installed.body": {
     "message": "该整合包已经被安装到实例<bold>{instanceName}</bold>中了。你确定要重复安装吗？"
@@ -1514,6 +1532,144 @@
   "app.settings.app-version": {
     "message": "Celestial v{version}"
   },
+  "app.settings.content-sources.broken": {
+    "message": "无法加载"
+  },
+  "app.settings.content-sources.capabilities": {
+    "message": "能力"
+  },
+  "app.settings.content-sources.config": {
+    "message": "设置"
+  },
+  "app.settings.content-sources.config.add-entry": {
+    "message": "添加条目"
+  },
+  "app.settings.content-sources.config.done": {
+    "message": "完成"
+  },
+  "app.settings.content-sources.config.entries": {
+    "message": "条目"
+  },
+  "app.settings.content-sources.config.entries-hint": {
+    "message": "这个内容源自己没有内容目录，你想看到什么就自己加。一个条目就是一个项目。"
+  },
+  "app.settings.content-sources.config.invalid": {
+    "message": "格式不符合要求"
+  },
+  "app.settings.content-sources.config.none": {
+    "message": "这个内容源没有可配置的内容。"
+  },
+  "app.settings.content-sources.config.remove-entry": {
+    "message": "删除"
+  },
+  "app.settings.content-sources.config.required": {
+    "message": "必填"
+  },
+  "app.settings.content-sources.config.saved": {
+    "message": "修改会自动保存。"
+  },
+  "app.settings.content-sources.config.settings": {
+    "message": "设置项"
+  },
+  "app.settings.content-sources.config.title": {
+    "message": "内容源设置"
+  },
+  "app.settings.content-sources.crash-log": {
+    "message": "查看崩溃日志"
+  },
+  "app.settings.content-sources.description": {
+    "message": "内容源是插件，用于添加可浏览的下载来源。默认情况下，发现页会使用所有已启用的内容源。"
+  },
+  "app.settings.content-sources.empty": {
+    "message": "尚未安装任何内容源。"
+  },
+  "app.settings.content-sources.empty-hint": {
+    "message": "可在“商店”标签安装，或从文件夹安装。"
+  },
+  "app.settings.content-sources.hosts": {
+    "message": "网络访问"
+  },
+  "app.settings.content-sources.install": {
+    "message": "从文件夹安装"
+  },
+  "app.settings.content-sources.load-failed": {
+    "message": "运行时启动失败"
+  },
+  "app.settings.content-sources.loading": {
+    "message": "正在加载内容源…"
+  },
+  "app.settings.content-sources.multiplier.decrease": {
+    "message": "减半"
+  },
+  "app.settings.content-sources.multiplier.description": {
+    "message": "按下载量排序时，每个内容源的下载量会先乘以其倍率再参与合并排序。可以用它避免大站的下载量把小站完全压下去。"
+  },
+  "app.settings.content-sources.multiplier.done": {
+    "message": "完成"
+  },
+  "app.settings.content-sources.multiplier.increase": {
+    "message": "翻倍"
+  },
+  "app.settings.content-sources.multiplier.label": {
+    "message": "倍率"
+  },
+  "app.settings.content-sources.multiplier.reset": {
+    "message": "全部重置为 1"
+  },
+  "app.settings.content-sources.multiplier.reset-one": {
+    "message": "重置"
+  },
+  "app.settings.content-sources.multiplier.source": {
+    "message": "内容源"
+  },
+  "app.settings.content-sources.multiplier.title": {
+    "message": "源倍率"
+  },
+  "app.settings.content-sources.multipliers": {
+    "message": "源倍率"
+  },
+  "app.settings.content-sources.open-folder": {
+    "message": "打开内容源文件夹"
+  },
+  "app.settings.content-sources.requires-login": {
+    "message": "需要登录"
+  },
+  "app.settings.content-sources.store-empty": {
+    "message": "内容源商店为空。"
+  },
+  "app.settings.content-sources.store-error": {
+    "message": "无法加载内容源商店。"
+  },
+  "app.settings.content-sources.store-install": {
+    "message": "安装"
+  },
+  "app.settings.content-sources.store-installed": {
+    "message": "已安装"
+  },
+  "app.settings.content-sources.store-loading": {
+    "message": "正在加载内容源商店…"
+  },
+  "app.settings.content-sources.store-refresh": {
+    "message": "刷新"
+  },
+  "app.settings.content-sources.tab-installed": {
+    "message": "已安装"
+  },
+  "app.settings.content-sources.tab-store": {
+    "message": "商店"
+  },
+  "app.settings.content-sources.title": {
+    "message": "内容源"
+  },
+  "app.settings.content-sources.types": {
+    "message": "内容类型"
+  },
+  "app.settings.content-sources.uninstall": {
+    "message": "卸载"
+  },
+  "app.settings.content-sources.unsupported": {
+    "message": "暂无可用能力"
+  },
   "app.settings.default-instance-options.environment-variables.description": {
     "message": "启动实例时设置的环境变量。"
   },
@@ -1803,7 +1959,7 @@
     "message": "实例设置"
   },
   "app.settings.sidebar.label.plugins": {
-    "message": "插件"
+    "message": "启动器"
   },
   "app.settings.synced-options.choose-sync-source.no-instances-found": {
     "message": "没有找到实例"
@@ -1855,6 +2011,9 @@
   },
   "app.settings.tabs.behavior": {
     "message": "行为"
+  },
+  "app.settings.tabs.content-sources": {
+    "message": "内容源"
   },
   "app.settings.tabs.default-instance-options": {
     "message": "默认游戏选项"
@@ -2068,6 +2227,96 @@
   },
   "app.skins.toggle-ears-features-on": {
     "message": "切换至开"
+  },
+  "app.source-content.check": {
+    "message": "检查更新"
+  },
+  "app.source-content.checking": {
+    "message": "正在检查…"
+  },
+  "app.source-content.description": {
+    "message": "从内容源安装的内容，以及其内容源是否有更新。"
+  },
+  "app.source-content.done": {
+    "message": "完成"
+  },
+  "app.source-content.empty": {
+    "message": "此实例还没有从内容源安装任何内容。"
+  },
+  "app.source-content.failed": {
+    "message": "检查失败"
+  },
+  "app.source-content.forget": {
+    "message": "不再跟踪"
+  },
+  "app.source-content.forget-hint": {
+    "message": "只在此处停止跟踪，文件本身保留。"
+  },
+  "app.source-content.has-update": {
+    "message": "有可用更新"
+  },
+  "app.source-content.no-check": {
+    "message": "该内容源不支持检查更新。"
+  },
+  "app.source-content.redownload": {
+    "message": "重新下载一份"
+  },
+  "app.source-content.title": {
+    "message": "内容源内容"
+  },
+  "app.source-content.world-note": {
+    "message": "世界永远不替换——每次下载都会新建一份，你在世界里的改动不会被覆盖；因此世界也不参与更新检查。"
+  },
+  "app.source-content.unknown-source": {
+    "message": "内容源未加载"
+  },
+  "app.source-content.up-to-date": {
+    "message": "已是最新"
+  },
+  "app.source-content.update": {
+    "message": "更新"
+  },
+  "app.source-content.versions": {
+    "message": "切换版本"
+  },
+  "app.source-project.back": {
+    "message": "返回"
+  },
+  "app.source-project.by": {
+    "message": "作者"
+  },
+  "app.source-project.install": {
+    "message": "安装"
+  },
+  "app.source-project.installing": {
+    "message": "安装中"
+  },
+  "app.source-project.loading": {
+    "message": "正在加载项目…"
+  },
+  "app.source-project.need-instance": {
+    "message": "请先选择实例，再安装此内容。"
+  },
+  "app.source-project.no-detail": {
+    "message": "该内容源没有提供项目页面。"
+  },
+  "app.source-project.no-detail-hint": {
+    "message": "你仍然可以安装它，或前往内容源本站查看。"
+  },
+  "app.source-project.no-download": {
+    "message": "该内容源无法直接下载此内容。"
+  },
+  "app.source-project.open": {
+    "message": "在内容源本站打开"
+  },
+  "app.source-project.unknown-source": {
+    "message": "该内容源未加载。"
+  },
+  "app.source-project.version": {
+    "message": "版本"
+  },
+  "app.source-project.versions": {
+    "message": "版本列表"
   },
   "app.survey.body": {
     "message": "您是否介意回答一些关于使用 Modrinth App 的问题？"

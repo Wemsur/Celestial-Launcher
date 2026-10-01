@@ -504,6 +504,38 @@ fn main() {
                     .default_permission(
                         DefaultPermissionRule::AllowAllCommands,
                     ),
+            )
+            .plugin(
+                "content-sources",
+                InlinedPlugin::new()
+                    .commands(&[
+                        "content_source_list",
+                        "content_source_get",
+                        "content_source_install",
+                        "content_source_install_from_url",
+                        "content_source_update_from_url",
+                        "content_source_latest_release",
+                        "content_source_uninstall",
+                        "content_source_set_enabled",
+                        "content_source_open_folder",
+                        "content_source_storage_get",
+                        "content_source_storage_set",
+                        "content_source_storage_remove",
+                        "content_source_storage_keys",
+                        "content_source_settings_get",
+                        "content_source_settings_set",
+                        "content_source_crash_log",
+                        "content_source_report_crash",
+                        "content_source_read_entry",
+                        "content_source_fetch",
+                        "content_source_install_content",
+                        "content_source_list_installed",
+                        "content_source_forget_installed",
+                        "content_source_list_downloaded_skins",
+                    ])
+                    .default_permission(
+                        DefaultPermissionRule::AllowAllCommands,
+                    ),
             ),
     )
     .expect("Failed to run tauri-build");

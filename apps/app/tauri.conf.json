@@ -103,7 +103,9 @@
 					"$CONFIG/profiles/*/saves/*/icon.png",
 					"$APPDATA/custom_bg_settings.txt",
 					"$APPDATA/*",
-					"$APPDATA/plugins/**"
+					"$APPDATA/plugins/**",
+					"$APPDATA/content-sources/**",
+					"$APPDATA/skins/**"
 				],
 				"enable": true
 			},

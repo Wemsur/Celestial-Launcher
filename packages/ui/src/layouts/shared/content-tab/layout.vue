@@ -1216,6 +1216,12 @@ const confirmUnlinkModal = ref<InstanceType<typeof ConfirmUnlinkModal>>()
 							</div>
 
 							<div class="flex shrink-0 items-center gap-2">
+								<!--
+									Platform-specific controls for the toolbar (the app puts its
+									content-source panel button here). Empty on the web.
+								-->
+								<slot name="toolbar-actions" />
+
 								<Button
 									v-if="hasBulkUpdateSupport && hasOutdatedProjects"
 									v-tooltip="formatMessage(messages.updateAll)"

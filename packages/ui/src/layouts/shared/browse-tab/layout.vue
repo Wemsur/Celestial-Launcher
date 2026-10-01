@@ -160,11 +160,22 @@ function getProjectCardTags(result: Labrinth.Search.v3.ResultSearchProject, disp
 		v-if="ctx.showProjectTypeTabs.value"
 		:class="
 			scrollableProjectTypeTabs
-				? '-mx-6 -my-2 overflow-x-auto px-6 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
-				: 'contents'
+				? '-mx-6 -my-2 flex items-center gap-2 overflow-x-auto px-6 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+				: 'flex items-center justify-between gap-2'
 		"
 	>
-		<NavTabs :links="ctx.selectableProjectTypes.value" :replace="ctx.variant === 'app'" />
+		<NavTabs
+			:links="ctx.selectableProjectTypes.value"
+			:replace="ctx.variant === 'app'"
+			:class="scrollableProjectTypeTabs ? 'shrink-0' : ''"
+		/>
+		<!--
+			Platform-specific controls for the tab row (the app puts its content
+			source picker here). Empty on the web, where the slot is unused.
+		-->
+		<div v-if="$slots['tabs-actions']" class="shrink-0">
+			<slot name="tabs-actions" />
+		</div>
 	</div>
 
 	<Input

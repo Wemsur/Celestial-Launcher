@@ -27,6 +27,7 @@ import {
 } from '@modrinth/ui'
 import { arrayBufferToBase64 } from '@modrinth/utils'
 import { useQuery } from '@tanstack/vue-query'
+import { convertFileSrc } from '@tauri-apps/api/core'
 import { type DragDropEvent, getCurrentWebview } from '@tauri-apps/api/webview'
 import { computedAsync } from '@vueuse/core'
 import type { Ref } from 'vue'
@@ -38,6 +39,7 @@ import EditSkinModal from '@/components/ui/skin/EditSkinModal.vue'
 import VirtualSkinSectionList from '@/components/ui/skin/VirtualSkinSectionList.vue'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
 import { handleSevereError } from '@/composables/use-error.js'
+import { type DownloadedSkin, listDownloadedSkins } from '@/content-sources/ipc'
 import { trackEvent } from '@/helpers/analytics'
 import { check_reachable, create_offline_user, get_default_user, login as login_flow, set_default_user, users } from '@/helpers/auth'
 import { cleanupUnusedPreviews } from '@/helpers/rendering/skin-previews'
@@ -1121,8 +1123,26 @@ function hideOfflineModal() {
     offlineError.value = ''
 }
 
+/**
+ * 从内容源下载的皮肤。它们属于启动器而不是某个实例，放在启动器数据目录的
+ * skins 文件夹里，这一页只负责把它们列出来。
+ */
+const downloadedSkins = ref<DownloadedSkin[]>([])
 
-await Promise.all([loadCapes(), loadCurrentUser()])
+async function loadDownloadedSkins() {
+    try {
+        downloadedSkins.value = await listDownloadedSkins()
+    } catch {
+        // 皮肤列表是附带信息，读不到就不显示，不打扰用户。
+        downloadedSkins.value = []
+    }
+}
+
+function downloadedSkinUrl(skin: DownloadedSkin): string {
+    return convertFileSrc(skin.path)
+}
+
+await Promise.all([loadCapes(), loadCurrentUser(), loadDownloadedSkins()])
 await loadSkins()
 </script>
 
@@ -1328,6 +1348,32 @@ await loadSkins()
 				@add-skin-dragleave="onAddSkinDragLeave"
 				@add-skin-drop="onAddSkinDrop"
 			/>
+		</div>
+	</div>
+
+	<div class="mt-8 flex flex-col gap-3 px-4">
+		<div class="flex items-baseline justify-between gap-4">
+			<h2 class="m-0 text-xl font-semibold text-contrast">已下载的皮肤</h2>
+			<span class="text-sm text-secondary">{{ downloadedSkins.length }} 个</span>
+		</div>
+		<p v-if="downloadedSkins.length === 0" class="m-0 text-secondary">
+			还没有从内容源下载的皮肤。在「发现」页里选择提供皮肤的内容源即可下载，下载后会出现在这里。
+		</p>
+		<div v-else class="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
+			<div
+				v-for="skin in downloadedSkins"
+				:key="skin.path"
+				class="flex flex-col items-center gap-2 rounded-xl border border-solid border-surface-5 bg-surface-3 p-3"
+			>
+				<img
+					:src="downloadedSkinUrl(skin)"
+					:alt="skin.name"
+					class="h-28 w-auto [image-rendering:pixelated]"
+				/>
+				<span class="w-full truncate text-center text-xs text-secondary" :title="skin.name">
+					{{ skin.name }}
+				</span>
+			</div>
 		</div>
 	</div>
 
