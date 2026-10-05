@@ -14,6 +14,8 @@ export const SPLIT_PROJECT_ROUTE_NAME = 'DiscoverSplitProject'
 /** A content source's project page, shown in the same split pane. */
 export const SPLIT_SOURCE_PROJECT_ROUTE_NAME = 'DiscoverSplitSourceProject'
 export const PLAIN_PROJECT_ROUTE_NAME = 'Project'
+/** The same source page at full width, outside split view. */
+export const PLAIN_SOURCE_PROJECT_ROUTE_NAME = 'SourceProject'
 
 export const SPLIT_ROUTE_NAME_BY_SUBPAGE = {
 	description: 'DiscoverSplitProjectDescription',
@@ -98,7 +100,11 @@ export function isSplitProjectRoute(route: RouteLike): boolean {
 }
 
 export function isPlainProjectRoute(route: RouteLike): boolean {
-	return route.matched.some((record) => record.name === PLAIN_PROJECT_ROUTE_NAME)
+	return route.matched.some(
+		(record) =>
+			record.name === PLAIN_PROJECT_ROUTE_NAME ||
+			record.name === PLAIN_SOURCE_PROJECT_ROUTE_NAME,
+	)
 }
 
 /** True for both `/project/:id` and the split view's `/browse/:projectType/p/:id`. */
