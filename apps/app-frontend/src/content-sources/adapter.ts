@@ -69,13 +69,26 @@ export function toSearchResult(
 }
 
 /**
+ * A neutral card that still carries the Modrinth hit it was built from.
+ *
+ * Modrinth rows render from the full hit, not the lossy neutral card, so the hit
+ * has to travel with the card through the merge and the result cache — a
+ * module-level side table would be empty on a cache hit, when the fetch that
+ * filled it never ran.
+ */
+export type ModrinthContentCard = ContentCard & {
+	__modrinthHit?: Labrinth.Search.v3.ResultSearchProject & { installed?: boolean }
+}
+
+/**
  * The reverse, for feeding Modrinth's own results into the merge. Only the
- * fields the merge and the multipliers read are carried over.
+ * fields the merge and the multipliers read are carried over; the raw hit rides
+ * along for the final render.
  */
 export function fromSearchResult(
-	result: Labrinth.Search.v3.ResultSearchProject,
+	result: Labrinth.Search.v3.ResultSearchProject & { installed?: boolean },
 	contentType: string,
-): ContentCard {
+): ModrinthContentCard {
 	return {
 		sourceId: MODRINTH_SOURCE_ID,
 		id: result.project_id,
@@ -90,7 +103,15 @@ export function fromSearchResult(
 		updatedAt: result.date_modified || undefined,
 		loaders: result.loaders,
 		tags: result.display_categories ?? [],
+		__modrinthHit: result,
 	}
+}
+
+/** The raw Modrinth hit a card was built from, if it is a Modrinth card. */
+export function modrinthHitOf(
+	card: ContentCard,
+): (Labrinth.Search.v3.ResultSearchProject & { installed?: boolean }) | undefined {
+	return (card as ModrinthContentCard).__modrinthHit
 }
 
 /** Whether a rendered row came from a source other than the built-in one. */

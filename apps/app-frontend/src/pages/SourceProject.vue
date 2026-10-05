@@ -2,6 +2,7 @@
 import { ExternalIcon, PlusIcon, SpinnerIcon, UndoIcon } from '@modrinth/assets'
 import { Button, defineMessages, injectNotificationManager, useVIntl } from '@modrinth/ui'
 import { openUrl } from '@tauri-apps/plugin-opener'
+import { useQueryClient } from '@tanstack/vue-query'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -9,9 +10,11 @@ import { selectableSources } from '@/content-sources/catalog'
 import { installSourceContent } from '@/content-sources/ipc'
 import { sourceProvider } from '@/content-sources/registry'
 import type { ContentProject, ContentType, ContentVersion } from '@/content-sources/types'
+import { toError } from '@/helpers/errors'
 
 const route = useRoute()
 const router = useRouter()
+const queryClient = useQueryClient()
 const { formatMessage } = useVIntl()
 const { handleError, addNotification } = injectNotificationManager()
 
@@ -46,10 +49,20 @@ const messages = defineMessages({
 	by: { id: 'app.source-project.by', defaultMessage: 'by' },
 })
 
+const provider = computed(() => sourceProvider(sourceId.value))
+
 const sourceId = computed(() => String(route.params.sourceId ?? ''))
 const projectId = computed(() => String(route.params.projectId ?? ''))
+// Split route carries the type in the path (`:projectType`); the full-width
+// route carries it in the query. Fall back to the source's sole type, then mod.
 const contentType = computed(
-	() => String(route.params.projectType ?? 'mod') as ContentType,
+	() =>
+		String(
+			route.params.projectType ??
+				route.query.type ??
+				provider.value?.manifest.content_types[0] ??
+				'mod',
+		) as ContentType,
 )
 
 const sourceName = computed(
@@ -64,8 +77,6 @@ const selectedVersionId = ref<string | undefined>(undefined)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const installing = ref(false)
-
-const provider = computed(() => sourceProvider(sourceId.value))
 
 /** The instance this browse session is installing into, when there is one. */
 const instanceId = computed(() =>
@@ -96,27 +107,43 @@ async function load() {
 	}
 
 	try {
-		if (current.detail) {
-			project.value = await current.detail(projectId.value, contentType.value)
-		}
-		if (current.versions) {
-			versions.value = await current.versions(projectId.value, {
-				contentType: contentType.value,
-				sort: 'newest',
-				page: 1,
-				limit: 50,
-			})
-			selectedVersionId.value = versions.value[0]?.id
-		}
+		// Cached like the browse list: a source has no backend cache of its own,
+		// so without this every visit to a project is another round trip.
+		const data = await queryClient.fetchQuery({
+			queryKey: [
+				'content-source',
+				'project',
+				sourceId.value,
+				projectId.value,
+				contentType.value,
+			],
+			staleTime: 120_000,
+			queryFn: async () => ({
+				project: current.detail
+					? await current.detail(projectId.value, contentType.value)
+					: null,
+				versions: current.versions
+					? await current.versions(projectId.value, {
+							contentType: contentType.value,
+							sort: 'newest',
+							page: 1,
+							limit: 50,
+						})
+					: [],
+			}),
+		})
+		project.value = data.project
+		versions.value = data.versions
+		selectedVersionId.value = data.versions[0]?.id
 	} catch (error) {
-		loadError.value = error instanceof Error ? error.message : String(error)
+		loadError.value = toError(error).message
 	} finally {
 		loading.value = false
 	}
 }
 
 onMounted(load)
-watch(() => [sourceId.value, projectId.value], load)
+watch(() => [sourceId.value, projectId.value, contentType.value], load)
 
 async function install() {
 	const current = provider.value

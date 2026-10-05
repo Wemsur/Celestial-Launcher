@@ -49,7 +49,12 @@ import {
     openProjectsInSplitView,
     useSplitView,
 } from '@/composables/use-split-view.ts'
-import { fromSearchResult, type SourcedSearchResult, toSearchResult } from '@/content-sources/adapter'
+import {
+    fromSearchResult,
+    modrinthHitOf,
+    type SourcedSearchResult,
+    toSearchResult,
+} from '@/content-sources/adapter'
 import { type ActiveSourceQuery, searchAcrossSources } from '@/content-sources/aggregate'
 import {
     MODRINTH_CONTENT_TYPES,
@@ -58,7 +63,12 @@ import {
     sourceSupportsType,
 } from '@/content-sources/catalog'
 import { installSourceContent } from '@/content-sources/ipc'
-import { isSourceActive, MODRINTH_SOURCE_ID, sourcePreferences } from '@/content-sources/preferences'
+import {
+    isSourceActive,
+    MODRINTH_SOURCE_ID,
+    sourceMultiplier,
+    sourcePreferences,
+} from '@/content-sources/preferences'
 import { sourceProvider } from '@/content-sources/registry'
 import SourceSelector from '@/content-sources/SourceSelector.vue'
 import type { ContentQuery, ContentSort, ContentType } from '@/content-sources/types'
@@ -134,9 +144,15 @@ const appSettings = useAppSettings()
 const browseRouteActive = computed(() => route.path.startsWith('/browse/'))
 const { splitViewActive } = useSplitView()
 /** Detail pane path segment, so tabs and links keep the open project. */
-const splitDetailSuffix = computed(() =>
-    splitViewActive.value ? `/p/${String(route.params.id ?? '')}` : '',
-)
+const splitDetailSuffix = computed(() => {
+    if (!splitViewActive.value) return ''
+    // A content source's project has its own segment pair; without this the
+    // suffix would fall through to `/p/` and switching tabs would navigate to a
+    // Modrinth route with an empty id.
+    const { sourceId, projectId } = route.params
+    if (sourceId && projectId) return `/s/${String(sourceId)}/${String(projectId)}`
+    return `/p/${String(route.params.id ?? '')}`
+})
 const serverSetupModalRef = ref<InstanceType<typeof CreationFlowModal> | null>(null)
 const serverInstallContent = createServerInstallContent({ serverSetupModalRef })
 provideServerInstallContent(serverInstallContent)
@@ -1172,12 +1188,6 @@ function getCardActions(
 }
 
 /**
- * Install a row that came from a content source.
- *
- * The source is asked for a download, and the launcher performs the install —
- * a source never writes to an instance itself. A skin lands in the launcher's
- * own skins folder, everything else in the instance the user is browsing.
- */
 /**
  * Install a row that came from a content source.
  *
@@ -1354,14 +1364,6 @@ function activeSourceQueries(requestParams: string): ActiveSourceQuery[] {
     return sources
 }
 
-// Raw Modrinth hits, keyed by project id for this request. A merged row that
-// came from Modrinth is rendered from its original hit, so installed badges,
-// detail caching and install actions all keep working unchanged.
-let modrinthHits = new Map<
-    string,
-    Labrinth.Search.v3.ResultSearchProject & { installed?: boolean }
->()
-
 async function searchModrinth(requestParams: string, contentType: string) {
     const rawResults = await queryClient.fetchQuery({
         queryKey: ['search', 'v3', requestParams],
@@ -1375,15 +1377,6 @@ async function searchModrinth(requestParams: string, contentType: string) {
     })
 
     if (!rawResults) return { items: [], total: 0 }
-
-    for (const hit of rawResults.result.hits) {
-        for (const identifier of [hit.project_id, hit.slug]) {
-            if (identifier) {
-                queryClient.setQueryData(['projects', 'summary', identifier], hit)
-            }
-        }
-        modrinthHits.set(hit.project_id, hit)
-    }
 
     return {
         items: rawResults.result.hits.map((hit) => fromSearchResult(hit, contentType)),
@@ -1421,17 +1414,42 @@ async function search(requestParams: string) {
 
     const request = parseRequestParams(requestParams)
     const context = queryContext()
-    modrinthHits = new Map()
-    const sources = activeSourceQueries(requestParams)
 
-    const merged = await searchAcrossSources(sources, {
-        query: request.query,
-        contentType: projectType.value as ContentQuery['contentType'],
-        sort: request.sort,
-        page: request.page,
-        limit: request.limit,
-        gameVersion: context.gameVersion,
-        loader: context.loader,
+    // The active source set is part of the cache key: toggling a source has to
+    // produce a different list, and the multiplier that reorders it is folded in
+    // too so a changed multiplier is not served a stale order.
+    const activeKey = selectableSources()
+        .filter((source) => source.available && isSourceActive(source.id))
+        .map((source) => `${source.id}:${sourceMultiplier(source.id)}`)
+        .join(',')
+
+    const merged = await queryClient.fetchQuery({
+        queryKey: [
+            'content-sources',
+            'search',
+            activeKey,
+            projectType.value,
+            request.query,
+            request.sort,
+            request.page,
+            request.limit,
+            context.gameVersion ?? '',
+            context.loader ?? '',
+        ],
+        // 120s: a content source is live-fetched over the network with no
+        // backend cache of its own, so this is the only thing standing between a
+        // tab switch and another round trip.
+        staleTime: 120_000,
+        queryFn: () =>
+            searchAcrossSources(activeSourceQueries(requestParams), {
+                query: request.query,
+                contentType: projectType.value as ContentQuery['contentType'],
+                sort: request.sort,
+                page: request.page,
+                limit: request.limit,
+                gameVersion: context.gameVersion,
+                loader: context.loader,
+            }),
     })
 
     reportSourceFailures(merged.failures)
@@ -1441,11 +1459,17 @@ async function search(requestParams: string) {
     )
 
     const hits = merged.items.map((item) => {
-        // A Modrinth row is rendered from its original hit: the neutral round
-        // trip drops fields the card, the detail pane and the installer need.
-        if (item.card.sourceId === MODRINTH_SOURCE_ID) {
-            const raw = modrinthHits.get(item.card.id)
-            if (raw) return withInstalledFlag(raw)
+        // A Modrinth row is rendered from its original hit, which rides along on
+        // the card so it survives the result cache; the neutral round trip drops
+        // fields the card, the detail pane and the installer need.
+        const raw = modrinthHitOf(item.card)
+        if (raw) {
+            // Re-seed the summary cache: on a cache hit the fetch that filled it
+            // did not run, but the project page still reads from it.
+            for (const identifier of [raw.project_id, raw.slug]) {
+                if (identifier) queryClient.setQueryData(['projects', 'summary', identifier], raw)
+            }
+            return withInstalledFlag(raw)
         }
 
         const shared = item.offers.length > 1
@@ -1649,13 +1673,20 @@ function projectLocationFor(result: Labrinth.Search.v3.ResultSearchProject) {
 
     const sourceId = encodeURIComponent(foreign.sourceId)
     const projectId = encodeURIComponent(foreign.id)
+    // The content type lives in the path for the split route (it reuses the
+    // browse `:projectType`), but the full-width route has no such segment, so
+    // it rides in the query — the source page installs by type and must know it.
+    const contentType = result.project_types?.[0] ?? projectType.value
     if (splitViewActive.value || openProjectsInSplitView.value) {
         return {
             path: `/browse/${String(route.params.projectType ?? projectType.value)}/s/${sourceId}/${projectId}`,
             query: browseListLocation(route).query,
         }
     }
-    return { path: `/source/${sourceId}/${projectId}`, query: getProjectBrowseQuery() }
+    return {
+        path: `/source/${sourceId}/${projectId}`,
+        query: { ...getProjectBrowseQuery(), type: contentType },
+    }
 }
 
 const advancedFiltersCollapsed = computed({

@@ -315,7 +315,7 @@
     "message": "皮肤"
   },
   "app.browse.project-type.worlds": {
-    "message": "世界"
+    "message": "地图"
   },
   "app.browse.server-instance-content-warning": {
     "message": "加入服务器时，添加内容可能会破坏兼容性。当更新服务器实例内容时，任何添加的内容也将丢失。"

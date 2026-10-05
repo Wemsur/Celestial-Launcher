@@ -11,6 +11,8 @@ import { loadSplitViewEnabled, saveSplitViewEnabled } from '@/helpers/split-view
  */
 export const BROWSE_LIST_ROUTE_NAME = 'Discover content'
 export const SPLIT_PROJECT_ROUTE_NAME = 'DiscoverSplitProject'
+/** A content source's project page, shown in the same split pane. */
+export const SPLIT_SOURCE_PROJECT_ROUTE_NAME = 'DiscoverSplitSourceProject'
 export const PLAIN_PROJECT_ROUTE_NAME = 'Project'
 
 export const SPLIT_ROUTE_NAME_BY_SUBPAGE = {
@@ -88,7 +90,11 @@ export function isBrowseRoute(route: RouteLike): boolean {
 }
 
 export function isSplitProjectRoute(route: RouteLike): boolean {
-	return route.matched.some((record) => record.name === SPLIT_PROJECT_ROUTE_NAME)
+	return route.matched.some(
+		(record) =>
+			record.name === SPLIT_PROJECT_ROUTE_NAME ||
+			record.name === SPLIT_SOURCE_PROJECT_ROUTE_NAME,
+	)
 }
 
 export function isPlainProjectRoute(route: RouteLike): boolean {
