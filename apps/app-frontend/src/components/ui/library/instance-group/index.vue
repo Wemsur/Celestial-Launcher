@@ -18,7 +18,6 @@ import {
 	InlineEditableText,
 	NewModal,
 	TagItem,
-	useScrollViewport,
 	useVIntl,
 } from '@modrinth/ui'
 import { useElementSize, useWindowSize } from '@vueuse/core'
@@ -84,16 +83,9 @@ const groupAccordion = ref<InstanceType<typeof Accordion>>()
 const groupOptions = ref<InstanceType<typeof ContextMenu>>()
 const groupNameInput = ref<InstanceType<typeof InlineEditableText>>()
 const confirmDeleteGroupModal = ref<InstanceType<typeof NewModal>>()
-const {
-	listContainer: instanceGridContent,
-	scrollTop,
-	containerOffset,
-	viewportHeight,
-	syncScrollState,
-} = useScrollViewport()
+const instanceGridContent = ref<HTMLElement | null>(null)
 const { width: gridWidth } = useElementSize(instanceGridContent)
 const { width: windowWidth } = useWindowSize()
-const focusedInstanceId = ref<string | null>(null)
 const enteringInstanceIds = ref(new Set<string>())
 const animateCardMoves = ref(false)
 let cardMoveTimer: ReturnType<typeof setTimeout> | undefined
@@ -146,21 +138,7 @@ const visibleInstances = computed(() => {
 	if (gridWidth.value <= 0) return []
 	if (!props.hideHeader && isSectionCollapsed(props.instanceGroup.id) && !isSearching.value)
 		return []
-	const top = scrollTop.value - containerOffset.value
-	const stride = cardHeight.value + gap.value
-	const first = Math.max(0, Math.floor((top - 300) / stride)) * columnCount.value
-	const end =
-		Math.max(0, Math.ceil((top + (viewportHeight.value || 800) + 300) / stride)) * columnCount.value
-	const dragging = activeInstanceGroupDrag.value
-	return props.instanceGroup.instances.flatMap((instance, index) => {
-		const inViewport = index >= first && index < end
-		const focused = focusedInstanceId.value === instance.id
-		const dragged =
-			dragging &&
-			(dragging.fromGroup ?? 'group:none') === props.instanceGroup.id &&
-			dragging.primaryInstanceId === instance.id
-		return inViewport || focused || dragged ? [{ instance, index }] : []
-	})
+	return props.instanceGroup.instances.map((instance, index) => ({ instance, index }))
 })
 
 function instancePosition(index: number) {
@@ -181,20 +159,13 @@ async function handleCardTab(event: KeyboardEvent, index: number) {
 	const boundary = event.shiftKey ? controls[0] : controls.at(-1)
 	if (event.target !== boundary) return
 	const nextIndex = index + (event.shiftKey ? -1 : 1)
-	const nextInstance = props.instanceGroup.instances[nextIndex]
-	if (!nextInstance) return
+	if (!props.instanceGroup.instances[nextIndex]) return
 	event.preventDefault()
-	focusedInstanceId.value = nextInstance.id
 	await nextTick()
 	const nextCard = instanceGridContent.value?.querySelector(`[data-instance-index="${nextIndex}"]`)
 	const nextControls = [...(nextCard?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])]
 	const target = event.shiftKey ? nextControls.at(-1) : nextControls[0]
 	target?.focus()
-}
-
-function handleCardBlur(event: FocusEvent, instanceId: string) {
-	if ((event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) return
-	if (focusedInstanceId.value === instanceId) focusedInstanceId.value = null
 }
 
 const instanceGridHeight = ref<number>()
@@ -215,7 +186,6 @@ const isGroupToggleBlocked = computed(
 let shouldSkipGroupToggle = false
 let groupToggleEventToSkip: MouseEvent | undefined
 let instanceGridResizeObserver: ResizeObserver | undefined
-let libraryResizeObserver: ResizeObserver | undefined
 let instanceGridObserverActivationTimeout: ReturnType<typeof setTimeout> | undefined
 
 const emit = defineEmits<{
@@ -479,18 +449,11 @@ function startInstanceGridResizeObserver() {
 onUnmounted(() => {
 	clearTimeout(cardMoveTimer)
 	stopInstanceGridResizeObserver()
-	libraryResizeObserver?.disconnect()
 })
 onMounted(() => {
 	remSize.value = parseFloat(getComputedStyle(document.documentElement).fontSize)
 	startInstanceGridResizeObserver()
-	const library = groupDropTarget.value?.closest('[data-library-page-background]')
-	if (library) {
-		libraryResizeObserver = new ResizeObserver(syncScrollState)
-		libraryResizeObserver.observe(library)
-	}
 })
-watch([gridHeight, () => props.instanceGroup.instances], () => nextTick(syncScrollState))
 </script>
 
 <template>
@@ -632,8 +595,6 @@ watch([gridHeight, () => props.instanceGroup.instances], () => nextTick(syncScro
 							:data-animate-entry="enteringInstanceIds.has(instance.id)"
 							class="min-w-0 w-full"
 							:style="instancePosition(index)"
-							@focusin="focusedInstanceId = instance.id"
-							@focusout="handleCardBlur($event, instance.id)"
 							@keydown="handleCardTab($event, index)"
 						>
 							<InstanceCard

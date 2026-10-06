@@ -8,7 +8,7 @@
 				@mouseleave="$emit('mouseleave')"
 			></AutoLink>
 		</template>
-		<div v-if="layout === 'grid'" :class="[baseCardStyle, 'flex flex-col']">
+		<div v-if="layout === 'grid'" :class="[baseCardStyle, 'flex flex-col']" :style="sourceTintStyle">
 			<div
 				:style="{ '--_project-color': cssColor }"
 				class="relative bg-project-gradient overflow-clip aspect-[2/1] w-full border-0 border-b-[1px] border-solid border-surface-4"
@@ -49,6 +49,13 @@
 				</div>
 				<div class="mt-auto flex flex-col gap-3 flex-wrap overflow-hidden justify-between grow">
 					<div class="flex items-center gap-1 flex-wrap overflow-hidden">
+						<ProjectCardSourceTag
+							v-if="sourceTag"
+							:label="sourceTag.label"
+							:color="sourceTag.color"
+							:icon-url="sourceTag.iconUrl"
+							:is-modrinth="sourceTag.isModrinth"
+						/>
 						<template v-if="isServerProject">
 							<ServerOnlinePlayers
 								v-if="serverOnlinePlayers !== undefined"
@@ -104,6 +111,7 @@
 				'p-4 grid grid-project-card-list gap-x-3 gap-y-2',
 				{ 'has-actions': !!$slots.actions },
 			]"
+			:style="sourceTintStyle"
 		>
 			<Avatar
 				:src="iconUrl"
@@ -142,6 +150,13 @@
 			</div>
 			<div class="mt-auto flex items-center gap-3 grid-project-card-list__tags">
 				<div class="flex items-center gap-2 w-full">
+					<ProjectCardSourceTag
+						v-if="sourceTag"
+						:label="sourceTag.label"
+						:color="sourceTag.color"
+						:icon-url="sourceTag.iconUrl"
+						:is-modrinth="sourceTag.isModrinth"
+					/>
 					<template v-if="isServerProject">
 						<ServerOnlinePlayers
 							v-if="serverOnlinePlayers !== undefined"
@@ -208,6 +223,7 @@ import ProjectCardEnvironment, {
 	type ProjectCardEnvironmentValue,
 } from './ProjectCardEnvironment.vue'
 import ProjectCardStats from './ProjectCardStats.vue'
+import ProjectCardSourceTag from './ProjectCardSourceTag.vue'
 import ProjectCardTags from './ProjectCardTags.vue'
 import ProjectCardTitle from './ProjectCardTitle.vue'
 
@@ -249,6 +265,15 @@ const props = defineProps<{
 	isServerProject?: boolean
 	banner?: string
 	color?: string | number
+	/** A content source's theme colour, tinting the card from its left edge. */
+	sourceColor?: string | null
+	/** Which content source the item came from, shown as a chip. */
+	sourceTag?: {
+		label: string
+		color?: string | null
+		iconUrl?: string | null
+		isModrinth?: boolean
+	} | null
 	environment?: ProjectCardEnvironmentValue
 	status?: ProjectStatus
 	maxTags?: number
@@ -297,6 +322,24 @@ const cssColor = computed(() => {
 	const g = (color & 0xff00) >>> 8
 	const r = (color & 0xff0000) >>> 16
 	return 'rgba(' + [r, g, b, 1].join(',') + ')'
+})
+
+/**
+ * The source's colour laid over the card's own background, fading out by the
+ * card's middle. Set as a background-image rather than as an overlay element so
+ * it cannot paint over the card's contents, and so the card's own border radius
+ * clips it without anything extra.
+ */
+const sourceTintStyle = computed(() => {
+	const hex = props.sourceColor?.trim().replace('#', '')
+	if (!hex || hex.length !== 6) return undefined
+	const r = Number.parseInt(hex.slice(0, 2), 16)
+	const g = Number.parseInt(hex.slice(2, 4), 16)
+	const b = Number.parseInt(hex.slice(4, 6), 16)
+	if ([r, g, b].some(Number.isNaN)) return undefined
+	return {
+		backgroundImage: `linear-gradient(to right, rgba(${r}, ${g}, ${b}, 0.3), rgba(${r}, ${g}, ${b}, 0) 50%)`,
+	}
 })
 </script>
 <style scoped>

@@ -164,6 +164,22 @@ pub struct SourceSettingOption {
     pub label: Option<String>,
 }
 
+/// How a source's project body is presented.
+///
+/// The launcher renders the body itself rather than letting a source ship HTML,
+/// so a source says which of the two it means and no markup from a manifest ever
+/// reaches the page unparsed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceDetailFormat {
+    /// Render as Markdown, sanitised — what a README or a site's `content_md`
+    /// wants. The default, because that is what content sites publish.
+    #[default]
+    Markdown,
+    /// Show verbatim, formatting characters and all.
+    Text,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ContentSourceManifest {
     /// Identifier. Doubles as the source's folder name, so it is restricted to
@@ -177,6 +193,18 @@ pub struct ContentSourceManifest {
     pub author: Option<String>,
     #[serde(default)]
     pub homepage: Option<String>,
+    /// An image in the source's own folder to show as its icon, e.g.
+    /// `icon.svg`. Anything the webview can display works (svg, png, webp). A
+    /// source without one is drawn as its name's first character instead.
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// The source's theme colour as `#rrggbb`, used for that fallback icon and
+    /// to tint the source's cards. Absent means no tint.
+    #[serde(default)]
+    pub color: Option<String>,
+    /// How the `detail` body is presented. Defaults to Markdown.
+    #[serde(default)]
+    pub detail_format: SourceDetailFormat,
     #[serde(default = "current_api_version")]
     pub api_version: u32,
     /// The JavaScript bundle to load, relative to the source folder.
@@ -272,6 +300,25 @@ impl ContentSourceManifest {
         if let Err(reason) = validate_entry(&self.entry) {
             return Err(crate::ErrorKind::InputError(format!(
                 "Content source '{}' has an invalid entry point: {reason}",
+                self.id
+            ))
+            .into());
+        }
+        if let Some(icon) = &self.icon
+            && let Err(reason) = validate_icon(icon)
+        {
+            return Err(crate::ErrorKind::InputError(format!(
+                "Content source '{}' has an invalid icon: {reason}",
+                self.id
+            ))
+            .into());
+        }
+        if let Some(color) = &self.color
+            && !is_valid_hex_color(color)
+        {
+            return Err(crate::ErrorKind::InputError(format!(
+                "Content source '{}' has an invalid color '{color}': expected \
+                 '#rrggbb'",
                 self.id
             ))
             .into());
@@ -378,6 +425,33 @@ fn validate_entry(entry: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// The icon is read out of the source's folder, so it carries the same
+/// restriction the entry point does: a plain relative path, nothing that could
+/// name a file elsewhere on the disk.
+fn validate_icon(icon: &str) -> Result<(), String> {
+    if icon.trim().is_empty() {
+        return Err("icon must not be empty".to_string());
+    }
+    if Path::new(icon)
+        .components()
+        .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return Err(
+            "icon must be a relative path inside the source folder".to_string(),
+        );
+    }
+    Ok(())
+}
+
+/// `#rrggbb`, the only colour form the launcher reads. Accepting names or
+/// `rgb()` would mean shipping a colour parser for no gain.
+fn is_valid_hex_color(value: &str) -> bool {
+    let Some(hex) = value.strip_prefix('#') else {
+        return false;
+    };
+    hex.len() == 6 && hex.chars().all(|character| character.is_ascii_hexdigit())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -481,5 +555,74 @@ mod tests {
         let manifest =
             ContentSourceManifest::parse(json.as_bytes()).unwrap();
         assert_eq!(manifest.content_types.len(), 5);
+    }
+
+    #[test]
+    fn appearance_is_optional_and_defaults_sensibly() {
+        let json = r#"{
+            "id": "example",
+            "name": "Example",
+            "version": "1.0.0",
+            "entry": "index.js",
+            "content_types": ["world"]
+        }"#;
+        let manifest =
+            ContentSourceManifest::parse(json.as_bytes()).unwrap();
+        assert!(manifest.icon.is_none());
+        assert!(manifest.color.is_none());
+        assert_eq!(manifest.detail_format, SourceDetailFormat::Markdown);
+    }
+
+    #[test]
+    fn appearance_is_read_when_present() {
+        // `r##"…"##`: the JSON contains `"#`, which would close an `r#"…"#`.
+        let json = r##"{
+            "id": "example",
+            "name": "Example",
+            "version": "1.0.0",
+            "entry": "index.js",
+            "content_types": ["world"],
+            "icon": "icon.svg",
+            "color": "#8B5A2B",
+            "detail_format": "text"
+        }"##;
+        let manifest =
+            ContentSourceManifest::parse(json.as_bytes()).unwrap();
+        assert_eq!(manifest.icon.as_deref(), Some("icon.svg"));
+        assert_eq!(manifest.color.as_deref(), Some("#8B5A2B"));
+        assert_eq!(manifest.detail_format, SourceDetailFormat::Text);
+    }
+
+    #[test]
+    fn a_loose_detail_format_is_rejected() {
+        let json = r#"{
+            "id": "example",
+            "name": "Example",
+            "version": "1.0.0",
+            "entry": "index.js",
+            "content_types": ["world"],
+            "detail_format": "html"
+        }"#;
+        assert!(ContentSourceManifest::parse(json.as_bytes()).is_err());
+    }
+
+    #[test]
+    fn an_icon_that_escapes_the_folder_is_rejected() {
+        assert!(validate_icon("icon.svg").is_ok());
+        assert!(validate_icon("assets/icon.png").is_ok());
+        assert!(validate_icon("../icon.svg").is_err());
+        assert!(validate_icon("/etc/passwd").is_err());
+        assert!(validate_icon("").is_err());
+    }
+
+    #[test]
+    fn colors_must_be_hex() {
+        assert!(is_valid_hex_color("#1bd96a"));
+        assert!(is_valid_hex_color("#8B5A2B"));
+        assert!(!is_valid_hex_color("1bd96a"));
+        assert!(!is_valid_hex_color("#1bd96"));
+        assert!(!is_valid_hex_color("#1bd96g"));
+        assert!(!is_valid_hex_color("green"));
+        assert!(!is_valid_hex_color(""));
     }
 }

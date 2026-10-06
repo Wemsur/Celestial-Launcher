@@ -91,12 +91,19 @@ export function isBrowseRoute(route: RouteLike): boolean {
 	return route.path.startsWith('/browse')
 }
 
+/** True only for a Modrinth project opened in the split pane. */
+export function isModrinthSplitProjectRoute(route: RouteLike): boolean {
+	return route.matched.some((record) => record.name === SPLIT_PROJECT_ROUTE_NAME)
+}
+
+/** True only for a content source's project opened in the split pane. */
+export function isSourceSplitProjectRoute(route: RouteLike): boolean {
+	return route.matched.some((record) => record.name === SPLIT_SOURCE_PROJECT_ROUTE_NAME)
+}
+
+/** Either kind of project in the split pane; this is what drives the layout. */
 export function isSplitProjectRoute(route: RouteLike): boolean {
-	return route.matched.some(
-		(record) =>
-			record.name === SPLIT_PROJECT_ROUTE_NAME ||
-			record.name === SPLIT_SOURCE_PROJECT_ROUTE_NAME,
-	)
+	return isModrinthSplitProjectRoute(route) || isSourceSplitProjectRoute(route)
 }
 
 export function isPlainProjectRoute(route: RouteLike): boolean {
@@ -125,10 +132,23 @@ export function projectSubpageOf(route: RouteLike): ProjectSubpage {
 /** Path prefix every project detail link has to be built from. */
 export function projectBasePathOf(route: RouteLike): string {
 	const id = String(route.params.id ?? '')
-	if (isSplitProjectRoute(route)) {
+	if (isModrinthSplitProjectRoute(route)) {
 		return `/browse/${String(route.params.projectType ?? '')}/p/${id}`
 	}
 	return `/project/${id}`
+}
+
+/** `/source/<source>/<project>` or, in split view, `/browse/<type>/s/<source>/<project>`. */
+export function sourceProjectBasePathOf(route: RouteLike): string {
+	// Re-encoded, not spliced in raw: the params arrive decoded, so a project id
+	// like GitHub's `owner/repo` would otherwise land in the URL as two path
+	// segments — which matches no route, and is what made the tabs go nowhere.
+	const source = encodeURIComponent(String(route.params.sourceId ?? ''))
+	const project = encodeURIComponent(String(route.params.projectId ?? ''))
+	if (isSourceSplitProjectRoute(route)) {
+		return `/browse/${String(route.params.projectType ?? '')}/s/${source}/${project}`
+	}
+	return `/source/${source}/${project}`
 }
 
 /** `/browse/<type>`, keeping the open detail pane when the split view is active. */
@@ -215,6 +235,25 @@ function rememberBrowseList(route: RouteLike) {
 
 export function setBrowseProjectTypeHint(projectType: string | null | undefined) {
 	if (projectType) browseProjectTypeHint.value = projectType
+}
+
+/** The colour the open detail page wants the split pane washed with. */
+const splitDetailColor = shallowRef<string | null>(null)
+
+/** That colour, as `#rrggbb`, or null when nothing is open. */
+export const splitDetailTintColor = computed(() => splitDetailColor.value)
+
+/**
+ * Publish the colour for the discover split pane to wash itself with.
+ *
+ * The pane belongs to the discover page, but only the page inside it knows the
+ * colour: a content source's theme colour, or a Modrinth project's own. The
+ * detail page therefore hands it over rather than the shell trying to guess it
+ * from the route — which is what left Modrinth projects with no tint at all,
+ * since their routes carry no source id to look one up from.
+ */
+export function setSplitDetailColor(color: string | null | undefined) {
+	splitDetailColor.value = color ?? null
 }
 
 /**

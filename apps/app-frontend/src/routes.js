@@ -5,6 +5,65 @@ import * as Library from '@/pages/library'
 import * as Project from '@/pages/project'
 
 /**
+ * The tabs of a content source's project page.
+ *
+ * Declared twice with distinct names rather than shared: Vue Router binds a
+ * child record to the parent that registered it, so handing the same array to
+ * two parents leaves the second one unable to match its own grandchildren —
+ * the tabs navigate but render nothing. The Modrinth project routes avoid this
+ * only because they happen to declare each set separately.
+ *
+ * The project id is a single segment because a source's id is passed as one —
+ * a GitHub entry's `owner/repo` is percent-encoded into the URL, so the child
+ * segments below stay unambiguous.
+ */
+const splitSourceProjectChildren = [
+	{
+		path: '',
+		name: 'DiscoverSplitSourceProjectDescription',
+		component: () => import('@/pages/source-project/Description.vue'),
+	},
+	{
+		path: 'versions',
+		name: 'DiscoverSplitSourceProjectVersions',
+		component: () => import('@/pages/source-project/Versions.vue'),
+	},
+	{
+		path: 'version/:version',
+		name: 'DiscoverSplitSourceProjectVersion',
+		component: () => import('@/pages/source-project/Version.vue'),
+	},
+	{
+		path: 'gallery',
+		name: 'DiscoverSplitSourceProjectGallery',
+		component: () => import('@/pages/source-project/Gallery.vue'),
+	},
+]
+
+const plainSourceProjectChildren = [
+	{
+		path: '',
+		name: 'SourceProjectDescription',
+		component: () => import('@/pages/source-project/Description.vue'),
+	},
+	{
+		path: 'versions',
+		name: 'SourceProjectVersions',
+		component: () => import('@/pages/source-project/Versions.vue'),
+	},
+	{
+		path: 'version/:version',
+		name: 'SourceProjectVersion',
+		component: () => import('@/pages/source-project/Version.vue'),
+	},
+	{
+		path: 'gallery',
+		name: 'SourceProjectGallery',
+		component: () => import('@/pages/source-project/Gallery.vue'),
+	},
+]
+
+/**
  * Loads each page when its route is visited.
  */
 export default new createRouter({
@@ -93,7 +152,8 @@ export default new createRouter({
 					// pane the same way a Modrinth one is.
 					path: 's/:sourceId/:projectId',
 					name: 'DiscoverSplitSourceProject',
-					component: () => import('@/pages/SourceProject.vue'),
+					component: () => import('@/pages/source-project/Index.vue'),
+					children: splitSourceProjectChildren,
 				},
 			],
 		},
@@ -160,7 +220,8 @@ export default new createRouter({
 			// A project from a content source, at full width (no split view).
 			path: '/source/:sourceId/:projectId',
 			name: 'SourceProject',
-			component: () => import('@/pages/SourceProject.vue'),
+			component: () => import('@/pages/source-project/Index.vue'),
+			children: plainSourceProjectChildren,
 		},
 		{
 			path: '/project/:id',

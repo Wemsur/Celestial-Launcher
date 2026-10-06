@@ -149,6 +149,14 @@ export interface ContentInstallContext {
 		gameVersion: string
 	}) => Promise<void>
 	prepareNewInstance: (projectId: string) => Promise<void>
+	/**
+	 * Open the instance picker for a content source's project, which has no
+	 * Modrinth project behind it: `install` runs once the user picks an instance.
+	 */
+	showSourceInstallModal: (
+		install: (instanceId: string) => Promise<void>,
+		info?: { title: string; iconUrl?: string; link?: string },
+	) => Promise<void>
 	handleNavigate: (instance: ContentInstallInstance) => void
 	handleCancel: () => void
 	setContentInstallModal: (ref: ModalRef) => void

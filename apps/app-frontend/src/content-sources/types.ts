@@ -83,6 +83,9 @@ export interface SourceSettingField {
 	options: SourceSettingOption[]
 }
 
+/** How a source's project body is presented. */
+export type SourceDetailFormat = 'markdown' | 'text'
+
 /** The manifest a source ships, as read and validated by the backend. */
 export interface ContentSourceManifest {
 	id: string
@@ -91,6 +94,12 @@ export interface ContentSourceManifest {
 	description?: string | null
 	author?: string | null
 	homepage?: string | null
+	/** An image in the source's folder to show as its icon. */
+	icon?: string | null
+	/** The source's theme colour, `#rrggbb`. */
+	color?: string | null
+	/** How the project body is presented. Defaults to markdown. */
+	detail_format?: SourceDetailFormat
 	api_version: number
 	entry: string
 	content_types: ContentType[]
@@ -155,6 +164,19 @@ export interface ContentPage {
 	total: number
 }
 
+/**
+ * One downloadable file inside a version. A version that offers several — a
+ * GitHub release with one asset per loader, say — lists them here so the user
+ * can pick, instead of the source guessing from a rule.
+ */
+export interface ContentFile {
+	/** The source's own id for this file; passed back to `resolveDownload`. */
+	id: string
+	name: string
+	/** Bytes, when known. */
+	size?: number
+}
+
 export interface ContentVersion {
 	id: string
 	name?: string
@@ -164,6 +186,10 @@ export interface ContentVersion {
 	publishedAt?: string
 	downloads?: number
 	channel?: string
+	/** The changelog for this version, in the source's `detail_format`. */
+	body?: string
+	/** The files this version offers, when there is more than one worth showing. */
+	files?: ContentFile[]
 }
 
 /** A project page. Every field past the card is optional; the page degrades. */
@@ -217,6 +243,14 @@ export interface ContentSourceProvider {
 	browse?(request: ContentQuery): Promise<ContentPage>
 	detail?(id: string, contentType: ContentType): Promise<ContentProject>
 	versions?(id: string, request: ContentQuery): Promise<ContentVersion[]>
-	resolveDownload?(id: string, versionId?: string): Promise<DownloadDescriptor>
+	/**
+	 * `fileId` names one of the version's `files`, when the user picked one
+	 * rather than letting the source's own rule choose.
+	 */
+	resolveDownload?(
+		id: string,
+		versionId?: string,
+		fileId?: string,
+	): Promise<DownloadDescriptor>
 	checkUpdate?(items: UpdateQueryItem[]): Promise<UpdateResult[]>
 }

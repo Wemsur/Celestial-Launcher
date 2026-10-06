@@ -42,8 +42,8 @@ pub use installed::{
 pub use manifest::{
     CURRENT_API_VERSION, ContentSort, ContentSourceManifest, ContentType,
     MANIFEST_FILE, ManualEntryField, SourceAuth, SourceCapabilities,
-    SourceSettingField, SourceSettingOption, SourceSettingType,
-    is_valid_source_id,
+    SourceDetailFormat, SourceSettingField, SourceSettingOption,
+    SourceSettingType, is_valid_source_id,
 };
 pub use network::{SourceFetchRequest, SourceFetchResponse, fetch};
 pub use store::{

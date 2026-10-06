@@ -409,6 +409,8 @@ function getProjectCardTags(result: Labrinth.Search.v3.ResultSearchProject, disp
 							: undefined
 					"
 					:layout="ctx.effectiveLayout.value"
+					:source-color="ctx.getCardSource?.(result)?.color ?? undefined"
+					:source-tag="ctx.getCardSource?.(result) ?? undefined"
 					@contextmenu.prevent.stop="(event: MouseEvent) => ctx.onContextMenu?.(event, result)"
 					@mouseenter="ctx.onProjectHover?.(result)"
 					@mouseleave="ctx.onProjectHoverEnd?.()"

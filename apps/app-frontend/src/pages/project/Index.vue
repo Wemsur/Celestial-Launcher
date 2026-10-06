@@ -289,7 +289,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, onScopeDispose, ref, shallowRef, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { SwapIcon } from '@/assets/icons/index.js'
@@ -308,6 +308,7 @@ import {
 	projectBasePathOf,
 	projectSubpageOf,
 	setBrowseProjectTypeHint,
+	setSplitDetailColor,
 	SPLIT_ROUTE_NAME_BY_SUBPAGE,
 	useSplitView,
 } from '@/composables/use-split-view.ts'
@@ -415,6 +416,20 @@ const { translate: translateContent } = useContentTranslation()
 const headerProject = computed(() =>
 	data.value ? { ...data.value, description: translateContent(data.value.description ?? '') } : null,
 )
+
+/*
+ * The colour the discover page washes its split pane with. A project carries it
+ * as a decimal RGB integer, the shape its own backdrop uses; the pane wants
+ * `#rrggbb`. Cleared on the way out so a pane that outlives this page does not
+ * keep the last project's colour.
+ */
+watchEffect(() => {
+	const color = data.value?.color
+	setSplitDetailColor(
+		typeof color === 'number' ? `#${(color & 0xffffff).toString(16).padStart(6, '0')}` : null,
+	)
+})
+onScopeDispose(() => setSplitDetailColor(null))
 
 function getProjectBreadcrumbSummary(projectId) {
 	const identifier = Array.isArray(projectId) ? projectId[0] : projectId

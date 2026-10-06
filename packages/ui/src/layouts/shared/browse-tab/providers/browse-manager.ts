@@ -54,6 +54,19 @@ export interface BrowseManagerContext {
 		result: Labrinth.Search.v3.ResultSearchProject,
 	) => string | RouteLocationRaw
 
+	/**
+	 * Which content source a card came from, for its tint and its chip. Absent on
+	 * the web, where every result is Modrinth's own.
+	 */
+	getCardSource?: (result: Labrinth.Search.v3.ResultSearchProject) =>
+		| {
+				label: string
+				color?: string | null
+				iconUrl?: string | null
+				isModrinth?: boolean
+		  }
+		| undefined
+
 	selectableProjectTypes: ComputedRef<{ label: string; href: string; shown?: boolean }[]>
 	showProjectTypeTabs: ComputedRef<boolean>
 	/** Lets the project type tabs scroll horizontally when the layout is too narrow for them. */

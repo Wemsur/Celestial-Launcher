@@ -47,6 +47,7 @@ import {
     browseListLocation,
     browsePathFor,
     openProjectsInSplitView,
+    splitDetailTintColor,
     useSplitView,
 } from '@/composables/use-split-view.ts'
 import {
@@ -60,7 +61,9 @@ import {
     MODRINTH_CONTENT_TYPES,
     type SelectableSource,
     selectableSources,
+    sourceAppearance,
     sourceSupportsType,
+    sourceTintStyle,
 } from '@/content-sources/catalog'
 import { installSourceContent } from '@/content-sources/ipc'
 import {
@@ -148,11 +151,30 @@ const splitDetailSuffix = computed(() => {
     if (!splitViewActive.value) return ''
     // A content source's project has its own segment pair; without this the
     // suffix would fall through to `/p/` and switching tabs would navigate to a
-    // Modrinth route with an empty id.
-    const { sourceId, projectId } = route.params
-    if (sourceId && projectId) return `/s/${String(sourceId)}/${String(projectId)}`
+    // Modrinth route with an empty id. Both halves are re-encoded because the
+    // params arrive decoded — a project id of `owner/repo` spliced in raw would
+    // become two segments and match nothing.
+    const source = String(route.params.sourceId ?? '')
+    const project = String(route.params.projectId ?? '')
+    if (source && project) {
+        return `/s/${encodeURIComponent(source)}/${encodeURIComponent(project)}`
+    }
     return `/p/${String(route.params.id ?? '')}`
 })
+
+/**
+ * The open project's colour, washed across the detail pane.
+ *
+ * A project at full width tints the app's backdrop layer instead, but that
+ * layer sits behind the discover list too, so in split view the pane itself is
+ * the only thing on screen that belongs to the open project. Painted as the
+ * pane's own background-image rather than an overlay, so it stays put while the
+ * pane's content scrolls and can never cover it.
+ *
+ * The colour is published by whichever detail page is open: a content source
+ * knows its own theme colour, and a Modrinth project carries one of its own.
+ */
+const splitPaneTint = computed(() => sourceTintStyle(splitDetailTintColor.value))
 const serverSetupModalRef = ref<InstanceType<typeof CreationFlowModal> | null>(null)
 const serverInstallContent = createServerInstallContent({ serverSetupModalRef })
 provideServerInstallContent(serverInstallContent)
@@ -1476,15 +1498,8 @@ async function search(requestParams: string) {
         const others = item.offers
             .map((offer) => sourceNames.get(offer.sourceId) ?? offer.sourceId)
             .filter((name) => name !== sourceNames.get(item.card.sourceId))
-        const label =
-            sourceNames.get(item.card.sourceId) ??
-            item.card.sourceId
 
-        return toSearchResult(item.card, {
-            sourceLabel: shared ? `${label} +${item.offers.length - 1}` : label,
-            shared,
-            otherSources: others,
-        })
+        return toSearchResult(item.card, { shared, otherSources: others })
     })
 
     return {
@@ -1735,6 +1750,23 @@ const translatedProjectHits = computed(() =>
 )
 const translatedServerHits = computed(() => searchState.serverHits.value.map(withTranslatedSummary))
 
+/**
+ * Which source a card came from, for its tint and its chip. A merged card is
+ * tinted by the source it is drawn from and says how many others also carry it,
+ * so the chip does not silently hide the fact that a row is shared.
+ */
+function getCardSource(result: Labrinth.Search.v3.ResultSearchProject) {
+    const foreign = (result as SourcedSearchResult).__source
+    const appearance = sourceAppearance(foreign?.sourceId ?? MODRINTH_SOURCE_ID)
+    const others = foreign?.otherSources?.length ?? 0
+    return {
+        label: others > 0 ? `${appearance.name} +${others}` : appearance.name,
+        color: appearance.color,
+        iconUrl: appearance.iconUrl,
+        isModrinth: appearance.isModrinth,
+    }
+}
+
 provideBrowseManager({
     tags,
     projectType,
@@ -1747,6 +1779,7 @@ provideBrowseManager({
         projectLocationFor(result),
     getServerProjectLink: (result: Labrinth.Search.v3.ResultSearchProject) =>
         getProjectDetailLocation(result.slug ?? result.project_id),
+    getCardSource,
     selectableProjectTypes,
     showProjectTypeTabs: computed(() => !isServerContext.value),
     // Half the viewport is easily too narrow for every project type tab.
@@ -1840,7 +1873,7 @@ provideBrowseManager({
                 />
             </div>
         </div>
-        <div v-if="splitViewActive" class="browse-detail-pane bg-surface-1">
+        <div v-if="splitViewActive" class="browse-detail-pane bg-surface-1" :style="splitPaneTint">
             <RouterView v-slot="{ Component }">
                 <template v-if="Component">
                     <Suspense>

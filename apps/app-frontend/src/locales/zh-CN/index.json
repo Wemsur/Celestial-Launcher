@@ -269,6 +269,9 @@
   "app.browse.back-to-instance": {
     "message": "返回实例"
   },
+  "app.browse.content-sources.clear": {
+    "message": "清空"
+  },
   "app.browse.content-sources.placeholder": {
     "message": "内容源"
   },
@@ -2279,44 +2282,74 @@
   "app.source-content.versions": {
     "message": "切换版本"
   },
-  "app.source-project.back": {
-    "message": "返回"
-  },
-  "app.source-project.by": {
+  "app.source-project.author": {
     "message": "作者"
   },
-  "app.source-project.install": {
-    "message": "安装"
+  "app.source-project.copy-link": {
+    "message": "复制链接"
   },
-  "app.source-project.installing": {
-    "message": "安装中"
+  "app.source-project.downloads": {
+    "message": "次下载"
+  },
+  "app.source-project.files": {
+    "message": "文件"
+  },
+  "app.source-project.followers": {
+    "message": "人关注"
+  },
+  "app.source-project.installed-hint": {
+    "message": "该实例中已安装"
+  },
+  "app.source-project.link-copied": {
+    "message": "链接已复制"
+  },
+  "app.source-project.links": {
+    "message": "链接"
   },
   "app.source-project.loading": {
     "message": "正在加载项目…"
   },
-  "app.source-project.need-instance": {
-    "message": "请先选择实例，再安装此内容。"
+  "app.source-project.more-options": {
+    "message": "更多操作"
   },
-  "app.source-project.no-detail": {
-    "message": "该内容源没有提供项目页面。"
+  "app.source-project.no-changelog": {
+    "message": "该版本没有更新日志。"
   },
-  "app.source-project.no-detail-hint": {
-    "message": "你仍然可以安装它，或前往内容源本站查看。"
+  "app.source-project.no-description": {
+    "message": "该内容源没有提供简介。"
   },
-  "app.source-project.no-download": {
-    "message": "该内容源无法直接下载此内容。"
+  "app.source-project.no-gallery": {
+    "message": "该内容源没有提供画廊。"
   },
-  "app.source-project.open": {
+  "app.source-project.no-versions": {
+    "message": "该内容源没有提供版本列表。"
+  },
+  "app.source-project.open-on-source": {
     "message": "在内容源本站打开"
   },
-  "app.source-project.unknown-source": {
-    "message": "该内容源未加载。"
+  "app.source-project.published": {
+    "message": "发布于"
   },
-  "app.source-project.version": {
+  "app.source-project.tab-description": {
+    "message": "项目介绍"
+  },
+  "app.source-project.tab-gallery": {
+    "message": "画廊"
+  },
+  "app.source-project.tab-versions": {
     "message": "版本"
   },
-  "app.source-project.versions": {
-    "message": "版本列表"
+  "app.source-project.tags": {
+    "message": "标签"
+  },
+  "app.source-project.updated": {
+    "message": "更新于"
+  },
+  "app.source-project.version-missing": {
+    "message": "该内容源没有这个版本。"
+  },
+  "app.source-project.view-version": {
+    "message": "详情"
   },
   "app.survey.body": {
     "message": "您是否介意回答一些关于使用 Modrinth App 的问题？"

@@ -18,7 +18,7 @@ const messages = defineMessages({
 	search: { id: 'app.library.search.placeholder', defaultMessage: 'Search' },
 	newGroup: { id: 'app.library.group.new', defaultMessage: 'New group' },
 	newInstance: { id: 'app.library.instance.new', defaultMessage: 'New instance' },
-	refresh: { id: 'app.library.refresh', defaultMessage: 'Refresh instances' },
+	refresh: { id: 'app.library.refresh', defaultMessage: '刷新实例' },
 })
 const selectedInstanceIds = computed(
 	() =>

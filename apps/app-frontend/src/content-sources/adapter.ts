@@ -30,9 +30,13 @@ export function syntheticProjectId(sourceId: string, id: string): string {
 
 export function toSearchResult(
 	card: ContentCard,
-	extra?: { sourceLabel?: string; shared?: boolean; otherSources?: string[] },
+	extra?: { shared?: boolean; otherSources?: string[] },
 ): SourcedSearchResult {
 	const projectId = syntheticProjectId(card.sourceId, card.id)
+	// The source's own name is *not* put among the tags: it has its own chip on
+	// the card, and two copies of it would read as two sources. What goes in the
+	// tags is what the source says about the content — its categories.
+	const contentTags = card.tags ?? []
 	return {
 		project_id: projectId,
 		project_types: [card.contentType],
@@ -44,10 +48,8 @@ export function toSearchResult(
 		organization_id: null,
 		name: card.name,
 		summary: card.summary ?? '',
-		categories: card.tags ?? [],
-		// The source's own name rides along as a display tag, so a merged row
-		// says where it came from without a bespoke card component.
-		display_categories: extra?.sourceLabel ? [extra.sourceLabel] : [],
+		categories: contentTags,
+		display_categories: contentTags,
 		downloads: card.downloads ?? 0,
 		follows: card.follows ?? 0,
 		icon_url: card.iconUrl ?? null,
