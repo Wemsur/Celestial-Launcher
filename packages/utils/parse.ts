@@ -166,10 +166,12 @@ export const configuredXss = new FilterXSS({
 
 				const allowedHostnameSuffixes = ['.github.io']
 
-				if (
-					!allowedHostnames.includes(url.hostname) &&
-					!allowedHostnameSuffixes.some((suffix) => url.hostname.endsWith(suffix))
-				) {
+				const allowed = (hostname: string) =>
+					allowedHostnames.includes(hostname) ||
+					allowedHostnameSuffixes.some((suffix) => hostname.endsWith(suffix)) ||
+					extraImageHosts.some((host) => hostname === host || hostname.endsWith(`.${host}`))
+
+				if (!allowed(url.hostname)) {
 					const proxiedUrl = `https://wsrv.nl/?url=${encodeURIComponent(url.toString())}&n=-1`
 					return safeAttrValue(tag, name, proxiedUrl.replaceAll('&', '&amp;'), cssFilter)
 				}
@@ -229,7 +231,31 @@ export const md = (options = {}) => {
 	return md
 }
 
-export const renderString = (string: string) => configuredXss.process(md().render(string))
+/**
+ * Image hosts, beyond the built-in list above, that render as themselves instead
+ * of being proxied through wsrv.nl. A content source declares the hosts its own
+ * body's images live on, and those are exactly what is allowed here.
+ */
+let extraImageHosts: string[] = []
+
+/**
+ * Runs a render with the given image hosts allowed through the filter unproxied.
+ * The render is synchronous, so the module-level value needs no locking, and the
+ * previous value is always restored.
+ */
+export const renderWithImageHosts = (imageHosts: string[] | undefined, render: () => string) => {
+	if (!imageHosts || imageHosts.length === 0) return render()
+	const previous = extraImageHosts
+	extraImageHosts = imageHosts
+	try {
+		return render()
+	} finally {
+		extraImageHosts = previous
+	}
+}
+
+export const renderString = (string: string, imageHosts?: string[]) =>
+	renderWithImageHosts(imageHosts, () => configuredXss.process(md().render(string)))
 
 const basicMarkdownXss = new FilterXSS({
 	whiteList: {

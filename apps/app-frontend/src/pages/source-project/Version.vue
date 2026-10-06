@@ -116,7 +116,10 @@ const isMarkdown = computed(
 	() => (installedManifest(sourceId.value)?.detail_format ?? 'markdown') === 'markdown',
 )
 
-const rendered = computed(() => renderHighlightedString(body.value))
+// The source's hosts ride along so release-note images render directly instead
+// of through the shared filter's image proxy. See Description.
+const sourceHosts = computed(() => installedManifest(sourceId.value)?.hosts ?? [])
+const rendered = computed(() => renderHighlightedString(body.value, sourceHosts.value))
 
 const files = computed(() => filesOf(version.value))
 

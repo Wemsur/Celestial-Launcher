@@ -17,7 +17,7 @@ import xml from 'highlight.js/lib/languages/xml'
 import yaml from 'highlight.js/lib/languages/yaml'
 import mcfunction from 'highlightjs-mcfunction'
 
-import { configuredXss, md } from '../parse'
+import { configuredXss, md, renderWithImageHosts } from '../parse'
 import skript from './skript'
 
 /* REGISTRATION */
@@ -57,21 +57,29 @@ hljs.registerAliases(['html', 'htm', 'xhtml', 'mcui', 'fxml'], { languageName: '
 
 export { hljs }
 
-export const renderHighlightedString = (string) =>
-	configuredXss.process(
-		md({
-			highlight(str, lang) {
-				if (lang && hljs.getLanguage(lang)) {
-					try {
-						return hljs.highlight(str, { language: lang }).value
-					} catch {
-						/* empty */
+/**
+ * Renders markdown through highlight.js and the shared XSS filter. `imageHosts`
+ * — the hosts a body's own images live on — render as themselves instead of
+ * being proxied, so a source whose CDN the proxy cannot reach still shows its
+ * pictures. The built-in list and Modrinth renders are untouched.
+ */
+export const renderHighlightedString = (string, imageHosts?: string[]) =>
+	renderWithImageHosts(imageHosts, () =>
+		configuredXss.process(
+			md({
+				highlight(str, lang) {
+					if (lang && hljs.getLanguage(lang)) {
+						try {
+							return hljs.highlight(str, { language: lang }).value
+						} catch {
+							/* empty */
+						}
 					}
-				}
 
-				return ''
-			},
-		}).render(string),
+					return ''
+				},
+			}).render(string),
+		),
 	)
 
 export const highlightCodeLines = (code: string, language: string): string[] => {

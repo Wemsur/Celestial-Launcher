@@ -46,6 +46,9 @@ const isMarkdown = computed(
 )
 
 // Sanitised markdown, the same renderer the Modrinth project description uses,
-// so both kinds of project page format their body identically.
-const rendered = computed(() => renderHighlightedString(body.value))
+// so both kinds of project page format their body identically. The source's own
+// hosts are passed so its body's images render directly — the shared filter
+// would otherwise proxy them to wsrv.nl, which a source's CDN rarely survives.
+const sourceHosts = computed(() => installedManifest(sourceId.value)?.hosts ?? [])
+const rendered = computed(() => renderHighlightedString(body.value, sourceHosts.value))
 </script>

@@ -12,10 +12,12 @@ import {
 } from '@modrinth/ui'
 import { computed, ref } from 'vue'
 
-import { sourceSettingsSet, sourceStorageGet, sourceStorageSet } from '@/content-sources/ipc'
+import { sourceSettingsGet, sourceSettingsSet, sourceStorageGet, sourceStorageSet } from '@/content-sources/ipc'
 import { loadContentSources } from '@/content-sources/loader'
 import type { ManualEntryField, SourceSettingField, SourceSummary } from '@/content-sources/types'
 import { toError } from '@/helpers/errors'
+
+import SourceEntryModal from './SourceEntryModal.vue'
 
 const props = defineProps<{ source: SourceSummary | null }>()
 
@@ -68,6 +70,7 @@ const messages = defineMessages({
 })
 
 const modal = ref<InstanceType<typeof NewModal> | null>(null)
+const entryModal = ref<InstanceType<typeof SourceEntryModal> | null>(null)
 const values = ref<Record<string, string>>({})
 /** Rows of the manual-entry form; each row is keyed by the fields' keys. */
 const entries = ref<Record<string, string>[]>([])
@@ -140,7 +143,6 @@ function debounce(work: () => void, delay = 400): () => void {
 }
 
 const scheduleSettingsSave = debounce(() => void saveAllSettings())
-const scheduleEntriesSave = debounce(() => void persistEntries())
 
 const pendingSettings = ref<Record<string, string>>({})
 
@@ -192,26 +194,34 @@ async function persistEntries() {
 	}
 }
 
-function addEntry() {
-	const row: Record<string, string> = {}
-	for (const field of entryFields.value) {
-		// A choice field starts on its first option so a new row is valid from the
-		// start, rather than empty until the user touches the dropdown.
-		row[field.key] = field.options[0]?.value ?? ''
+/**
+ * Adding and editing happen in the entry modal, so the list stays a list: one
+ * row per entry, and nothing expands in place. On save the row replaces its
+ * previous self (or joins the end) and the whole list is persisted, the same
+ * write the source reads back as one JSON array.
+ */
+function handleEntrySave(row: Record<string, string>, editIndex: number | undefined) {
+	if (editIndex === undefined) {
+		entries.value = [...entries.value, row]
+	} else {
+		const next = [...entries.value]
+		next[editIndex] = row
+		entries.value = next
 	}
-	entries.value = [...entries.value, row]
+	void persistEntries()
+}
+
+function openAddEntry() {
+	entryModal.value?.show(undefined)
+}
+
+function openEditEntry(index: number) {
+	entryModal.value?.show(entries.value[index], index)
 }
 
 function removeEntry(index: number) {
 	entries.value = entries.value.filter((_, position) => position !== index)
 	void persistEntries()
-}
-
-function setEntryField(index: number, key: string, value: string) {
-	const next = [...entries.value]
-	next[index] = { ...next[index], [key]: value }
-	entries.value = next
-	scheduleEntriesSave()
 }
 
 function entryIssue(row: Record<string, string>, field: ManualEntryField): string | null {
@@ -228,6 +238,19 @@ function entryIssue(row: Record<string, string>, field: ManualEntryField): strin
 		}
 	}
 	return null
+}
+
+/** One row's read-only summary: its first filled value as the title, the rest beneath. */
+function entrySummary(row: Record<string, string>): { title: string; detail: string } {
+	const parts = entryFields.value
+		.map((field) => ({ label: field.label, value: (row[field.key] ?? '').trim() }))
+		.filter((part) => part.value.length > 0)
+	if (parts.length === 0) return { title: '—', detail: '' }
+	const [first, ...rest] = parts
+	return {
+		title: first.value,
+		detail: rest.map((part) => `${part.label}：${part.value}`).join(' · '),
+	}
 }
 
 async function show() {
@@ -263,7 +286,55 @@ defineExpose({ show, hide })
 			</p>
 
 			<template v-else>
-				<div v-if="settingsFields.length" class="flex flex-col gap-4">
+				<div v-if="entryFields.length" class="flex flex-col gap-3">
+					<div class="flex flex-col gap-1">
+						<h4 class="m-0 text-sm font-semibold text-contrast">
+							{{ formatMessage(messages.entries) }}
+						</h4>
+						<span class="text-xs text-secondary">{{ formatMessage(messages.entriesHint) }}</span>
+					</div>
+
+					<div
+						v-for="(row, index) in entries"
+						:key="index"
+						class="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-solid border-surface-5 bg-surface-3 px-3 py-2"
+						role="button"
+						tabindex="0"
+						@click="openEditEntry(index)"
+						@keydown.enter="openEditEntry(index)"
+					>
+						<div class="flex min-w-0 flex-col gap-0.5">
+							<span class="min-w-0 break-words text-sm font-medium text-contrast">
+								{{ entrySummary(row).title }}
+							</span>
+							<span v-if="entrySummary(row).detail" class="min-w-0 break-words text-xs text-secondary">
+								{{ entrySummary(row).detail }}
+							</span>
+							<span
+								v-if="entryFields.some((field) => entryIssue(row, field))"
+								class="flex items-center gap-1 text-xs text-orange"
+							>
+								<TriangleAlertIcon class="size-3.5" />
+								{{ entryFields.filter((field) => entryIssue(row, field)).map((field) => entryIssue(row, field)).join(' · ') }}
+							</span>
+						</div>
+						<Button
+							size="sm"
+							type="outlined"
+							@click.stop="removeEntry(index)"
+						>
+							<TrashIcon />
+							{{ formatMessage(messages.removeEntry) }}
+						</Button>
+					</div>
+
+					<Button class="w-full" type="outlined" @click="openAddEntry">
+						<PlusIcon />
+						{{ formatMessage(messages.addEntry) }}
+					</Button>
+				</div>
+
+				<div v-if="settingsFields.length" class="flex flex-col gap-4 border-0 border-t border-solid border-surface-5 pt-4">
 					<h4 class="m-0 text-sm font-semibold text-contrast">
 						{{ formatMessage(messages.settings) }}
 					</h4>
@@ -299,69 +370,17 @@ defineExpose({ show, hide })
 						</span>
 					</div>
 				</div>
-
-				<div v-if="entryFields.length" class="flex flex-col gap-3 border-0 border-t border-solid border-surface-5 pt-4">
-					<div class="flex flex-col gap-1">
-						<h4 class="m-0 text-sm font-semibold text-contrast">
-							{{ formatMessage(messages.entries) }}
-						</h4>
-						<span class="text-xs text-secondary">{{ formatMessage(messages.entriesHint) }}</span>
-					</div>
-
-					<div v-for="(row, index) in entries" :key="index" class="flex flex-col gap-2 rounded-xl border border-solid border-surface-5 bg-surface-3 p-3">
-						<div v-for="field in entryFields" :key="field.key" class="flex flex-col gap-1">
-							<label class="text-xs font-medium text-secondary">{{ field.label }}</label>
-							<DropdownSelect
-								v-if="field.options.length"
-								:model-value="row[field.key]"
-								:options="field.options.map((option) => option.value)"
-								:display-name="
-									(value: string) =>
-										field.options.find((option) => option.value === value)?.label ?? value
-								"
-								name="Entry field"
-								@update:model-value="(value: string) => setEntryField(index, field.key, value)"
-							/>
-							<Input
-								v-else
-								:model-value="row[field.key]"
-								type="text"
-								wrapper-class="w-full"
-								:placeholder="field.placeholder ?? ''"
-								@update:model-value="(value: string) => setEntryField(index, field.key, value)"
-							/>
-							<span v-if="field.description" class="text-xs text-secondary">
-								{{ field.description }}
-							</span>
-							<span
-								v-if="entryIssue(row, field)"
-								class="flex items-center gap-1 text-xs text-orange"
-							>
-								<TriangleAlertIcon class="size-3.5" />
-								{{ entryIssue(row, field) }}
-							</span>
-						</div>
-						<div class="flex justify-end">
-							<Button size="sm" type="outlined" @click="removeEntry(index)">
-								<TrashIcon />
-								{{ formatMessage(messages.removeEntry) }}
-							</Button>
-						</div>
-					</div>
-
-					<div>
-						<Button type="outlined" @click="addEntry">
-							<PlusIcon />
-							{{ formatMessage(messages.addEntry) }}
-						</Button>
-					</div>
-				</div>
 			</template>
 
 			<div class="flex items-center justify-between gap-2 pt-2">
 				<span class="text-xs text-secondary">{{ formatMessage(messages.saved) }}</span>
 				<Button @click="hide">{{ formatMessage(messages.done) }}</Button>
 			</div>
+
+			<!-- The entry editor lives inside this modal's slot so the component keeps
+				one root. Both modals teleport to body, so nothing is DOM-nested here —
+				this is the same arrangement as every other host of a secondary modal. -->
+			<SourceEntryModal ref="entryModal" :source="source" @save="handleEntrySave" />
 		</div>
 	</NewModal>
 </template>
