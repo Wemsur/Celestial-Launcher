@@ -869,10 +869,10 @@ pub async fn stage_modpack(
     io::write(&staged_path, &bytes).await?;
 
     // Identify the pack by its manifest, the way the installer will.
-    let probe = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).map_err(|error| {
+    let mut probe = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).map_err(|error| {
         crate::ErrorKind::InputError(format!("Staged modpack is not a readable zip: {error}"))
     })?;
-    let mut format = String::new();
+    let format;
     let mut manifest_json = None;
     if probe.by_name("manifest.json").is_ok() {
         format = "curseforge".to_string();

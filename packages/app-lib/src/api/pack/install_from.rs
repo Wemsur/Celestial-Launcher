@@ -220,7 +220,7 @@ pub async fn get_instance_from_pack(
             title,
             icon_url,
         } => Ok(CreatePackInstance {
-            name: title,
+            name: title.clone(),
             icon_url,
             link: Some(InstanceLink::ModrinthModpack {
                 project_id,
@@ -336,7 +336,7 @@ pub async fn get_instance_from_pack(
             version_id,
             ..
         } => Ok(CreatePackInstance {
-            name: title,
+            name: title.clone(),
             icon_url,
             link: Some(InstanceLink::ImportedModpack {
                 project_id: Some(project_id),
@@ -759,6 +759,6 @@ pub(crate) async fn generate_pack_from_content_source_with_reporter(
                 source_filename: None,
             },
         },
-        Some(plan),
+        plan,
     ))
 }
