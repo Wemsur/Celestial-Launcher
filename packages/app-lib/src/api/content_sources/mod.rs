@@ -32,9 +32,9 @@ pub use data::{
     storage_keys, storage_remove, storage_set,
 };
 pub use install::{
-    DownloadedSkin, FileHash, InstallDescriptor, InstallMetadata,
-    InstalledContent, SKINS_DIR, install_content, list_downloaded_skins,
-    skins_dir,
+    DownloadedSkin, FileHash, InstallDescriptor, InstallMetadata, InstalledContent,
+    SKINS_DIR, StagedModpack, install_content, list_downloaded_skins, skins_dir,
+    stage_modpack,
 };
 pub use installed::{
     SourceContentRecord, forget_install, list_installed, record_install,

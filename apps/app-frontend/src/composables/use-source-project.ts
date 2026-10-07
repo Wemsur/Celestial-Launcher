@@ -117,7 +117,7 @@ export interface SourceProjectState {
 export function useSourceProject(): SourceProjectState {
 	const route = useRoute()
 	const queryClient = useQueryClient()
-	const { showSourceInstallModal } = injectContentInstall()
+	const { showSourceInstallModal, showSourceModpackInstall } = injectContentInstall()
 
 	const sourceId = computed(() => String(route.params.sourceId ?? ''))
 	const projectId = computed(() => String(route.params.projectId ?? ''))
@@ -263,8 +263,21 @@ export function useSourceProject(): SourceProjectState {
 			}
 		}
 
-		// A skin belongs to the launcher; everything else needs an instance.
-		if (contentType.value === 'skin') {
+	// A modpack *is* an instance: it runs the pack flow instead of the picker.
+	if (contentType.value === 'modpack') {
+		await showSourceModpackInstall({
+			sourceId: sourceId.value,
+			projectId: projectId.value,
+			versionId: options?.versionId,
+			title: project.value?.name ?? projectId.value,
+			iconUrl: project.value?.iconUrl ?? undefined,
+		})
+		forgetSourceProject(sourceId.value, projectId.value)
+		return
+	}
+
+	// A skin belongs to the launcher; everything else needs an instance.
+	if (contentType.value === 'skin') {
 			await run(undefined)
 			return
 		}

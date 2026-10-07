@@ -14,9 +14,9 @@ use super::shared_instance::{
 use super::{diagnostics, recovery, store};
 use crate::ErrorKind;
 use crate::api::pack::install_from::{
-    CreatePackLocation, generate_pack_from_file,
-    generate_pack_from_version_id_with_reporter, get_instance_from_pack,
-    get_local_pack_instance,
+    CreatePackLocation, generate_pack_from_content_source_with_reporter,
+    generate_pack_from_file, generate_pack_from_version_id_with_reporter,
+    get_instance_from_pack, get_local_pack_instance,
 };
 use crate::api::pack::install_mrpack::install_zipped_mrpack_files_with_reporter;
 use crate::event::InstancePayloadType;
@@ -1456,7 +1456,7 @@ pub(super) async fn install_pack(
         )
         .await?;
 
-    let create_pack = match location {
+    let (create_pack, source_plan) = match location {
         CreatePackLocation::FromVersionId {
             project_id,
             version_id,
@@ -1471,16 +1471,19 @@ pub(super) async fn install_pack(
                         .build(),
                 )
                 .await?;
-            generate_pack_from_version_id_with_reporter(
-                project_id,
-                version_id,
-                title,
-                icon_url,
-                instance_id.clone(),
-                reason,
-                reporter.clone(),
+            (
+                generate_pack_from_version_id_with_reporter(
+                    project_id,
+                    version_id,
+                    title,
+                    icon_url,
+                    instance_id.clone(),
+                    reason,
+                    reporter.clone(),
+                )
+                .await?,
+                None,
             )
-            .await?
         }
         CreatePackLocation::FromFile { path } => {
             reporter
@@ -1490,17 +1493,61 @@ pub(super) async fn install_pack(
                         .build(),
                 )
                 .await?;
-            generate_pack_from_file(path, instance_id.clone()).await?
+            (generate_pack_from_file(path, instance_id.clone()).await?, None)
+        }
+        CreatePackLocation::FromContentSource {
+            staged_path,
+            title,
+            icon_url,
+            source_id,
+            project_id,
+            version_id,
+            plan,
+        } => {
+            reporter
+                .set_context(
+                    InstallErrorContext::new("read staged modpack file")
+                        .source_path(staged_path.display().to_string())
+                        .build(),
+                )
+                .await?;
+            let (pack, plan) =
+                generate_pack_from_content_source_with_reporter(
+                    staged_path,
+                    title,
+                    icon_url,
+                    project_id,
+                    version_id,
+                    plan,
+                    instance_id.clone(),
+                    reporter.clone(),
+                )
+                .await?;
+            tracing::debug!(
+                "Installing content-source modpack staged from {source_id}"
+            );
+            (pack, plan)
         }
     };
 
-    Box::pin(install_zipped_mrpack_files_with_reporter(
-        create_pack,
-        false,
-        reason,
-        reporter,
-    ))
-    .await?;
+    if let Some(plan) = source_plan {
+        crate::api::pack::install_source_pack::install_source_modpack_files_with_reporter(
+            create_pack,
+            plan,
+            false,
+            reason,
+            reporter,
+        )
+        .await?;
+    } else {
+        Box::pin(install_zipped_mrpack_files_with_reporter(
+            create_pack,
+            false,
+            reason,
+            reporter,
+        ))
+        .await?;
+    }
 
     Ok(())
 }
@@ -1866,5 +1913,12 @@ pub(super) fn modpack_details(
             version_id: None,
             title: None,
         },
+        CreatePackLocation::FromContentSource { title, .. } => {
+            InstallPhaseDetails::Modpack {
+                project_id: None,
+                version_id: None,
+                title: Some(title.clone()),
+            }
+        }
     }
 }

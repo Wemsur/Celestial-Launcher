@@ -295,7 +295,7 @@ fn sanitize_file_name(name: &str) -> String {
 /// needs to stream to disk and report progress), so the check has to be made
 /// here too, or a manifest's `hosts` list would be a promise the download path
 /// does not keep.
-async fn download(
+pub(crate) async fn download(
     descriptor: &InstallDescriptor,
     source_id: &str,
     state: &State,
@@ -821,4 +821,78 @@ mod tests {
         assert!(verify_hash(b"x", Some(&sha1)).is_err());
         assert!(verify_hash(b"x", None).is_ok());
     }
+}
+
+/// What staging a source's modpack produced.
+///
+/// camelCase on the wire: this crosses the Tauri boundary to the frontend,
+/// which hands the manifest to the source's provider for resolution.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StagedModpack {
+    /// Absolute path of the staged archive; the install reads it from disk.
+    pub staged_path: String,
+    /// `curseforge` or `modrinth`, by which manifest the archive carries.
+    pub format: String,
+    /// The manifest text, present for CurseForge packs — that is what the
+    /// source's provider resolves into an install plan. A Modrinth pack needs
+    /// no resolution; its index is read by the mrpack installer.
+    pub manifest_json: Option<String>,
+}
+
+/// Download a source's modpack archive and read its manifest, so the frontend
+/// can have the source's provider resolve the pack's files before the install
+/// runs. The archive stays on disk under the launcher's metadata directory —
+/// a pack is too big to round-trip through the webview.
+pub async fn stage_modpack(
+    source_id: &str,
+    descriptor: &InstallDescriptor,
+    state: &State,
+) -> crate::Result<StagedModpack> {
+    let bytes = download(descriptor, source_id, state).await?;
+
+    let staging = super::super::pack::install_source_pack::staged_modpacks_dir(state);
+    io::create_dir_all(&staging).await?;
+    let name = descriptor
+        .file_name
+        .clone()
+        .unwrap_or_else(|| descriptor.url.split('/').next_back().unwrap_or_default().to_string());
+    let safe_name: String = name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' })
+        .collect();
+    let staged_path = staging.join(format!(
+        "{}-{}",
+        chrono::Utc::now().timestamp_millis(),
+        if safe_name.is_empty() { "pack.zip".to_string() } else { safe_name }
+    ));
+    io::write(&staged_path, &bytes).await?;
+
+    // Identify the pack by its manifest, the way the installer will.
+    let probe = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).map_err(|error| {
+        crate::ErrorKind::InputError(format!("Staged modpack is not a readable zip: {error}"))
+    })?;
+    let mut format = String::new();
+    let mut manifest_json = None;
+    if probe.by_name("manifest.json").is_ok() {
+        format = "curseforge".to_string();
+        let mut file = probe.by_name("manifest.json")?;
+        use std::io::Read;
+        let mut text = String::new();
+        file.read_to_string(&mut text)?;
+        manifest_json = Some(text);
+    } else if probe.by_name("modrinth.index.json").is_ok() {
+        format = "modrinth".to_string();
+    } else {
+        return Err(crate::ErrorKind::InputError(
+            "The archive carries neither manifest.json nor modrinth.index.json".to_string(),
+        )
+        .into());
+    }
+
+    Ok(StagedModpack {
+        staged_path: staged_path.to_string_lossy().to_string(),
+        format,
+        manifest_json,
+    })
 }

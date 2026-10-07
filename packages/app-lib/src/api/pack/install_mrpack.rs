@@ -124,14 +124,14 @@ impl ModpackContentInstallContext {
     }
 }
 
-enum MrpackZipReader {
+pub(crate) enum MrpackZipReader {
     Memory(async_zip::tokio::read::seek::ZipFileReader<Cursor<bytes::Bytes>>),
     // Local imports stay on disk so large .mrpacks do not have to fit in memory.
     File(FsZipFileReader),
 }
 
 impl MrpackZipReader {
-    async fn new(file: &CreatePackFile) -> crate::Result<Self> {
+    pub(crate) async fn new(file: &CreatePackFile) -> crate::Result<Self> {
         match file {
             CreatePackFile::Bytes(file) => Ok(Self::Memory(
                 SeekZipFileReader::with_tokio(Cursor::new(file.clone()))
@@ -155,14 +155,14 @@ impl MrpackZipReader {
         }
     }
 
-    fn file(&self) -> &async_zip::ZipFile {
+    pub(crate) fn file(&self) -> &async_zip::ZipFile {
         match self {
             Self::Memory(reader) => reader.file(),
             Self::File(reader) => reader.file(),
         }
     }
 
-    async fn read_entry_to_string(
+    pub(crate) async fn read_entry_to_string(
         &mut self,
         index: usize,
     ) -> crate::Result<String> {
@@ -198,7 +198,7 @@ impl MrpackZipReader {
         }
     }
 
-    async fn extract_entry(
+    pub(crate) async fn extract_entry(
         &mut self,
         index: usize,
         path: &Path,

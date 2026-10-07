@@ -36,7 +36,29 @@ export interface PackLocationFile {
 	path: string
 }
 
-export type CreatePackLocation = PackLocationVersionId | PackLocationFile
+export interface PackLocationContentSource {
+	type: 'fromContentSource'
+	stagedPath: string
+	title: string
+	iconUrl?: string | null
+	sourceId: string
+	projectId: string
+	versionId?: string | null
+	/** Absent for a Modrinth-format archive, which needs no resolution. */
+	plan?: {
+		gameVersion: string
+		loader: string
+		loaderVersion?: string | null
+		files: {
+			url: string
+			fileName: string
+			hashSha1?: string | null
+			folder?: string | null
+		}[]
+	} | null
+}
+
+export type CreatePackLocation = PackLocationVersionId | PackLocationFile | PackLocationContentSource
 
 export interface InstallModpackPreview {
 	name: string

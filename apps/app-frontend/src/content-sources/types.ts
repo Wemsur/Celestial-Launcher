@@ -185,6 +185,27 @@ export interface SourceFilterOption {
 	label?: string
 }
 
+/** One file of a modpack plan: where to fetch it, what to call it, where it lands. */
+export interface ContentModpackFile {
+	url: string
+	fileName: string
+	hashSha1?: string
+	/** Instance-relative directory (`mods`, `resourcepacks`, `shaderpacks`); defaults to `mods`. */
+	folder?: string
+}
+
+/**
+ * What a modpack archive expands to, as the source's provider resolved it.
+ * The launcher creates the instance and fetches the files; the source never
+ * writes an instance.
+ */
+export interface ContentModpackPlan {
+	gameVersion: string
+	loader: 'vanilla' | 'forge' | 'neoforge' | 'fabric' | 'quilt'
+	loaderVersion?: string
+	files: ContentModpackFile[]
+}
+
 /**
  * One downloadable file inside a version. A version that offers several — a
  * GitHub release with one asset per loader, say — lists them here so the user
@@ -281,4 +302,10 @@ export interface ContentSourceProvider {
 	 * `ContentQuery.filters`.
 	 */
 	filters?(contentType: ContentType): Promise<SourceFilterGroup[]>
+	/**
+	 * Turn a staged modpack's manifest (the raw `manifest.json`, handed back by
+	 * the launcher) into an install plan. Implement only if the source serves
+	 * modpacks.
+	 */
+	resolveModpack?(manifestJson: string): Promise<ContentModpackPlan>
 }

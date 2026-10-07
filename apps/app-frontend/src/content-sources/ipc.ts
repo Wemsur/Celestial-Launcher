@@ -192,6 +192,29 @@ export interface InstallDescriptor {
 	hash?: { algorithm: string; value: string }
 }
 
+export interface StagedModpack {
+	/** Absolute path of the staged archive; the install reads it from disk. */
+	staged_path: string
+	/** `curseforge` or `modrinth`, by which manifest the archive carries. */
+	format: string
+	/** The manifest text for CurseForge packs, handed to `resolveModpack`. */
+	manifest_json?: string | null
+}
+
+/**
+ * Download a source's modpack archive and read its manifest, so the source's
+ * provider can resolve the pack's files before the install runs.
+ */
+export function sourceStageModpack(
+	sourceId: string,
+	descriptor: InstallDescriptor,
+): Promise<StagedModpack> {
+	return invoke<StagedModpack>('plugin:content-sources|content_source_stage_modpack', {
+		sourceId,
+		descriptor,
+	})
+}
+
 export interface InstalledContent {
 	/** Relative to the instance, or to the launcher's data dir for a skin. */
 	relative_path: string

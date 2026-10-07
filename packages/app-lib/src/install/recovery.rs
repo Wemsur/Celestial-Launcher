@@ -405,6 +405,14 @@ fn display_from_request(state: &InstallJobState) -> Option<InstallJobDisplay> {
             crate::api::pack::install_from::CreatePackLocation::FromFile {
                 ..
             } => None,
+            crate::api::pack::install_from::CreatePackLocation::FromContentSource {
+                title,
+                icon_url,
+                ..
+            } => Some(InstallJobDisplay {
+                title: title.clone(),
+                icon: icon_url.clone(),
+            }),
         },
         InstallRequest::CreateSharedInstance { data } => {
             Some(InstallJobDisplay {

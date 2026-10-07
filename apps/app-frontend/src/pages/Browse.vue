@@ -1250,8 +1250,21 @@ function installForeignContent(
         return
     }
 
-    // A skin belongs to the launcher rather than to an instance, so it needs no
-    // picker; everything else installs into an instance.
+    // A modpack *is* an instance: it runs the pack flow (stage, resolve, pick a
+    // library, create) instead of picking an existing one. A skin belongs to
+    // the launcher rather than to an instance and needs no picker at all.
+    if (installType === 'modpack') {
+        void injectContentInstall()
+            .showSourceModpackInstall({
+                sourceId: source.sourceId,
+                projectId: source.id,
+                title: result.name,
+                iconUrl: result.icon_url ?? undefined,
+                callback: () => onSearchResultInstalled(result.project_id),
+            })
+            .catch((error: unknown) => handleError(toError(error)))
+        return
+    }
     if (installType !== 'skin' && !instance.value) {
         void showSourceInstallModal(
             (instanceId) => runForeignInstall(result, source, installType, instanceId),

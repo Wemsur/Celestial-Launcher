@@ -102,6 +102,40 @@ pub enum CreatePackLocation {
     FromFile {
         path: PathBuf,
     },
+    // Create a pack from a content source's staged modpack archive. The plan —
+    // the loader setup and every file URL — was resolved by the source's
+    // provider; this side only downloads and unpacks.
+    FromContentSource {
+        staged_path: PathBuf,
+        title: String,
+        icon_url: Option<String>,
+        source_id: String,
+        project_id: String,
+        version_id: Option<String>,
+        /// Absent for a Modrinth-format archive, which needs no resolution.
+        plan: Option<SourceModpackPlan>,
+    },
+}
+
+/// What a content source's modpack expands to, as its provider resolved it.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceModpackPlan {
+    pub game_version: String,
+    pub loader: String,
+    pub loader_version: Option<String>,
+    pub files: Vec<SourceModpackFile>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceModpackFile {
+    pub url: String,
+    pub file_name: String,
+    pub hash_sha1: Option<String>,
+    /// Instance-relative directory the file belongs in (`mods`,
+    /// `resourcepacks`, `shaderpacks`); defaults to `mods`.
+    pub folder: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -294,6 +328,25 @@ pub async fn get_instance_from_pack(
             instance.external_files_in_modpack = external_files_in_modpack;
             Ok(instance)
         }
+        CreatePackLocation::FromContentSource {
+            title,
+            icon_url,
+            source_id: _,
+            project_id,
+            version_id,
+            ..
+        } => Ok(CreatePackInstance {
+            name: title,
+            icon_url,
+            link: Some(InstanceLink::ImportedModpack {
+                project_id: Some(project_id),
+                version_id,
+                name: Some(title),
+                version_number: None,
+                filename: None,
+            }),
+            ..Default::default()
+        }),
     }
 }
 
@@ -638,4 +691,74 @@ pub async fn set_instance_information(
     )
     .await?;
     Ok(())
+}
+
+/// Build a [`CreatePack`] from a content source's staged modpack archive.
+///
+/// The archive was downloaded by the staging step, so nothing here fetches the
+/// pack itself — only the icon, so the instance shows it while the pack
+/// installs. The loader setup arrives in the plan; it is applied by the install
+/// step, which reads it straight off the location.
+#[tracing::instrument(skip(reporter))]
+pub(crate) async fn generate_pack_from_content_source_with_reporter(
+    staged_path: PathBuf,
+    title: String,
+    icon_url: Option<String>,
+    project_id: String,
+    version_id: Option<String>,
+    plan: Option<SourceModpackPlan>,
+    instance_id: String,
+    reporter: InstallProgressReporter,
+) -> crate::Result<(CreatePack, Option<SourceModpackPlan>)> {
+    let state = State::get().await?;
+
+    let icon = if let Some(icon_url) = icon_url {
+        reporter
+            .set_context(
+                InstallErrorContext::new("download modpack icon")
+                    .urls(vec![icon_url.clone()])
+                    .project_id(project_id.clone())
+                    .build(),
+            )
+            .await?;
+        match fetch(
+            &icon_url,
+            None,
+            None,
+            None,
+            &state.fetch_semaphore,
+            &state.pool,
+        )
+        .await
+        {
+            Ok(icon_bytes) => Some(crate::api::instance::cache_icon(icon_bytes, &state).await?),
+            Err(error) => {
+                // A broken logo URL must not fail the whole install; the pack's
+                // own overrides/icon.png is picked up later as a fallback.
+                tracing::warn!("Failed to download modpack icon: {error}");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    if let Some(ref icon_path) = icon {
+        let _ = crate::api::instance::edit_icon(&instance_id, Some(icon_path.as_path())).await;
+    }
+
+    Ok((
+        CreatePack {
+            file: CreatePackFile::Path(staged_path),
+            description: CreatePackDescription {
+                icon,
+                override_title: Some(title),
+                project_id: Some(project_id),
+                version_id,
+                instance_id,
+                source_filename: None,
+            },
+        },
+        Some(plan),
+    ))
 }

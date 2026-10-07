@@ -16,7 +16,6 @@ use theseus::content_sources::{
     self, ContentType, InstallDescriptor, InstallMetadata, InstalledContent,
     SourceFetchRequest, SourceFetchResponse, SourceSummary,
 };
-
 pub fn init<R: tauri::Runtime>() -> TauriPlugin<R> {
     tauri::plugin::Builder::new("content-sources")
         .invoke_handler(tauri::generate_handler![
@@ -43,6 +42,7 @@ pub fn init<R: tauri::Runtime>() -> TauriPlugin<R> {
             content_source_list_installed,
             content_source_forget_installed,
             content_source_list_downloaded_skins,
+            content_source_stage_modpack,
         ])
         .build()
 }
@@ -282,4 +282,16 @@ pub async fn content_source_list_downloaded_skins(
 ) -> Result<Vec<content_sources::DownloadedSkin>> {
     let state = theseus::State::get().await?;
     Ok(content_sources::list_downloaded_skins(&state).await?)
+}
+
+/// Download a source's modpack archive and read its manifest, so the frontend
+/// can have the source's provider resolve the pack's files before installing.
+/// The archive stays on disk under the launcher's metadata directory.
+#[tauri::command]
+pub async fn content_source_stage_modpack(
+    source_id: String,
+    descriptor: InstallDescriptor,
+) -> Result<content_sources::StagedModpack> {
+    let state = theseus::State::get().await?;
+    Ok(content_sources::stage_modpack(&source_id, &descriptor, &state).await?)
 }

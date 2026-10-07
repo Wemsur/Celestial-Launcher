@@ -15,6 +15,9 @@ import type { Router } from 'vue-router'
 
 import { useAppSettings } from '@/composables/use-app-settings.ts'
 import { trackEvent } from '@/helpers/analytics'
+import { sourceProvider } from '@/content-sources/registry'
+import { sourceStageModpack } from '@/content-sources/ipc'
+import type { ContentModpackPlan } from '@/content-sources/types'
 import {
 	get_organization,
 	get_project,
@@ -157,6 +160,16 @@ export interface ContentInstallContext {
 		install: (instanceId: string) => Promise<void>,
 		info?: { title: string; iconUrl?: string; link?: string },
 	) => Promise<void>
+	/** A content source's modpack: stage, resolve, pick a library, create. */
+	showSourceModpackInstall: (options: {
+		sourceId: string
+		projectId: string
+		versionId?: string
+		title: string
+		iconUrl?: string
+		callback?: ContentInstallCallback
+		createInstanceCallback?: (instanceId: string) => void
+	}) => Promise<boolean>
 	handleNavigate: (instance: ContentInstallInstance) => void
 	handleCancel: () => void
 	setContentInstallModal: (ref: ModalRef) => void
@@ -714,6 +727,80 @@ export function createContentInstall(opts: {
 		})
 	}
 
+	/**
+	 * Install a content source's modpack: the same tail a Modrinth pack runs
+	 * through — stage the archive, let the source resolve its files, pick a
+	 * library, create the instance — with no instance picker, because a pack
+	 * *is* an instance. The archive format decides the path: a CurseForge
+	 * manifest goes to the source's `resolveModpack`, a Modrinth index installs
+	 * as-is.
+	 */
+	async function showSourceModpackInstall(options: {
+		sourceId: string
+		projectId: string
+		versionId?: string
+		title: string
+		iconUrl?: string
+		callback?: ContentInstallCallback
+		createInstanceCallback?: (instanceId: string) => void
+	}): Promise<boolean> {
+		const { sourceId, projectId, versionId, title, iconUrl } = options
+		const provider = sourceProvider(sourceId)
+		if (!provider?.resolveDownload) {
+			throw new Error('该内容源不支持直接下载。')
+		}
+
+		const descriptor = await provider.resolveDownload(projectId, versionId)
+		const staged = await sourceStageModpack(sourceId, {
+			url: descriptor.url,
+			headers: descriptor.headers,
+			fileName: descriptor.fileName,
+			hash: descriptor.hash,
+		})
+
+		let plan: ContentModpackPlan | undefined
+		if (staged.format === 'curseforge') {
+			if (!provider.resolveModpack) {
+				throw new Error('该内容源不支持解析整合包。')
+			}
+			if (!staged.manifest_json) {
+				throw new Error('整合包里没有找到 manifest.json。')
+			}
+			plan = await provider.resolveModpack(staged.manifest_json)
+		}
+
+		const { cancelled, library } = await pickInstallLibrary()
+		if (cancelled) return false
+
+		const job = await install_create_modpack_instance(
+			{
+				type: 'fromContentSource',
+				stagedPath: staged.staged_path,
+				title,
+				iconUrl: iconUrl ?? null,
+				sourceId,
+				projectId,
+				versionId: versionId ?? null,
+				plan: plan ?? null,
+			},
+			null,
+			library?.path ?? null,
+			library?.format ?? null,
+		)
+		const instanceId = installJobInstanceId(job)
+		if (instanceId) {
+			options.createInstanceCallback?.(instanceId)
+		}
+		trackEvent('PackInstall', {
+			id: projectId,
+			version_id: versionId ?? '',
+			title,
+			source: sourceId,
+		})
+		options.callback?.(versionId ?? '')
+		return true
+	}
+
 	function getInstallTargets(versions: Labrinth.Versions.v2.Version[]) {
 		const targets: { game_version: string; loader: string }[] = []
 		const seen = new Set<string>()
@@ -1108,6 +1195,7 @@ export function createContentInstall(opts: {
 		handleCreateAndInstall,
 		prepareNewInstance,
 		showSourceInstallModal,
+		showSourceModpackInstall,
 		handleNavigate,
 		handleCancel,
 		setContentInstallModal(ref: ModalRef) {
