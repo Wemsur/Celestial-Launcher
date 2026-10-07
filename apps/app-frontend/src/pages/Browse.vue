@@ -9,7 +9,7 @@ import {
     ServerStackIcon,
     SpinnerIcon,
 } from '@modrinth/assets'
-import type { BrowseInstallContentType, CardAction, ProjectType, Tags } from '@modrinth/ui'
+import type { BrowseInstallContentType, CardAction, FilterType, ProjectType, Tags } from '@modrinth/ui'
 import {
     BrowsePageLayout,
     BrowseSidebar,
@@ -21,6 +21,7 @@ import {
     getLatestMatchingInstallVersion,
     getSelectedInstallPreferences,
     getTargetInstallPreferences,
+    getCategoryHeaderMessage,
     injectNotificationManager,
     LoadingIndicator,
     preferencesDiffer,
@@ -57,6 +58,12 @@ import {
     toSearchResult,
 } from '@/content-sources/adapter'
 import { type ActiveSourceQuery, searchAcrossSources } from '@/content-sources/aggregate'
+import {
+    flattenSourceGroups,
+    type SidebarGroup,
+    sourceFiltersFromSelection,
+    useSourceFilters,
+} from '@/content-sources/filters'
 import {
     MODRINTH_CONTENT_TYPES,
     type SelectableSource,
@@ -345,6 +352,17 @@ const tags: Ref<Tags> = computed(() => ({
     loaders: loaders.value ?? [],
     categories: categories.value ?? [],
 }))
+
+/**
+ * Section titles a source group declares use the same vocabulary the Modrinth
+ * headers do, so they localize identically — a shader source's
+ * `performance impact` header reads 性能要求, same as the built-in one. Anything
+ * else capitalizes like an untranslated tag does.
+ */
+function formatSourceFilterHeader(header: string): string {
+	const message = getCategoryHeaderMessage(header.trim().toLowerCase())
+	return message ? formatMessage(message) : header.charAt(0).toUpperCase() + header.slice(1)
+}
 
 if (isFromWorlds.value && route.params.projectType !== 'server') {
     router.replace({
@@ -815,6 +833,7 @@ const selectableProjectTypes = computed(() => {
             {
                 label: formatMessage(messages.serversProjectType),
                 href: `/browse/server${detail}${suffix}`,
+                shown: isSourceActive(MODRINTH_SOURCE_ID),
             },
         ]
     }
@@ -861,7 +880,10 @@ const selectableProjectTypes = computed(() => {
         {
             label: formatMessage(messages.serversProjectType),
             href: `/browse/server${detail}${suffix}`,
-            shown: !instance.value,
+            // Server browsing is the built-in source's feature alone — no plugin
+            // source serves it — so its tab follows the Modrinth toggle like the
+            // content types it owns do.
+            shown: !instance.value && isSourceActive(MODRINTH_SOURCE_ID),
         },
     ]
 })
@@ -1339,7 +1361,7 @@ function queryContext(): { gameVersion?: string; loader?: string } {
  * is enabled and serves the type, plus each content source that is loaded,
  * enabled and serves the type.
  */
-function activeSourceQueries(requestParams: string): ActiveSourceQuery[] {
+function activeSourceQueries(requestParams: string, filtersBySource: Record<string, Record<string, string[]>> = {}): ActiveSourceQuery[] {
     const type = projectType.value
     const sources: ActiveSourceQuery[] = []
 
@@ -1368,6 +1390,7 @@ function activeSourceQueries(requestParams: string): ActiveSourceQuery[] {
         if (!provider) continue
         const run = provider.search ?? provider.browse
         if (!run) continue
+        const sourceFilters = filtersBySource[source.id]
         sources.push({
             sourceId: source.id,
             query: (request) =>
@@ -1379,6 +1402,7 @@ function activeSourceQueries(requestParams: string): ActiveSourceQuery[] {
                     sort: request.sort,
                     page: request.page,
                     limit: request.limit,
+                    filters: sourceFilters,
                 } satisfies ContentQuery),
         })
     }
@@ -1439,11 +1463,18 @@ async function search(requestParams: string) {
 
     // The active source set is part of the cache key: toggling a source has to
     // produce a different list, and the multiplier that reorders it is folded in
-    // too so a changed multiplier is not served a stale order.
+    // too so a changed multiplier is not served a stale order. The sidebar's
+    // source-namespace selections ride along too — they change what a plugin
+    // source answers.
     const activeKey = selectableSources()
         .filter((source) => source.available && isSourceActive(source.id))
         .map((source) => `${source.id}:${sourceMultiplier(source.id)}`)
         .join(',')
+
+    const sourceFilters = sourceFiltersFromSelection(
+        flattenSourceGroups(sourceFilterGroups.value),
+        searchState.currentFilters.value,
+    )
 
     const merged = await queryClient.fetchQuery({
         queryKey: [
@@ -1451,19 +1482,20 @@ async function search(requestParams: string) {
             'search',
             activeKey,
             projectType.value,
-            request.query,
-            request.sort,
-            request.page,
-            request.limit,
+            // The whole Modrinth request string, filters included: a tag the user
+            // ticked in the sidebar changes `new_filters` inside it, and a key
+            // that ignored that served the unfiltered list from cache.
+            requestParams,
             context.gameVersion ?? '',
             context.loader ?? '',
+            sourceFilters,
         ],
         // 120s: a content source is live-fetched over the network with no
         // backend cache of its own, so this is the only thing standing between a
         // tab switch and another round trip.
         staleTime: 120_000,
         queryFn: () =>
-            searchAcrossSources(activeSourceQueries(requestParams), {
+            searchAcrossSources(activeSourceQueries(requestParams, sourceFilters), {
                 query: request.query,
                 contentType: projectType.value as ContentQuery['contentType'],
                 sort: request.sort,
@@ -1471,6 +1503,7 @@ async function search(requestParams: string) {
                 limit: request.limit,
                 gameVersion: context.gameVersion,
                 loader: context.loader,
+                filters: sourceFilters,
             }),
     })
 
@@ -1568,11 +1601,39 @@ const lockedFilterMessages = computed(() => ({
     providedBy: formatMessage(messages.providedByInstance),
 }))
 
+/**
+ * The filter sections content sources contribute, rendered beside the Modrinth
+ * ones. A source group whose header names a built-in section (`categories`,
+ * `features`, `performance impact`) is merged into that section by
+ * `flattenSourceGroups`, so e.g. pixelmap's map genres tick alongside Modrinth's
+ * own categories rather than in a second "类别".
+ */
+const { groups: sourceFilterGroups } = useSourceFilters(() => projectType.value)
+
+const extraFilterTypes = computed<FilterType[]>(() =>
+    flattenSourceGroups(sourceFilterGroups.value).map((section: SidebarGroup) => ({
+        id: section.filterTypeId,
+        formatted_name: formatSourceFilterHeader(section.header),
+        supported_project_types: [projectType.value as ProjectType],
+        display: 'all',
+        query_param: 'f',
+        supports: ['include'],
+        searchable: false,
+        options: section.options.map((option) => ({
+            id: option.id,
+            formatted_name: option.label,
+            method: 'or' as const,
+            value: `${section.filterTypeId}:${option.id}`,
+        })),
+    })),
+)
+
 const searchState = useBrowseSearch({
     projectType,
     tags,
     active: browseRouteActive,
     providedFilters: combinedProvidedFilters,
+    extraFilters: extraFilterTypes,
     search,
     persistentQueryParams: ['i', 'ai', 'shi', 'sid', 'wid', 'from'],
     getExtraQueryParams: () => ({
@@ -1587,6 +1648,22 @@ const searchState = useBrowseSearch({
 // merged list) has to re-run the search; the shared search state cannot see the
 // preference store on its own.
 watch(sourcePreferences, () => {
+    void searchState.refreshSearch()
+})
+
+// The shared search state refreshes off the Modrinth request string, and source
+// filters deliberately stay out of it — they mean nothing to Modrinth. So their
+// selections need their own trigger, or a tick in a source's group would render
+// without ever re-asking that source.
+const sourceFiltersSignature = computed(() =>
+    JSON.stringify(
+        sourceFiltersFromSelection(
+            flattenSourceGroups(sourceFilterGroups.value),
+            searchState.currentFilters.value,
+        ),
+    ),
+)
+watch(sourceFiltersSignature, () => {
     void searchState.refreshSearch()
 })
 

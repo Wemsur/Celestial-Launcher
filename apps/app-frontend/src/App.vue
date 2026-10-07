@@ -246,6 +246,14 @@ provideBreadcrumbManager(breadcrumbManager)
 const canNavigateBack = ref(false)
 const canNavigateForward = ref(false)
 
+/**
+ * The discover page's filter rail owns the whole sidebar while it is open — the
+ * default content hides for it, and plugin widgets above the rail would hang
+ * over the filters with nothing else around them. Removing the slot container
+ * unmounts the widgets; the plugin host re-places them when it comes back.
+ */
+const onDiscoverPage = computed(() => route.path.startsWith('/browse/'))
+
 function updateHistoryNavigationState() {
 	const historyState = window.history.state
 	canNavigateBack.value = historyState?.back != null
@@ -2878,7 +2886,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 				<!-- Must not sit between #sidebar-teleport-target and
 				     .sidebar-default-content: that rule is an adjacent-sibling
 				     selector, and anything in between hides the whole sidebar. -->
-				<div data-plugin-slot="sidebar.top"></div>
+				<div v-if="!onDiscoverPage" data-plugin-slot="sidebar.top"></div>
 				<div id="sidebar-teleport-target" class="sidebar-teleport-content"></div>
 				<div class="sidebar-default-content" :class="{ 'sidebar-enabled': sidebarVisible }">
 					<div

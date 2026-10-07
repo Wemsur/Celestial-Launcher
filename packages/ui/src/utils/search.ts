@@ -382,6 +382,13 @@ export function useSearch(
 	tags: Ref<Tags>,
 	providedFilters: Ref<FilterValue[]>,
 	environmentOverride: Ref<EnvironmentSearchOverride | undefined> = ref(undefined),
+	/**
+	 * Filter groups contributed from outside the Modrinth vocabulary — a content
+	 * source's own categories, say. They render in the sidebar and can be
+	 * selected like any other, but their values never reach the Modrinth query:
+	 * {@link newFilters} skips types it does not know, silently.
+	 */
+	extraFilters: Ref<FilterType[]> = ref([]),
 ) {
 	const query = ref('')
 	const maxResults = ref(20)
@@ -763,6 +770,11 @@ export function useSearch(
 			.sort((a, b) => (b.ordering ?? 0) - (a.ordering ?? 0))
 	})
 
+	// What the sidebar renders: the Modrinth vocabulary plus whatever outside
+	// groups were contributed. A source group that declared a built-in header
+	// arrives already merged by the contributor, so nothing deduplicates here.
+	const allFilters = computed(() => [...filters.value, ...extraFilters.value])
+
 	const newFilters = computed(() => {
 		const validProvidedFilters = providedFilters.value.filter(
 			(providedFilter) => !overriddenProvidedFilterTypes.value.includes(providedFilter.type),
@@ -800,7 +812,9 @@ export function useSearch(
 
 			const type = filters.value.find((type) => type.id === filterValue.type)
 			if (!type) {
-				console.error(`Filter type ${filterValue.type} not found`)
+				// Not in the Modrinth vocabulary: an outside group's selection, which
+				// the contributor of that group consumes itself. Skip quietly — it
+				// must not become a facet on the Modrinth query.
 				continue
 			}
 			if (type.id === 'advanced' && isProjectTypeExclusionOption(filterValue.option)) {
@@ -956,7 +970,7 @@ export function useSearch(
 		loadQueryParam(['nf'], (filter) => {
 			const set = typeof filter === 'string' ? new Set([filter]) : new Set(filter)
 
-			typesLoop: for (const type of filters.value) {
+			typesLoop: for (const type of allFilters.value) {
 				for (const option of flattenFilterOptions(type.options)) {
 					const value = getOptionValue(option, false)
 					if (
@@ -1056,7 +1070,7 @@ export function useSearch(
 		}
 
 		currentFilters.value.forEach((filterValue) => {
-			const type = filters.value.find((type) => type.id === filterValue.type)
+			const type = allFilters.value.find((type) => type.id === filterValue.type)
 			const option = type ? findFilterOption(type.options, filterValue.option) : undefined
 			if (type && (option || type.allows_custom_options)) {
 				const value = option ? getOptionValue(option, filterValue.negative) : filterValue.option
@@ -1133,7 +1147,7 @@ export function useSearch(
 
 		// Lists
 		sortTypes,
-		filters,
+		filters: allFilters,
 
 		// Computed
 		newFilters,

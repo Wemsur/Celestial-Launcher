@@ -294,6 +294,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { SwapIcon } from '@/assets/icons/index.js'
 import InstanceIndicator from '@/components/ui/InstanceIndicator.vue'
+import { MODRINTH_COLOR } from '@/content-sources/catalog'
 import {
 	fetchCachedServerStatus,
 	getFreshCachedServerStatus,
@@ -418,17 +419,12 @@ const headerProject = computed(() =>
 )
 
 /*
- * The colour the discover page washes its split pane with. A project carries it
- * as a decimal RGB integer, the shape its own backdrop uses; the pane wants
- * `#rrggbb`. Cleared on the way out so a pane that outlives this page does not
- * keep the last project's colour.
+ * The colour the discover page washes its split pane with: the built-in
+ * source's own brand colour. A project's `color` field is *not* used — that
+ * value is extracted from the project's icon, and the pane is meant to carry
+ * the source's identity, not a per-project sample of it.
  */
-watchEffect(() => {
-	const color = data.value?.color
-	setSplitDetailColor(
-		typeof color === 'number' ? `#${(color & 0xffffff).toString(16).padStart(6, '0')}` : null,
-	)
-})
+watchEffect(() => setSplitDetailColor(MODRINTH_COLOR))
 onScopeDispose(() => setSplitDetailColor(null))
 
 function getProjectBreadcrumbSummary(projectId) {

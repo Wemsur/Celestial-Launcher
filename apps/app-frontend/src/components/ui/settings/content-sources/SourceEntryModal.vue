@@ -6,6 +6,8 @@ import type { ManualEntryField, SourceSummary } from '@/content-sources/types'
 
 const props = defineProps<{ source: SourceSummary | null }>()
 
+const { formatMessage } = useVIntl()
+
 const emit = defineEmits<{
 	save: [row: Record<string, string>, editIndex: number | undefined]
 }>()

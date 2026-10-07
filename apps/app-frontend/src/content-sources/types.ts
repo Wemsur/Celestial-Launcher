@@ -165,6 +165,27 @@ export interface ContentPage {
 }
 
 /**
+ * One sidebar filter group a source offers, e.g. its own categories.
+ *
+ * A group with the same `header` as a built-in one — `categories`, `features`,
+ * `performance impact` — is merged into that section's options rather than
+ * shown as a second group of the same name. Otherwise the group stands alone.
+ */
+export interface SourceFilterGroup {
+	/** Stable id, unique within the source; option ids are unique within the group. */
+	id: string
+	/** Shown as the section title, e.g. `categories`, `features`, `performance impact`. */
+	header: string
+	options: SourceFilterOption[]
+}
+
+export interface SourceFilterOption {
+	id: string
+	/** Shown label; falls back to the id. */
+	label?: string
+}
+
+/**
  * One downloadable file inside a version. A version that offers several — a
  * GitHub release with one asset per loader, say — lists them here so the user
  * can pick, instead of the source guessing from a rule.
@@ -253,4 +274,11 @@ export interface ContentSourceProvider {
 		fileId?: string,
 	): Promise<DownloadDescriptor>
 	checkUpdate?(items: UpdateQueryItem[]): Promise<UpdateResult[]>
+	/**
+	 * The sidebar filter groups this source offers, per content type. A source
+	 * without one simply contributes nothing; the groups show whenever the
+	 * source's tab is active and its selections ride back in on
+	 * `ContentQuery.filters`.
+	 */
+	filters?(contentType: ContentType): Promise<SourceFilterGroup[]>
 }

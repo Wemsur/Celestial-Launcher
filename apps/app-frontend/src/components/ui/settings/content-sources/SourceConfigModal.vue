@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { PlusIcon, TrashIcon, TriangleAlertIcon } from '@modrinth/assets'
+import { PlusIcon, RefreshCwIcon, TrashIcon, TriangleAlertIcon } from '@modrinth/assets'
 import {
 	Button,
 	defineMessages,
 	DropdownSelect,
+	IconButton,
 	Input,
 	injectNotificationManager,
 	NewModal,
@@ -49,6 +50,10 @@ const messages = defineMessages({
 	addEntry: {
 		id: 'app.settings.content-sources.config.add-entry',
 		defaultMessage: 'Add entry',
+	},
+	refreshEntries: {
+		id: 'app.settings.content-sources.config.refresh-entries',
+		defaultMessage: 'Refresh entries',
 	},
 	removeEntry: {
 		id: 'app.settings.content-sources.config.remove-entry',
@@ -113,6 +118,34 @@ function parseEntries(raw: string | null): Record<string, string>[] {
 	}
 }
 
+/**
+ * Fetches and parses the entry list. `persistEntries` writes this list back
+ * wholesale, so it only ever writes after a successful read: wiping the
+ * source's entries because one read failed would be the one mistake this modal
+ * can never take back.
+ */
+const entriesLoaded = ref(false)
+const reloadingEntries = ref(false)
+
+async function reloadEntries(): Promise<void> {
+	const source = props.source
+	if (!source) return
+	reloadingEntries.value = true
+	try {
+		const raw = await sourceStorageGet(source.id, MANUAL_ENTRIES_KEY)
+		console.debug('[content-source-config]', source.id, 'manualEntries raw:', raw)
+		const parsed = parseEntries(raw)
+		console.debug('[content-source-config]', source.id, 'parsed entries:', parsed)
+		entries.value = parsed
+		entriesLoaded.value = true
+	} catch (error) {
+		console.error('[content-source-config]', source.id, 'loading entries failed:', error)
+		throw error
+	} finally {
+		reloadingEntries.value = false
+	}
+}
+
 async function load() {
 	const source = props.source
 	if (!source) return
@@ -125,7 +158,7 @@ async function load() {
 		}
 		values.value = next
 
-		entries.value = parseEntries(await sourceStorageGet(source.id, MANUAL_ENTRIES_KEY))
+		await reloadEntries()
 	} catch (error) {
 		handleError(toError(error))
 	} finally {
@@ -182,6 +215,12 @@ async function saveAllSettings() {
 async function persistEntries() {
 	const source = props.source
 	if (!source) return
+	if (!entriesLoaded.value) {
+		// Nothing was read this session; writing now would save the empty list
+		// over entries that exist on disk.
+		console.warn('[content-source-config]', source.id, 'skipping entry save: nothing was loaded')
+		return
+	}
 	// Drop rows the user left entirely blank, so an accidental "Add" does not
 	// leave a nameless entry behind for the source to trip over.
 	const rows = entries.value.filter((row) =>
@@ -240,11 +279,14 @@ function entryIssue(row: Record<string, string>, field: ManualEntryField): strin
 	return null
 }
 
-/** One row's read-only summary: its first filled value as the title, the rest beneath. */
+/** One row's read-only summary. The name — or the repo, when unnamed — is the
+ * title; those two keys lead so a type-only row never becomes the title. */
 function entrySummary(row: Record<string, string>): { title: string; detail: string } {
+	const rank = (key: string) => (key === 'name' ? 0 : key === 'repo' ? 1 : 2)
 	const parts = entryFields.value
-		.map((field) => ({ label: field.label, value: (row[field.key] ?? '').trim() }))
+		.map((field) => ({ key: field.key, label: field.label, value: (row[field.key] ?? '').trim() }))
 		.filter((part) => part.value.length > 0)
+		.sort((a, b) => rank(a.key) - rank(b.key))
 	if (parts.length === 0) return { title: '—', detail: '' }
 	const [first, ...rest] = parts
 	return {
@@ -253,9 +295,44 @@ function entrySummary(row: Record<string, string>): { title: string; detail: str
 	}
 }
 
+/** Timers of the post-open refreshes, cleared when the modal leaves. */
+let refreshTimers: ReturnType<typeof setTimeout>[] = []
+
+function clearRefreshTimers() {
+	for (const timer of refreshTimers) clearTimeout(timer)
+	refreshTimers = []
+}
+
 async function show() {
-	await load()
+	// Open on whatever was read last; the reload below brings the list current.
+	const opening = load()
 	modal.value?.show()
+	await opening
+
+	// The storage read at open time has, in practice, come back empty more than
+	// once for reasons the read itself does not explain. Rather than guess at
+	// the race, re-read twice more after the modal has settled — each pass logs
+	// what it got, and a pass that finds nothing changes nothing that matters
+	// (an empty answer cannot erase rows the user is editing, because the guard
+	// in persistEntries only writes after a successful read).
+	clearRefreshTimers()
+	refreshTimers = [1_000, 2_000].map((delay) =>
+		setTimeout(() => {
+			if (!modal.value) return
+			void reloadEntries().catch((error) => handleError(toError(error)))
+		}, delay),
+	)
+}
+
+/**
+ * The X button, Escape and clicking the overlay all close through NewModal
+ * itself rather than through `hide` below, so a debounced edit would be lost
+ * when the modal leaves. This hook is the one path every close takes.
+ */
+function flush() {
+	clearRefreshTimers()
+	void saveAllSettings()
+	void persistEntries()
 }
 
 async function hide() {
@@ -269,7 +346,12 @@ defineExpose({ show, hide })
 </script>
 
 <template>
-	<NewModal ref="modal" :header="formatMessage(messages.title)" max-width="min(640px, 92vw)">
+	<NewModal
+		ref="modal"
+		:header="formatMessage(messages.title)"
+		max-width="min(640px, 92vw)"
+		:on-hide="flush"
+	>
 		<div class="flex w-full max-w-[600px] flex-col gap-4">
 			<div v-if="source" class="flex flex-col">
 				<h3 class="m-0 text-lg font-semibold text-contrast">
@@ -287,11 +369,21 @@ defineExpose({ show, hide })
 
 			<template v-else>
 				<div v-if="entryFields.length" class="flex flex-col gap-3">
-					<div class="flex flex-col gap-1">
-						<h4 class="m-0 text-sm font-semibold text-contrast">
-							{{ formatMessage(messages.entries) }}
-						</h4>
-						<span class="text-xs text-secondary">{{ formatMessage(messages.entriesHint) }}</span>
+					<div class="flex items-center justify-between gap-2">
+						<div class="flex flex-col gap-1">
+							<h4 class="m-0 text-sm font-semibold text-contrast">
+								{{ formatMessage(messages.entries) }}
+							</h4>
+							<span class="text-xs text-secondary">{{ formatMessage(messages.entriesHint) }}</span>
+						</div>
+						<IconButton
+							v-tooltip="formatMessage(messages.refreshEntries)"
+							:label="formatMessage(messages.refreshEntries)"
+							:disabled="reloadingEntries"
+							@click="reloadEntries().catch((error) => handleError(toError(error)))"
+						>
+							<RefreshCwIcon :class="reloadingEntries ? 'animate-spin' : ''" />
+						</IconButton>
 					</div>
 
 					<div

@@ -34,6 +34,8 @@ export interface UseBrowseSearchOptions {
 	}>
 	providedFilters?: ComputedRef<FilterValue[]>
 	environmentOverride?: ComputedRef<EnvironmentSearchOverride | undefined>
+	/** Outside filter groups (content sources') rendered alongside the built-ins. */
+	extraFilters?: ComputedRef<FilterType[]>
 	active?: ComputedRef<boolean>
 	search: (params: string) => Promise<BrowseSearchResponse>
 	persistentQueryParams: string[]
@@ -109,6 +111,7 @@ export function useBrowseSearch(options: UseBrowseSearchOptions): BrowseSearchSt
 		options.tags,
 		options.providedFilters ?? computed(() => []),
 		options.environmentOverride ?? computed(() => undefined),
+		options.extraFilters ?? computed(() => []),
 	)
 
 	const {

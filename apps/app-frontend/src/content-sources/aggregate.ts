@@ -30,6 +30,11 @@ export interface FanOutRequest {
 	limit: number
 	gameVersion?: string
 	loader?: string
+	/**
+	 * Per-source sidebar selections: source id → group id → option ids. Each
+	 * source only ever sees its own slice, stripped before the query reaches it.
+	 */
+	filters?: Record<string, Record<string, string[]>>
 }
 
 /** One source's contribution to the merged page. */

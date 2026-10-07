@@ -158,6 +158,6 @@ export function sourceTintStyle(
 	if ([r, g, b].some(Number.isNaN)) return undefined
 
 	return {
-		backgroundImage: `linear-gradient(to bottom, rgba(${r}, ${g}, ${b}, 0.5), rgba(${r}, ${g}, ${b}, 0))`,
+		backgroundImage: `linear-gradient(to bottom, rgba(${r}, ${g}, ${b}, 0.2), rgba(${r}, ${g}, ${b}, 0))`,
 	}
 }
