@@ -341,7 +341,7 @@ pub async fn get_instance_from_pack(
             link: Some(InstanceLink::ImportedModpack {
                 project_id: Some(project_id),
                 version_id,
-                name: Some(title),
+                name: Some(title.clone()),
                 version_number: None,
                 filename: None,
             }),

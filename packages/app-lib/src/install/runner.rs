@@ -1778,6 +1778,9 @@ fn set_initial_display(job_state: &mut InstallJobState) {
                 CreatePackLocation::FromFile { path } => {
                     Some((get_local_pack_instance(path).name, None))
                 }
+                CreatePackLocation::FromContentSource {
+                    title, icon_url, ..
+                } => Some((title.clone(), icon_url.clone())),
             }
         }
         _ => None,

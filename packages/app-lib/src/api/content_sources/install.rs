@@ -876,7 +876,9 @@ pub async fn stage_modpack(
     let mut manifest_json = None;
     if probe.by_name("manifest.json").is_ok() {
         format = "curseforge".to_string();
-        let mut file = probe.by_name("manifest.json")?;
+        let mut file = probe.by_name("manifest.json").map_err(|error| {
+            crate::ErrorKind::InputError(format!("Failed to read pack manifest: {error}"))
+        })?;
         use std::io::Read;
         let mut text = String::new();
         file.read_to_string(&mut text)?;

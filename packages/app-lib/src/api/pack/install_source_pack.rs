@@ -13,11 +13,11 @@ use super::install_mrpack::{MrpackZipReader, install_zipped_mrpack_files_with_re
 use crate::install::{InstallErrorContext, InstallPhaseId, InstallProgressReporter};
 use crate::state::{AppliedContentSetPatch, EditInstance, ModLoader, State};
 use crate::util::fetch::{DownloadReason, fetch};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::path::PathBuf;
 
 /// A minimal slice of a CurseForge pack manifest — only what the unpack needs.
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 struct CurseforgeManifest {
     #[serde(default = "default_overrides_dir")]
     overrides: String,
@@ -50,7 +50,7 @@ pub(crate) async fn install_source_modpack_files_with_reporter(
     // pack as easily as a CurseForge one. The mrpack path is the mature one —
     // hashing, external-file handling, lock updating — so it wins whenever the
     // archive declares itself.
-    let mut probe = MrpackZipReader::new(&create_pack.file).await?;
+    let probe = MrpackZipReader::new(&create_pack.file).await?;
     let is_mrpack = probe
         .file()
         .entries()
