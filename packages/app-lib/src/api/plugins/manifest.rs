@@ -90,6 +90,11 @@ pub struct PluginManifest {
     pub author: Option<String>,
     #[serde(default)]
     pub homepage: Option<String>,
+    /// An image in the plugin's own folder to show as its icon, e.g.
+    /// `icon.png`. Anything the webview can display works (svg, png, webp). A
+    /// plugin without one is drawn with the launcher's generic plugin mark.
+    #[serde(default)]
+    pub icon: Option<String>,
     #[serde(default)]
     pub r#type: PluginType,
     #[serde(default = "current_api_version")]
@@ -207,6 +212,16 @@ impl PluginManifest {
             }
         }
 
+        if let Some(icon) = &self.icon
+            && let Err(reason) = validate_icon(icon)
+        {
+            return Err(crate::ErrorKind::InputError(format!(
+                "Plugin '{}' has an invalid icon '{icon}': {reason}",
+                self.id
+            ))
+            .into());
+        }
+
         match self.r#type {
             PluginType::Ui => {
                 let entry = self.entry.as_deref().ok_or_else(|| {
@@ -269,6 +284,24 @@ pub fn is_valid_plugin_id(id: &str) -> bool {
             character.is_ascii_alphanumeric()
                 || matches!(character, '.' | '-' | '_')
         })
+}
+
+/// The icon is read out of the plugin's folder, so it carries the same
+/// restriction the entry point does: a plain relative path, nothing that could
+/// name a file elsewhere on the disk.
+fn validate_icon(icon: &str) -> Result<(), String> {
+    if icon.trim().is_empty() {
+        return Err("icon must not be empty".to_string());
+    }
+    if Path::new(icon)
+        .components()
+        .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return Err(
+            "icon must be a relative path inside the plugin folder".to_string(),
+        );
+    }
+    Ok(())
 }
 
 /// An entry point must be a plain relative path inside the plugin folder —

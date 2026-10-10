@@ -8,11 +8,19 @@ import {
 	TrashIcon,
 	TriangleAlertIcon,
 } from '@modrinth/assets'
-import { Button, defineMessages, injectNotificationManager, Toggle, useVIntl } from '@modrinth/ui'
+import {
+	Button,
+	defineMessages,
+	injectNotificationManager,
+	SourceBadge,
+	Toggle,
+	useVIntl,
+} from '@modrinth/ui'
 import { open } from '@tauri-apps/plugin-dialog'
 import { computed, onMounted, ref } from 'vue'
 
 import {
+	contentSourceAssetUrl,
 	installSource,
 	installSourceFromUrl,
 	listSources,
@@ -184,6 +192,18 @@ const configTarget = ref<SourceSummary | null>(null)
 function openConfig(source: SourceSummary) {
 	configTarget.value = source
 	configModal.value?.show()
+}
+
+/**
+ * The source's own icon, resolved to a URL the webview may load — or null, and
+ * the badge falls back to the source's first letter on its colour. Read from
+ * the summary rather than `sourceAppearance`, so a source that is switched off
+ * still shows the mark it ships.
+ */
+function sourceIconUrl(source: SourceSummary): string | null {
+	const icon = source.manifest?.icon
+	if (!icon || !source.path) return null
+	return contentSourceAssetUrl(source.path, icon)
 }
 
 /** Every source Discover can pull from, the built-in one first. */
@@ -368,14 +388,22 @@ function installFromStore(entry: StoreContentSource) {
 					class="rounded-xl border border-solid border-surface-5 bg-surface-3 p-4 flex flex-col gap-3"
 				>
 					<header class="flex items-start justify-between gap-4">
-						<div class="min-w-0">
-							<h3 class="m-0 text-lg font-semibold text-contrast">
-								{{ source.manifest?.name ?? source.dir_name }}
-							</h3>
-							<p class="m-0 text-sm text-secondary">
-								<span v-if="source.manifest?.version">v{{ source.manifest.version }}</span>
-								<span v-if="source.manifest?.author"> · {{ source.manifest.author }}</span>
-							</p>
+						<div class="flex min-w-0 items-start gap-3">
+							<SourceBadge
+								:label="source.manifest?.name ?? source.dir_name"
+								:color="source.manifest?.color ?? null"
+								:icon-url="sourceIconUrl(source)"
+								size="40px"
+							/>
+							<div class="min-w-0">
+								<h3 class="m-0 text-lg font-semibold text-contrast">
+									{{ source.manifest?.name ?? source.dir_name }}
+								</h3>
+								<p class="m-0 text-sm text-secondary">
+									<span v-if="source.manifest?.version">v{{ source.manifest.version }}</span>
+									<span v-if="source.manifest?.author"> · {{ source.manifest.author }}</span>
+								</p>
+							</div>
 						</div>
 						<span class="inline-flex shrink-0">
 							<Toggle

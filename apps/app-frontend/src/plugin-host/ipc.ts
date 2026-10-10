@@ -278,3 +278,21 @@ export function pluginLanCleanup(pluginId: string): Promise<void> {
 export function pluginAssetUrl(absolutePath: string): string {
 	return `${convertFileSrc(absolutePath)}?v=${Date.now()}`
 }
+
+/**
+ * Resolve a file inside a plugin's own folder — its icon, say — to a URL the
+ * webview may load. The relative part comes from the manifest and has already
+ * been checked backend-side to stay inside the folder.
+ *
+ * Deliberately without the cache-busting query `pluginAssetUrl` carries: this
+ * is how a plugin's icon is shown in lists, and a URL that changed on every
+ * render would make the browser re-fetch the same image over and over.
+ */
+export function pluginIconUrl(pluginDir: string, relativePath: string): string {
+	const separator = pluginDir.includes('\\') ? '\\' : '/'
+	const joined = `${pluginDir.replace(/[\\/]+$/, '')}${separator}${relativePath.replace(
+		/^[\\/]+/,
+		'',
+	)}`
+	return convertFileSrc(joined)
+}

@@ -32,6 +32,8 @@ export interface PluginManifest {
 	version: string
 	author?: string | null
 	homepage?: string | null
+	/** A displayable image in the plugin's folder, e.g. `icon.png`. */
+	icon?: string | null
 	type: PluginType
 	api_version: number
 	entry?: string | null

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TrashIcon, FolderOpenIcon, PlusIcon, TriangleAlertIcon, DownloadIcon, SettingsIcon } from '@modrinth/assets'
+import { TrashIcon, FolderOpenIcon, PlusIcon, PlugIcon, TriangleAlertIcon, DownloadIcon, SettingsIcon } from '@modrinth/assets'
 import {
 	Button,
 	defineMessages,
@@ -19,6 +19,7 @@ import {
 	pluginCrashLog,
 	pluginGetHotReload,
 	pluginLatestRelease,
+	pluginIconUrl,
 	pluginSetHotReload,
 	setPluginEnabled,
 	setPluginGranted,
@@ -34,6 +35,17 @@ const { handleError } = injectNotificationManager()
 
 const settingsModal = ref<InstanceType<typeof PluginSettingsModal> | null>(null)
 const settingsTarget = ref<PluginSummary | null>(null)
+
+/**
+ * The plugin's own icon, resolved to a URL the webview may load, or `null` when
+ * it declared none (or its folder could not be read) — in which case the card
+ * shows the launcher's generic plugin mark instead.
+ */
+function pluginIcon(plugin: PluginSummary): string | null {
+	const icon = plugin.manifest?.icon
+	if (!icon || !plugin.path) return null
+	return pluginIconUrl(plugin.path, icon)
+}
 
 /**
  * Human labels for permission strings. A permission is `kind` or `kind:scope`;
@@ -461,20 +473,34 @@ function updateFromStore(plugin: PluginSummary, entry: StorePlugin) {
 				class="rounded-xl border border-solid border-surface-5 bg-surface-3 p-4 flex flex-col gap-3"
 			>
 				<header class="flex items-start justify-between gap-4">
-					<div class="min-w-0">
-						<h3 class="m-0 text-lg font-semibold text-contrast">
-							{{ plugin.manifest?.name ?? plugin.dir_name }}
-						</h3>
-						<p class="m-0 text-sm text-secondary">
-							<span v-if="plugin.manifest?.version">v{{ plugin.manifest.version }}</span>
-							<span v-if="plugin.manifest?.author"> · {{ plugin.manifest.author }}</span>
-						</p>
+					<div class="flex min-w-0 items-start gap-3">
+						<img
+							v-if="pluginIcon(plugin)"
+							:src="pluginIcon(plugin) ?? ''"
+							:alt="plugin.manifest?.name ?? plugin.dir_name"
+							class="size-10 shrink-0 rounded-lg object-cover"
+						/>
 						<span
-							v-if="updates.get(plugin.id)"
-							class="mt-1 inline-flex items-center gap-1 rounded-full bg-brand-highlight px-2 py-0.5 text-xs font-semibold text-brand"
+							v-else
+							class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-surface-4 text-secondary"
 						>
-							{{ formatMessage(messages.hasUpdate) }} · {{ updates.get(plugin.id)?.tag }}
+							<PlugIcon class="size-5" />
 						</span>
+						<div class="min-w-0">
+							<h3 class="m-0 text-lg font-semibold text-contrast">
+								{{ plugin.manifest?.name ?? plugin.dir_name }}
+							</h3>
+							<p class="m-0 text-sm text-secondary">
+								<span v-if="plugin.manifest?.version">v{{ plugin.manifest.version }}</span>
+								<span v-if="plugin.manifest?.author"> · {{ plugin.manifest.author }}</span>
+							</p>
+							<span
+								v-if="updates.get(plugin.id)"
+								class="mt-1 inline-flex items-center gap-1 rounded-full bg-brand-highlight px-2 py-0.5 text-xs font-semibold text-brand"
+							>
+								{{ formatMessage(messages.hasUpdate) }} · {{ updates.get(plugin.id)?.tag }}
+							</span>
+						</div>
 					</div>
 					<span class="inline-flex shrink-0">
 						<Toggle
