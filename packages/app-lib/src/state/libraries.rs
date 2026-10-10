@@ -1475,8 +1475,8 @@ pub fn detect_game_version_from_jar_name(name: &str) -> Option<String> {
     versions.into_iter().last().map(String::from)
 }
 
-/// Detect the loader from the instance directory by reading the version JSON's
-/// `mainClass` field. Falls back to Vanilla if no JSON is found.
+/// Detect the loader from the instance directory by reading the first version
+/// JSON in it. Falls back to Vanilla if no JSON is found.
 pub fn detect_loader_from_dir(dir: &Path) -> crate::state::ModLoader {
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
@@ -1500,12 +1500,77 @@ pub fn detect_loader_from_dir(dir: &Path) -> crate::state::ModLoader {
         let Ok(val) = serde_json::from_str::<Value>(&content) else {
             continue;
         };
-        let Some(main_class) = val.get("mainClass").and_then(|v| v.as_str()) else {
+        if val.get("mainClass").and_then(|v| v.as_str()).is_none() {
             continue;
-        };
-        return detect_loader_from_main_class(main_class);
+        }
+        return detect_loader_from_json(&val);
     }
     crate::state::ModLoader::Vanilla
+}
+
+/// The loader a launcher version JSON describes.
+///
+/// The libraries are read first: the artifacts a loader puts on the classpath
+/// are the structural truth, and the class name often says nothing at all. A
+/// NeoForge 21.1 install boots through
+/// `cpw.mods.bootstraplauncher.BootstrapLauncher`, which names no loader, and
+/// legacy entry points — `net.minecraft.launchwrapper.Launch`,
+/// `cpw.mods.modlauncher.Launcher` — are as anonymous. The class name is only
+/// the fallback for a JSON whose libraries were pruned.
+fn detect_loader_from_json(val: &Value) -> crate::state::ModLoader {
+    let from_libraries = detect_loader_from_libraries(val);
+    if from_libraries != crate::state::ModLoader::Vanilla {
+        return from_libraries;
+    }
+
+    let main_class = val
+        .get("mainClass")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    detect_loader_from_main_class(main_class)
+}
+
+/// The loader whose own artifacts appear in a version JSON's `libraries`.
+///
+/// NeoForge is resolved before Forge: a NeoForge install carries the odd
+/// `net.minecraftforge` artifact too — 21.1.251 ships
+/// `net.minecraftforge:srgutils:0.4.15` — so testing Forge first would call it
+/// Forge. The reverse cannot happen: no Forge install carries `net.neoforged`.
+fn detect_loader_from_libraries(val: &Value) -> crate::state::ModLoader {
+    use crate::state::ModLoader;
+
+    let Some(libraries) = val.get("libraries").and_then(|v| v.as_array()) else {
+        return ModLoader::Vanilla;
+    };
+
+    let (mut fabric, mut quilt, mut neoforge, mut forge) = (false, false, false, false);
+    for name in libraries
+        .iter()
+        .filter_map(|library| library.get("name").and_then(|v| v.as_str()))
+        .map(str::to_lowercase)
+    {
+        if name.starts_with("net.neoforged") {
+            neoforge = true;
+        } else if name.starts_with("net.minecraftforge") {
+            forge = true;
+        } else if name.starts_with("net.fabricmc:fabric-loader") {
+            fabric = true;
+        } else if name.starts_with("org.quiltmc:quilt-loader") {
+            quilt = true;
+        }
+    }
+
+    if neoforge {
+        ModLoader::NeoForge
+    } else if forge {
+        ModLoader::Forge
+    } else if fabric {
+        ModLoader::Fabric
+    } else if quilt {
+        ModLoader::Quilt
+    } else {
+        ModLoader::Vanilla
+    }
 }
 
 /// Parse a Minecraft launcher `mainClass` string and return the corresponding loader.
