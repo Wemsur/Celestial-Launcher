@@ -69,13 +69,13 @@ const title = computed(() => (props.tooltip ? props.label : undefined))
 		v-tooltip="title"
 		:src="iconUrl"
 		:alt="label"
-		class="shrink-0 rounded-full object-cover"
+		class="shrink-0 rounded-md object-cover"
 		:style="box"
 	/>
 	<span
 		v-else
 		v-tooltip="title"
-		class="inline-flex shrink-0 select-none items-center justify-center rounded-full font-semibold leading-none"
+		class="inline-flex shrink-0 select-none items-center justify-center rounded-md font-semibold leading-none"
 		:style="{
 			...box,
 			backgroundColor: color ?? DEFAULT_COLOR,
