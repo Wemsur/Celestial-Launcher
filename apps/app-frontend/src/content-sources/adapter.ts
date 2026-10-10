@@ -16,7 +16,7 @@
 import type { Labrinth } from '@modrinth/api-client'
 
 import { MODRINTH_SOURCE_ID } from './preferences'
-import type { ContentCard } from './types'
+import type { ContentCard, ContentVersion } from './types'
 
 export interface SourcedSearchResult extends Labrinth.Search.v3.ResultSearchProject {
 	/** The source this row came from, and its own id for the project. */
@@ -121,5 +121,40 @@ export function resultSourceId(
 	result: Labrinth.Search.v3.ResultSearchProject,
 ): string | undefined {
 	return (result as SourcedSearchResult).__source?.sourceId
+}
+
+/**
+ * A source version in the shape `ProjectPageVersions` renders.
+ *
+ * Same reasoning as {@link toSearchResult}: that table is the launcher's version
+ * list — its columns, filters, pagination and row actions — and rebuilding it
+ * for sources would give the same data two different-looking homes. A source
+ * describes a version in neutral terms, so the conversion is field renaming
+ * plus the defaults the table reads unconditionally. Nothing here is invented:
+ * a source that does not know a figure leaves it empty, and the cell renders
+ * empty rather than a made-up zero.
+ */
+export type VersionRow = Labrinth.Versions.v3.Version & { displayUrlEnding: string }
+
+export function toVersionRow(version: ContentVersion): VersionRow {
+	return {
+		id: version.id,
+		project_id: '',
+		author_id: '',
+		name: version.name ?? version.versionNumber ?? version.id,
+		version_number: version.versionNumber ?? version.id,
+		version_type: (version.channel ?? 'release') as Labrinth.Versions.v3.Version['version_type'],
+		status: 'listed' as Labrinth.Versions.v2.VersionStatus,
+		featured: false,
+		dependencies: [],
+		game_versions: version.gameVersions ?? [],
+		loaders: version.loaders ?? [],
+		date_published: version.publishedAt ?? '',
+		downloads: version.downloads ?? 0,
+		// `showFiles` is off, so the table never reads these; an empty list keeps
+		// the type honest rather than fabricating file entries.
+		files: [],
+		displayUrlEnding: '',
+	}
 }
 

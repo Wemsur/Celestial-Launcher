@@ -1,99 +1,85 @@
 <template>
-	<div class="flex flex-col">
-		<Card v-for="version in versions" :key="version.id">
-			<div class="flex flex-wrap items-center justify-between gap-3">
-				<div class="flex min-w-0 flex-col gap-1">
-					<div class="flex flex-wrap items-center gap-2">
-						<span class="font-semibold text-contrast">
-							{{ version.versionNumber ?? version.name ?? version.id }}
-						</span>
-						<TagItem v-if="version.channel && version.channel !== 'release'">
-							{{ version.channel }}
-						</TagItem>
-					</div>
-					<span v-if="version.name && version.name !== version.id" class="text-sm text-secondary">
-						{{ version.name }}
-					</span>
-					<span v-if="version.publishedAt" class="text-sm text-secondary">
-						{{ formatDate(version.publishedAt) }}
-					</span>
-				</div>
-
-				<div class="flex shrink-0 items-center gap-2">
-					<Button
-						size="sm"
-						type="outlined"
-						@click="router.push(versionHref(version))"
-					>
-						{{ formatMessage(messages.view) }}
-					</Button>
-					<Button
-						v-if="provider?.resolveDownload"
-						size="sm"
-						color="brand"
-						:disabled="installing"
-						@click="installVersion(version)"
-					>
-						<DownloadIcon />
-						{{ formatMessage(commonMessages.installButton) }}
-					</Button>
-				</div>
-			</div>
-		</Card>
-
-		<Card v-if="versions.length === 0">
-			<p class="m-0 text-secondary">{{ formatMessage(messages.empty) }}</p>
-		</Card>
+	<div>
+		<ProjectPageVersions
+			:loaders="loaders"
+			:game-versions="gameVersions"
+			:versions="rows"
+			:project="tableProject"
+			:version-link="(version) => versionHref(version)"
+		>
+			<template #actions="{ version }">
+				<IconButton
+					v-if="provider?.resolveDownload"
+					v-tooltip="formatMessage(commonMessages.installButton)"
+					type="quiet"
+					color="green"
+					:label="formatMessage(commonMessages.installButton)"
+					:disabled="installing"
+					@click.stop="installVersion(version)"
+				>
+					<SpinnerIcon v-if="installing" class="animate-spin" />
+					<DownloadIcon v-else />
+				</IconButton>
+			</template>
+		</ProjectPageVersions>
 	</div>
 </template>
 
 <script setup lang="ts">
-import { DownloadIcon } from '@modrinth/assets'
+import { DownloadIcon, SpinnerIcon } from '@modrinth/assets'
 import {
-	Button,
-	Card,
 	commonMessages,
-	defineMessages,
+	IconButton,
 	injectNotificationManager,
-	TagItem,
+	ProjectPageVersions,
 	useVIntl,
 } from '@modrinth/ui'
-import dayjs from 'dayjs'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, ref } from 'vue'
+import { useRoute } from 'vue-router'
 
 import { sourceProjectBasePathOf } from '@/composables/use-split-view.ts'
 import { useSourceProject } from '@/composables/use-source-project'
+import { toVersionRow } from '@/content-sources/adapter'
 import { toError } from '@/helpers/errors'
-import type { ContentVersion } from '@/content-sources/types'
+import { get_game_versions, get_loaders } from '@/helpers/tags.js'
 
 const route = useRoute()
-const router = useRouter()
 const { formatMessage } = useVIntl()
 const { handleError } = injectNotificationManager()
-const { versions, provider, installing, install } = useSourceProject()
+const { projectId, contentType, provider, versions, installing, install } = useSourceProject()
 
-const messages = defineMessages({
-	empty: {
-		id: 'app.source-project.no-versions',
-		defaultMessage: 'This source does not list versions.',
-	},
-	view: { id: 'app.source-project.view-version', defaultMessage: 'Details' },
-})
+/*
+ * Modrinth's own versions table, fed a source's versions: the same columns,
+ * filters, grouping and row actions, so a source's page is the same page rather
+ * than a second list that drifts from it.
+ */
+const rows = computed(() => versions.value.map(toVersionRow))
 
-function versionHref(version: ContentVersion) {
+/** Only `project_type` and `id` are read — for the modpack loader rule. */
+const tableProject = computed(() => ({
+	project_type: String(contentType.value),
+	id: projectId.value,
+}))
+
+/** The table hands back its own row shape; these are the two fields read here. */
+type VersionRef = { id: string; name?: string }
+
+function versionHref(version: VersionRef) {
 	return `${sourceProjectBasePathOf(route)}/version/${encodeURIComponent(version.id)}`
 }
 
-function formatDate(iso: string): string {
-	const parsed = dayjs(iso)
-	return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm') : iso
-}
-
-async function installVersion(version: ContentVersion) {
+async function installVersion(version: VersionRef) {
 	try {
-		await install({ versionId: version.id, versionName: version.name ?? version.id })
+		await install({ versionId: version.id, versionName: version.name })
 	} catch (caught) {
 		handleError(toError(caught))
 	}
 }
+
+// The tag lists the table's filters offer. Modrinth's page reads the same two,
+// and a source's own values are matched against them by name.
+const [loaders, gameVersions] = await Promise.all([
+	get_loaders().catch(handleError).then(ref),
+	get_game_versions().catch(handleError).then(ref),
+])
 </script>
