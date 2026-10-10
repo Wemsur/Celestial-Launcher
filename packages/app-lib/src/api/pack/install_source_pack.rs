@@ -169,24 +169,30 @@ async fn install_curseforge_pack(
         .map(|(index, _)| index)
         .collect();
 
+    // Reported in bytes, which is how the frontend formats this phase: an entry
+    // count would be shown as a byte figure and read as nonsense.
+    let override_bytes: u64 = override_indices
+        .iter()
+        .map(|index| zip_reader.file().entries()[*index].uncompressed_size())
+        .sum();
+    let mut override_done: u64 = 0;
+
     reporter
         .update(
             InstallPhaseId::ExtractingOverrides,
             Some(crate::install::InstallProgress {
                 current: 0,
-                total: override_indices.len() as u64,
+                total: override_bytes,
                 secondary: None,
             }),
             modpack_details(&description),
         )
         .await?;
 
-    for (done, index) in override_indices.iter().enumerate() {
-        let name = zip_reader.file().entries()[*index]
-            .filename()
-            .as_str()
-            .unwrap_or_default()
-            .to_string();
+    for index in override_indices.iter() {
+        let entry = &zip_reader.file().entries()[*index];
+        let name = entry.filename().as_str().unwrap_or_default().to_string();
+        let entry_bytes = entry.uncompressed_size();
         // Zip entries carry their own directory records; extracting those
         // through extract_entry would produce a file named like a directory.
         if name.ends_with('/') {
@@ -206,12 +212,13 @@ async fn install_curseforge_pack(
         zip_reader
             .extract_entry(*index, &target, &state.io_semaphore, None)
             .await?;
+        override_done += entry_bytes;
         reporter
             .update(
                 InstallPhaseId::ExtractingOverrides,
                 Some(crate::install::InstallProgress {
-                    current: done as u64 + 1,
-                    total: override_indices.len() as u64,
+                    current: override_done.min(override_bytes),
+                    total: override_bytes,
                     secondary: None,
                 }),
                 modpack_details(&description),
@@ -274,6 +281,18 @@ async fn install_curseforge_pack(
             )
             .await?;
     }
+
+    // Applying a loader setup is not installing it: without this the instance
+    // has no version JSON and no Java component, and every launch fails with
+    // "Missing correct java installation". The mrpack branch ends the same way,
+    // and this branch reaches here only for archives that are not mrpack.
+    crate::launcher::install_minecraft_for_instance_id_with_reporter(
+        &instance_id,
+        false,
+        Some(reporter.clone()),
+    )
+    .await?;
+    reporter.clear_context().await?;
 
     let _ = icon_exists;
     Ok(instance_id)

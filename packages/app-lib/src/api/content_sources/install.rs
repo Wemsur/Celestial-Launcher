@@ -300,6 +300,18 @@ pub(crate) async fn download(
     source_id: &str,
     state: &State,
 ) -> crate::Result<Vec<u8>> {
+	download_inner(descriptor, source_id, state, None).await
+}
+
+/// `progress_title` asks for a native pack-import bar, created once the response
+/// arrives so it can be sized by the announced length and fed the bytes as they
+/// stream. A pack is far too big for the window to sit silently through.
+async fn download_inner(
+	descriptor: &InstallDescriptor,
+	source_id: &str,
+	state: &State,
+	progress_title: Option<&str>,
+) -> crate::Result<Vec<u8>> {
     let url = url::Url::parse(&descriptor.url).map_err(|error| {
         crate::ErrorKind::InputError(format!("Invalid download URL: {error}"))
     })?;
@@ -330,7 +342,7 @@ pub(crate) async fn download(
         }
     }
 
-    let response = request.send().await?;
+    let mut response = request.send().await?;
     if !response.status().is_success() {
         return Err(crate::ErrorKind::OtherError(format!(
             "Download failed with HTTP {}",
@@ -348,14 +360,37 @@ pub(crate) async fn download(
         .into());
     }
 
-    let bytes = response.bytes().await?;
-    if bytes.len() as u64 > MAX_DOWNLOAD_BYTES {
-        return Err(crate::ErrorKind::InputError(format!(
-            "Download exceeds the {} MiB limit",
-            MAX_DOWNLOAD_BYTES / (1024 * 1024)
-        ))
-        .into());
-    }
+	// Dropped when this function returns, which is what takes the bar away.
+	let progress = match progress_title {
+		Some(title) => Some(
+			crate::event::emit::init_loading(
+				crate::event::LoadingBarType::PackImport {
+					pack_name: title.to_string(),
+				},
+				response.content_length().unwrap_or(0) as f64,
+				title,
+			)
+			.await?,
+		),
+		None => None,
+	};
+
+	let mut bytes = Vec::new();
+	while let Some(chunk) = response.chunk().await? {
+		if bytes.len() as u64 + chunk.len() as u64 > MAX_DOWNLOAD_BYTES {
+			return Err(crate::ErrorKind::InputError(format!(
+				"Download exceeds the {} MiB limit",
+				MAX_DOWNLOAD_BYTES / (1024 * 1024)
+			)).into());
+		}
+		bytes.extend_from_slice(&chunk);
+		// The bar counts bytes, so it is fed each chunk's own length rather than a
+		// fraction. A server that announced no length leaves it in the waiting
+		// state instead of reporting a percentage it cannot know.
+		if let Some(progress) = &progress {
+			crate::event::emit::emit_loading(progress, chunk.len() as f64, None)?;
+		}
+	}
 
     verify_hash(&bytes, descriptor.hash.as_ref())?;
     Ok(bytes.to_vec())
@@ -849,7 +884,11 @@ pub async fn stage_modpack(
     descriptor: &InstallDescriptor,
     state: &State,
 ) -> crate::Result<StagedModpack> {
-    let bytes = download(descriptor, source_id, state).await?;
+	let pack_name = descriptor
+		.file_name
+		.clone()
+		.unwrap_or_else(|| "整合包".to_string());
+	let bytes = download_inner(descriptor, source_id, state, Some(&pack_name)).await?;
 
     let staging = super::super::pack::install_source_pack::staged_modpacks_dir(state);
     io::create_dir_all(&staging).await?;

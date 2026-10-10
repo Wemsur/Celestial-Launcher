@@ -532,6 +532,7 @@ fn main() {
                         "content_source_list_installed",
                         "content_source_forget_installed",
                         "content_source_list_downloaded_skins",
+						"content_source_stage_modpack",
                     ])
                     .default_permission(
                         DefaultPermissionRule::AllowAllCommands,

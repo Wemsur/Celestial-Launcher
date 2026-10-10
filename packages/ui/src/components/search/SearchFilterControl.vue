@@ -133,7 +133,11 @@ const dependentProjectNames = computed(
 )
 
 function filterMatches(type: FilterType, option: FilterOption, list: FilterValue[]) {
-	return list.some((provided) => provided.type === type.id && provided.option === option.id)
+	return list.some((provided) =>
+		(option.filter_values ?? [{ type: type.id, option: option.id }]).some(
+			(value) => value.type === provided.type && value.option === provided.option,
+		),
+	)
 }
 
 const items: ComputedRef<Item[]> = computed(() => {

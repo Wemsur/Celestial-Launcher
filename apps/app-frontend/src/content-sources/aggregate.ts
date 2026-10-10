@@ -128,7 +128,11 @@ export async function searchAcrossSources(
 		}
 	}
 
-	return { items: merge(perSource, request.sort), total, failures }
+	return {
+		items: merge(perSource, request.sort === 'relevance' && !request.query?.trim() ? 'downloads' : request.sort),
+		total,
+		failures,
+	}
 }
 
 /** Group same-name same-type items together, then order the result. */
@@ -160,12 +164,9 @@ function merge(perSource: SourceOffer[][], sort: ContentSort): MergedContentItem
 	return sortItems(items, sort)
 }
 
-/**
- * Order merged items. `relevance` has no cross-source meaning, so the sources are
- * interleaved round-robin instead — fair to each, and stable.
- */
+/** Preserve source relevance order for text searches; otherwise compare shared metrics. */
 function sortItems(items: MergedContentItem[], sort: ContentSort): MergedContentItem[] {
-	if (sort === 'relevance') return interleave(items)
+	if (sort === 'relevance') return items
 
 	if (sort === 'newest' || sort === 'updated') {
 		return [...items].sort((a, b) => compareDates(itemDate(b, sort), itemDate(a, sort)))
@@ -208,33 +209,6 @@ function compareDates(a: number | undefined, b: number | undefined): number {
 	if (a === undefined) return 1
 	if (b === undefined) return -1
 	return a - b
-}
-
-/** Round-robin the sources so no single source's block dominates the top. */
-function interleave(items: MergedContentItem[]): MergedContentItem[] {
-	const queues = new Map<string, MergedContentItem[]>()
-	for (const item of items) {
-		const sourceId = item.card.sourceId
-		const queue = queues.get(sourceId)
-		if (queue) {
-			queue.push(item)
-		} else {
-			queues.set(sourceId, [item])
-		}
-	}
-
-	const result: MergedContentItem[] = []
-	let remaining = items.length
-	while (remaining > 0) {
-		for (const queue of queues.values()) {
-			const next = queue.shift()
-			if (next) {
-				result.push(next)
-				remaining -= 1
-			}
-		}
-	}
-	return result
 }
 
 /** Case- and whitespace-insensitive, so "JEI" and "jei " merge. */

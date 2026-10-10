@@ -17,6 +17,8 @@
 
 import { ref, watch } from 'vue'
 
+import i18n from '@/i18n.config'
+
 import { selectableSources } from './catalog'
 import { contentSourceProviders, sourceProvider } from './registry'
 import type { ContentType, SourceFilterGroup } from './types'
@@ -44,6 +46,7 @@ export function useSourceFilters(contentType: () => string): SourceFiltersState 
 	async function reload() {
 		const type = contentType() as ContentType
 		if (!type) return
+		const locale = i18n.global.locale.value
 		const version = ++loadVersion
 		loading.value = true
 
@@ -54,7 +57,7 @@ export function useSourceFilters(contentType: () => string): SourceFiltersState 
 		const next: Record<string, SourceFilterGroup[]> = {}
 		await Promise.all(
 			active.map(async (source) => {
-				const key = `${source.id}:${type}`
+				const key = `${source.id}:${type}:${locale}`
 				const provider = sourceProvider(source.id)
 				if (!provider?.filters) return
 				try {
@@ -77,6 +80,7 @@ export function useSourceFilters(contentType: () => string): SourceFiltersState 
 	watch(
 		() => [
 			contentType(),
+			i18n.global.locale.value,
 			selectableSources().map((source) => `${source.id}:${source.available}`),
 			// Providers appear late — after the plugin module loads — so the
 			// registry itself is part of the trigger: a source that finishes
@@ -110,7 +114,6 @@ export function flattenSourceGroups(
 	perSource: Record<string, SourceFilterGroup[]>,
 ): SidebarGroup[] {
 	const sections: SidebarGroup[] = []
-	const byHeader = new Map<string, SidebarGroup>()
 
 	for (const [sourceId, groups] of Object.entries(perSource)) {
 		for (const group of groups) {
@@ -119,16 +122,6 @@ export function flattenSourceGroups(
 				id: option.id,
 				label: option.label ?? option.id,
 			}))
-			const mergeable = MERGEABLE_HEADERS.includes(header)
-			const existing = mergeable ? byHeader.get(header) : undefined
-			if (existing) {
-				for (const option of options) {
-					if (!existing.options.some((candidate) => candidate.id === option.id)) {
-						existing.options.push(option)
-					}
-				}
-				continue
-			}
 			const section: SidebarGroup = {
 				filterTypeId: `source_${sourceId}_${group.id}`,
 				sourceId,
@@ -137,7 +130,6 @@ export function flattenSourceGroups(
 				options,
 			}
 			sections.push(section)
-			if (mergeable) byHeader.set(header, section)
 		}
 	}
 

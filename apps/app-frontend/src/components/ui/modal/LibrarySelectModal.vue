@@ -16,25 +16,25 @@
 				v-for="library in libraries"
 				:key="library.path"
 				type="button"
-				class="flex w-full cursor-pointer flex-col items-start gap-1 rounded-xl border-[2px] border-solid bg-bg-raised p-3 text-left transition-colors"
-				:class="
-					selectedPath === library.path
-						? 'border-brand text-contrast'
-						: 'border-transparent text-primary'
-				"
+				class="flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-solid bg-surface-3 px-3 py-2 text-left transition-colors"
+				:class="selectedPath === library.path ? 'border-brand' : 'border-surface-5'"
 				@click="selectedPath = library.path"
 			>
-				<span class="flex w-full items-center gap-2">
-					<span class="font-semibold">{{ library.name }}</span>
-					<span class="rounded-full bg-button-bg px-2 py-[0.125rem] text-xs font-medium">
-						{{
-							formatMessage(
-								library.format === 'minecraft' ? messages.badgeMinecraft : messages.badgeModrinth,
-							)
-						}}
+				<div class="flex min-w-0 flex-col gap-0.5">
+					<span class="flex min-w-0 items-center gap-2">
+						<span class="min-w-0 break-words text-sm font-medium text-contrast">
+							{{ library.label }}
+						</span>
+						<span class="shrink-0 rounded-full bg-button-bg px-2 py-[0.125rem] text-xs font-medium text-secondary">
+							{{
+								formatMessage(
+									library.format === 'minecraft' ? messages.badgeMinecraft : messages.badgeModrinth,
+								)
+							}}
+						</span>
 					</span>
-				</span>
-				<span class="break-all text-xs text-secondary">{{ library.path }}</span>
+					<span class="min-w-0 break-all text-xs text-secondary">{{ library.path }}</span>
+				</div>
 			</button>
 		</div>
 
@@ -44,7 +44,7 @@
 					<XIcon />
 					{{ formatMessage(commonMessages.cancelButton) }}
 				</Button>
-				<Button type="primary" :disabled="!selectedPath" @click="handleConfirm">
+				<Button type="colored" color="brand" :disabled="!selectedPath" @click="handleConfirm">
 					<RightArrowIcon />
 					{{ formatMessage(messages.confirm) }}
 				</Button>
@@ -59,7 +59,7 @@ import { Button, commonMessages, defineMessages, NewModal, useVIntl } from '@mod
 import { ref } from 'vue'
 
 import type { InstanceFormat } from '@/helpers/library'
-import { library_list } from '@/helpers/library'
+import { library_default_path, library_list, libraryDisplayLabel } from '@/helpers/library'
 
 const { formatMessage } = useVIntl()
 
@@ -95,7 +95,7 @@ type LibrarySelection = {
 	format: InstanceFormat
 }
 
-type LibraryEntry = LibrarySelection & { name: string }
+type LibraryEntry = LibrarySelection & { label: string }
 const modal = ref<InstanceType<typeof NewModal>>()
 const libraries = ref<LibraryEntry[]>([])
 const selectedPath = ref<string | null>(null)
@@ -117,8 +117,12 @@ async function pick(): Promise<LibrarySelection | null> {
 	settle(null)
 
 	const config = await library_list()
+	// Same labels the home nav's library tabs show, so the picker names a
+	// library the way the page it installs onto does. A missing default path
+	// only costs the "默认库" wording, not the list.
+	const defaultPath = await library_default_path().catch(() => null)
 	libraries.value = config.libraries.map((library) => ({
-		name: library.name,
+		label: libraryDisplayLabel(library, defaultPath),
 		path: library.path,
 		format: (String(library.type).toLowerCase() === 'minecraft'
 			? 'minecraft'

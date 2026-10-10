@@ -383,11 +383,19 @@ function toggleGroup(group: string) {
 }
 
 function isIncluded(filter: FilterOption) {
-	return selectedFilters.value.some((value) => value.option === filter.id && !value.negative)
+	return selectedFilters.value.some((value) =>
+		(filter.filter_values ?? [{ type: props.filterType.id, option: filter.id }]).some(
+			(candidate) => candidate.type === value.type && candidate.option === value.option,
+		) && !value.negative,
+	)
 }
 
 function isExcluded(filter: FilterOption) {
-	return selectedFilters.value.some((value) => value.option === filter.id && value.negative)
+	return selectedFilters.value.some((value) =>
+		(filter.filter_values ?? [{ type: props.filterType.id, option: filter.id }]).some(
+			(candidate) => candidate.type === value.type && candidate.option === value.option,
+		) && !!value.negative,
+	)
 }
 
 function hasSelectedSubOption(filter: FilterOption) {
@@ -440,7 +448,10 @@ function toggleNegativeFilter(filter: FilterOption) {
 }
 
 function setFilter(filter: FilterOption, state: FilterState) {
-	let newFilters = selectedFilters.value.filter((selected) => selected.option !== filter.id)
+	const values = filter.filter_values ?? [{ type: props.filterType.id, option: filter.id }]
+	let newFilters = selectedFilters.value.filter((selected) =>
+		!values.some((value) => value.type === selected.type && value.option === selected.option),
+	)
 
 	if (state !== 'ignore') {
 		const subOptionIds = new Set(filter.sub_options?.map((subOption) => subOption.id) ?? [])
@@ -457,21 +468,11 @@ function setFilter(filter: FilterOption, state: FilterState) {
 		}
 	}
 
-	const baseValues = {
-		type: props.filterType.id,
-		option: filter.id,
-	}
-
-	if (state === 'include') {
-		newFilters.push({
-			...baseValues,
-			negative: false,
-		})
-	} else if (state === 'exclude') {
-		newFilters.push({
-			...baseValues,
-			negative: true,
-		})
+	if (state !== 'ignore') {
+		newFilters.push(...values.map((value) => ({
+			...value,
+			negative: state === 'exclude',
+		})))
 	}
 
 	selectedFilters.value = newFilters

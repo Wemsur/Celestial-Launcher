@@ -750,6 +750,9 @@ export function createContentInstall(opts: {
 			throw new Error('该内容源不支持直接下载。')
 		}
 
+		const { cancelled, library } = await pickInstallLibrary()
+		if (cancelled) return false
+
 		const descriptor = await provider.resolveDownload(projectId, versionId)
 		const staged = await sourceStageModpack(sourceId, {
 			url: descriptor.url,
@@ -763,24 +766,24 @@ export function createContentInstall(opts: {
 			if (!provider.resolveModpack) {
 				throw new Error('该内容源不支持解析整合包。')
 			}
-			if (!staged.manifest_json) {
+			if (!staged.manifestJson) {
 				throw new Error('整合包里没有找到 manifest.json。')
 			}
-			plan = await provider.resolveModpack(staged.manifest_json)
+			plan = await provider.resolveModpack(staged.manifestJson)
 		}
-
-		const { cancelled, library } = await pickInstallLibrary()
-		if (cancelled) return false
 
 		const job = await install_create_modpack_instance(
 			{
 				type: 'fromContentSource',
-				stagedPath: staged.staged_path,
+				// `rename_all` on that enum renames the variant, not the fields
+				// inside it, so these stay snake_case — the same shape the
+				// `fromVersionId` branch above sends.
+				staged_path: staged.stagedPath,
 				title,
-				iconUrl: iconUrl ?? null,
-				sourceId,
-				projectId,
-				versionId: versionId ?? null,
+				icon_url: iconUrl ?? null,
+				source_id: sourceId,
+				project_id: projectId,
+				version_id: versionId ?? null,
 				plan: plan ?? null,
 			},
 			null,

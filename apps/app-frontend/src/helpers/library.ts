@@ -47,3 +47,31 @@ export async function library_default_path(): Promise<string> {
 	return await invoke('plugin:instance|library_default_path')
 }
 
+/**
+ * What a library is called wherever one is listed — the home nav's tabs and the
+ * install picker alike: the name the user gave it, else "默认库" for the
+ * launcher's own path, else the folder it lives in. `defaultPath` is optional
+ * so a caller that could not read it still gets a usable label.
+ */
+export function libraryDisplayLabel(
+	library: { name?: string | null; path: string },
+	defaultPath?: string | null,
+): string {
+	if (library.name) return library.name
+
+	const normalize = (value: string) =>
+		value.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '')
+	if (defaultPath) {
+		const normalizedDefault = normalize(defaultPath)
+		const normalizedPath = normalize(library.path)
+		// The default library holds the instance folders, so its own path and the
+		// `profiles` folder inside it are the same library written two ways.
+		if (normalizedPath === normalizedDefault || normalizedPath === `${normalizedDefault}/profiles`) {
+			return '默认库'
+		}
+	}
+
+	const segments = library.path.split(/[\\/]/).filter(Boolean)
+	return segments[segments.length - 1] ?? library.path
+}
+

@@ -194,11 +194,11 @@ export interface InstallDescriptor {
 
 export interface StagedModpack {
 	/** Absolute path of the staged archive; the install reads it from disk. */
-	staged_path: string
+	stagedPath: string
 	/** `curseforge` or `modrinth`, by which manifest the archive carries. */
 	format: string
 	/** The manifest text for CurseForge packs, handed to `resolveModpack`. */
-	manifest_json?: string | null
+	manifestJson?: string | null
 }
 
 /**

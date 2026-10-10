@@ -5,7 +5,7 @@
 			class="markdown-body"
 			v-html="rendered"
 		/>
-		<p v-else-if="body" class="m-0 whitespace-pre-wrap text-primary">{{ body }}</p>
+		<p v-else-if="body" class="m-0 whitespace-pre-wrap text-primary">{{ translate(body) }}</p>
 		<p v-else class="m-0 text-secondary">
 			{{ formatMessage(messages.empty) }}
 		</p>
@@ -17,11 +17,13 @@ import { Card, defineMessages, useVIntl } from '@modrinth/ui'
 import { renderHighlightedString } from '@modrinth/utils'
 import { computed } from 'vue'
 
+import { useContentTranslation } from '@/composables/use-content-translation.ts'
 import { installedManifest } from '@/content-sources/catalog'
 import { useSourceProject } from '@/composables/use-source-project'
 
 const { formatMessage } = useVIntl()
 const { sourceId, project } = useSourceProject()
+const { translate, translateHtml } = useContentTranslation()
 
 const messages = defineMessages({
 	empty: {
@@ -50,5 +52,7 @@ const isMarkdown = computed(
 // hosts are passed so its body's images render directly — the shared filter
 // would otherwise proxy them to wsrv.nl, which a source's CDN rarely survives.
 const sourceHosts = computed(() => installedManifest(sourceId.value)?.hosts ?? [])
-const rendered = computed(() => renderHighlightedString(body.value, sourceHosts.value))
+const rendered = computed(() =>
+	translateHtml(renderHighlightedString(body.value, sourceHosts.value)),
+)
 </script>

@@ -54,7 +54,7 @@
 
 		<Card>
 			<div v-if="body && isMarkdown" class="markdown-body" v-html="rendered" />
-			<p v-else-if="body" class="m-0 whitespace-pre-wrap text-primary">{{ body }}</p>
+			<p v-else-if="body" class="m-0 whitespace-pre-wrap text-primary">{{ translate(body) }}</p>
 			<p v-else class="m-0 text-secondary">{{ formatMessage(messages.noChangelog) }}</p>
 		</Card>
 	</div>
@@ -80,6 +80,7 @@ import dayjs from 'dayjs'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
+import { useContentTranslation } from '@/composables/use-content-translation.ts'
 import { installedManifest } from '@/content-sources/catalog'
 import { useSourceProject } from '@/composables/use-source-project'
 import { toError } from '@/helpers/errors'
@@ -88,6 +89,7 @@ const route = useRoute()
 const { formatMessage } = useVIntl()
 const { handleError } = injectNotificationManager()
 const { versions, provider, sourceId, installing, filesOf, install } = useSourceProject()
+const { translate, translateHtml } = useContentTranslation()
 
 const messages = defineMessages({
 	files: { id: 'app.source-project.files', defaultMessage: 'Files' },
@@ -119,7 +121,9 @@ const isMarkdown = computed(
 // The source's hosts ride along so release-note images render directly instead
 // of through the shared filter's image proxy. See Description.
 const sourceHosts = computed(() => installedManifest(sourceId.value)?.hosts ?? [])
-const rendered = computed(() => renderHighlightedString(body.value, sourceHosts.value))
+const rendered = computed(() =>
+	translateHtml(renderHighlightedString(body.value, sourceHosts.value)),
+)
 
 const files = computed(() => filesOf(version.value))
 

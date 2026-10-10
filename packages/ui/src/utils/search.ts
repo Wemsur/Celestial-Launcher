@@ -42,6 +42,7 @@ import {
 
 type BaseOption = {
 	id: string
+	filter_values?: FilterValue[]
 	formatted_name?: string
 	toggle_group?: string
 	icon?: string | Component
@@ -773,7 +774,30 @@ export function useSearch(
 	// What the sidebar renders: the Modrinth vocabulary plus whatever outside
 	// groups were contributed. A source group that declared a built-in header
 	// arrives already merged by the contributor, so nothing deduplicates here.
-	const allFilters = computed(() => [...filters.value, ...extraFilters.value])
+	const allFilters = computed(() => {
+		const sections: FilterType[] = []
+		for (const type of [...filters.value, ...extraFilters.value]) {
+			const name = type.formatted_name.trim().toLocaleLowerCase()
+			let section = sections.find((candidate) => candidate.formatted_name.trim().toLocaleLowerCase() === name)
+			if (!section) {
+				section = { ...type, options: [] }
+				sections.push(section)
+			}
+			for (const option of type.options) {
+				const values = option.filter_values ?? [{ type: type.id, option: option.id }]
+				const label = (option.formatted_name ?? option.id).trim().toLocaleLowerCase()
+				const existing = section.options.find((candidate) =>
+					(candidate.formatted_name ?? candidate.id).trim().toLocaleLowerCase() === label,
+				)
+				if (existing) {
+					existing.filter_values!.push(...values)
+				} else {
+					section.options.push({ ...option, filter_values: [...values] })
+				}
+			}
+		}
+		return sections
+	})
 
 	const newFilters = computed(() => {
 		const validProvidedFilters = providedFilters.value.filter(

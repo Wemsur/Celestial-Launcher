@@ -30,6 +30,8 @@ import {
 	setContentSourceSummaries,
 	setSourceLoadError,
 } from './registry'
+import i18n from '@/i18n.config'
+
 import type {
 	ContentSourceManifest,
 	ContentSourceProvider,
@@ -38,6 +40,7 @@ import type {
 
 /** The host API handed to a content source's `activate`. */
 export interface ContentSourceApi {
+	readonly i18n: { readonly locale: string }
 	readonly source: {
 		readonly id: string
 		readonly name: string
@@ -214,6 +217,11 @@ function createApi(
 ): ContentSourceApi {
 	const id = summary.id
 	return Object.freeze({
+		i18n: Object.freeze({
+			get locale() {
+				return i18n.global.locale.value
+			},
+		}),
 		source: Object.freeze({
 			id,
 			name: manifest.name,

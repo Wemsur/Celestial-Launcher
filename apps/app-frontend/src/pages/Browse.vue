@@ -40,6 +40,7 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import type { LocationQuery } from 'vue-router'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 
+import i18n from '@/i18n.config'
 import { useAppServerBrowse } from '@/composables/browse/use-app-server-browse'
 import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
@@ -110,7 +111,7 @@ const { handleError, addNotification } = injectNotificationManager()
 const { formatMessage } = useVIntl()
 const { installingServerProjects, playServerProject, showAddServerToInstanceModal } =
     injectServerInstall()
-const { install: installVersion, showSourceInstallModal } = injectContentInstall()
+const { install: installVersion, showSourceInstallModal, showSourceModpackInstall } = injectContentInstall()
 const queryClient = useQueryClient()
 const debugLog = useDebugLogger('Browse')
 
@@ -1254,8 +1255,7 @@ function installForeignContent(
     // library, create) instead of picking an existing one. A skin belongs to
     // the launcher rather than to an instance and needs no picker at all.
     if (installType === 'modpack') {
-        void injectContentInstall()
-            .showSourceModpackInstall({
+        void showSourceModpackInstall({
                 sourceId: source.sourceId,
                 projectId: source.id,
                 title: result.name,
@@ -1377,11 +1377,33 @@ function queryContext(): { gameVersion?: string; loader?: string } {
 function activeSourceQueries(requestParams: string, filtersBySource: Record<string, Record<string, string[]>> = {}): ActiveSourceQuery[] {
     const type = projectType.value
     const sources: ActiveSourceQuery[] = []
+    const matchesSource = (sourceId: string) => searchState.filters.value.every((section) => {
+        const selectedOptions = section.options.filter((option) =>
+            (option.filter_values ?? [{ type: section.id, option: option.id }]).some((value) =>
+                searchState.currentFilters.value.some((selected) =>
+                    !selected.negative && selected.type === value.type && selected.option === value.option,
+                ),
+            ),
+        )
+        if (!selectedOptions.length || !section.options.some((option) =>
+            option.filter_values?.some((value) => value.type.startsWith('source_')),
+        )) return true
+        return selectedOptions.some((option) =>
+            (option.filter_values ?? [{ type: section.id, option: option.id }]).some((value) =>
+                sourceId === MODRINTH_SOURCE_ID
+                    ? !value.type.startsWith('source_')
+                    : flattenSourceGroups(sourceFilterGroups.value).some((group) =>
+                        group.sourceId === sourceId && group.filterTypeId === value.type,
+                    ),
+            ),
+        )
+    })
 
     // Modrinth only serves the five types it owns; a world or a skin is asked
     // of the plugin sources alone.
     if (
         isSourceActive(MODRINTH_SOURCE_ID) &&
+        matchesSource(MODRINTH_SOURCE_ID) &&
         MODRINTH_CONTENT_TYPES.includes(type as ContentType)
     ) {
         sources.push({
@@ -1395,7 +1417,8 @@ function activeSourceQueries(requestParams: string, filtersBySource: Record<stri
             source.id === MODRINTH_SOURCE_ID ||
             !source.available ||
             !isSourceActive(source.id) ||
-            !sourceSupportsType(source, type)
+            !sourceSupportsType(source, type) ||
+            !matchesSource(source.id)
         ) {
             continue
         }
@@ -1493,6 +1516,7 @@ async function search(requestParams: string) {
         queryKey: [
             'content-sources',
             'search',
+            i18n.global.locale.value,
             activeKey,
             projectType.value,
             // The whole Modrinth request string, filters included: a tag the user
@@ -1660,6 +1684,10 @@ const searchState = useBrowseSearch({
 // Turning a source on or off (or changing a multiplier, which reorders the
 // merged list) has to re-run the search; the shared search state cannot see the
 // preference store on its own.
+watch(() => i18n.global.locale.value, () => {
+	void searchState.refreshSearch()
+})
+
 watch(sourcePreferences, () => {
     void searchState.refreshSearch()
 })
