@@ -373,6 +373,104 @@ pub static NO_TIMEOUT_REQWEST_CLIENT: LazyLock<reqwest::Client> =
             .expect("client configuration should be valid")
     });
 
+/// A client that does not follow redirects, so a caller can check each hop's
+/// host itself (see [`send_checked`]). `https_only` is kept, matching
+/// [`REQWEST_CLIENT`], so this does not widen what a caller may reach.
+pub static NO_REDIRECT_REQWEST_CLIENT: LazyLock<reqwest::Client> =
+    LazyLock::new(|| {
+        reqwest_client_builder_with_timeout()
+            .https_only(true)
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .expect("client configuration should be valid")
+    });
+
+/// How many redirects [`send_checked`] will follow before giving up.
+const MAX_REDIRECTS: usize = 10;
+
+/// Send a request, following redirects by hand so that every hop's host can be
+/// checked against an allowlist.
+///
+/// reqwest's default policy follows a `Location` without consulting the caller,
+/// so a URL that passed a host check could bounce to a host that never would —
+/// an allowlist that only guards the first request is not a boundary. Passing a
+/// `Policy::none()` client (such as [`NO_REDIRECT_REQWEST_CLIENT`]) and looping
+/// here keeps every hop subject to `check_host`.
+///
+/// `check_host` takes an owned `String` rather than a `&str` so the future it
+/// returns does not borrow its argument; a `Fn(&str) -> Fut` bound cannot be
+/// satisfied by a closure whose future borrows the input.
+///
+/// Redirect semantics follow RFC 9110: `303` always, and `301`/`302` for a
+/// `POST`, switch to `GET` and drop the body; `307`/`308` preserve both.
+pub async fn send_checked<F, Fut>(
+    client: &reqwest::Client,
+    method: reqwest::Method,
+    url: reqwest::Url,
+    headers: &HashMap<String, String>,
+    body: Option<&str>,
+    check_host: F,
+) -> crate::Result<reqwest::Response>
+where
+    F: Fn(String) -> Fut,
+    Fut: Future<Output = crate::Result<()>>,
+{
+    let mut method = method;
+    let mut url = url;
+    let mut body = body.map(str::to_string);
+
+    for _ in 0..=MAX_REDIRECTS {
+        let host = url.host_str().ok_or_else(|| {
+            crate::ErrorKind::InputError("URL has no host".to_string())
+        })?;
+        check_host(host.to_string()).await?;
+
+        let mut builder = client.request(method.clone(), url.clone());
+        for (name, value) in headers {
+            builder = builder.header(name, value);
+        }
+        if let Some(body) = &body {
+            builder = builder.body(body.clone());
+        }
+
+        let response = builder.send().await?;
+        if !response.status().is_redirection() {
+            return Ok(response);
+        }
+
+        let Some(location) =
+            response.headers().get(reqwest::header::LOCATION)
+        else {
+            // A redirection status with no `Location` is the final response.
+            return Ok(response);
+        };
+        let location = location.to_str().map_err(|_| {
+            crate::ErrorKind::InputError(
+                "Redirect Location is not valid UTF-8".to_string(),
+            )
+        })?;
+        url = url.join(location).map_err(|error| {
+            crate::ErrorKind::InputError(format!(
+                "Invalid redirect target: {error}"
+            ))
+        })?;
+
+        let status = response.status().as_u16();
+        if status == 303
+            || ((status == 301 || status == 302)
+                && method == reqwest::Method::POST)
+        {
+            method = reqwest::Method::GET;
+            body = None;
+        }
+    }
+
+    Err(crate::ErrorKind::InputError(format!(
+        "Too many redirects (more than {MAX_REDIRECTS})"
+    ))
+    .into())
+}
+
 const FETCH_ATTEMPTS: usize = 2;
 
 pub type FetchProgressFn<'a> = dyn FnMut(

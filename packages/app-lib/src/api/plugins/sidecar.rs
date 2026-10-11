@@ -13,7 +13,6 @@
 //! be routed through a system proxy).
 
 use super::store;
-use crate::util::fetch::REQWEST_CLIENT;
 use crate::util::io;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha512};
@@ -178,7 +177,17 @@ pub async fn ensure(
         return Ok(());
     }
 
-    let response = REQWEST_CLIENT.get(url).send().await?;
+    // Follow redirects by hand so every hop's host is checked against the
+    // plugin's `network:` grants, not just the URL it named.
+    let response = crate::util::fetch::send_checked(
+        &crate::util::fetch::NO_REDIRECT_REQWEST_CLIENT,
+        reqwest::Method::GET,
+        parsed.clone(),
+        &HashMap::new(),
+        None,
+        |host| async move { super::network::ensure_host_granted(plugin_id, &host).await },
+    )
+    .await?;
     if !response.status().is_success() {
         return Err(crate::ErrorKind::InputError(format!(
             "Sidecar download failed: HTTP {}",
@@ -257,7 +266,34 @@ async fn verify_sha512(
     let expected = if let Some(hex) = sha512 {
         Some(hex.trim().to_ascii_lowercase())
     } else if let Some(hash_url) = sha512_url {
-        match REQWEST_CLIENT.get(hash_url).send().await {
+        // The hash file is fetched from a host the plugin named, so it is
+        // subject to the same grant as the binary itself — otherwise a plugin
+        // could use this as an ungated fetch primitive.
+        let fetched = async {
+            let url = url::Url::parse(hash_url).map_err(|error| {
+                crate::ErrorKind::InputError(format!(
+                    "Invalid sidecar hash URL: {error}"
+                ))
+            })?;
+            if !matches!(url.scheme(), "http" | "https") {
+                return Err(crate::ErrorKind::InputError(
+                    "Sidecar hash URL must be http or https".to_string(),
+                )
+                .into());
+            }
+            crate::util::fetch::send_checked(
+                &crate::util::fetch::NO_REDIRECT_REQWEST_CLIENT,
+                reqwest::Method::GET,
+                url,
+                &HashMap::new(),
+                None,
+                |host| async move { super::network::ensure_host_granted(plugin_id, &host).await },
+            )
+            .await
+        }
+        .await;
+
+        match fetched {
             Ok(response) if response.status().is_success() => response
                 .text()
                 .await

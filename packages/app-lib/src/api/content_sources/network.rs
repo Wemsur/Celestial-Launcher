@@ -14,7 +14,6 @@
 //! `Host` for another site, say) is a request-smuggling foothold rather than a
 //! legitimate content fetch.
 
-use crate::util::fetch::REQWEST_CLIENT;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -81,20 +80,30 @@ pub async fn fetch(
         .into());
     }
 
-    let mut builder = REQWEST_CLIENT.request(method, url.clone());
-    if let Some(headers) = request.headers {
-        for (name, value) in headers {
+    let mut headers = HashMap::new();
+    if let Some(requested) = request.headers {
+        for (name, value) in requested {
             if is_forbidden_header(&name) {
                 continue;
             }
-            builder = builder.header(name, value);
+            headers.insert(name, value);
         }
     }
-    if let Some(body) = request.body {
-        builder = builder.body(body);
-    }
 
-    let response = builder.send().await?;
+    // Redirects are followed by hand so every hop's host is checked, not just
+    // the first: otherwise a declared host could bounce the request to one that
+    // was never granted. `NO_REDIRECT_REQWEST_CLIENT` never follows a `Location`
+    // on its own.
+    let response = crate::util::fetch::send_checked(
+        &crate::util::fetch::NO_REDIRECT_REQWEST_CLIENT,
+        method,
+        url.clone(),
+        &headers,
+        request.body.as_deref(),
+        |host| async move { ensure_host_allowed(source_id, &host).await },
+    )
+    .await?;
+
     let status = response.status();
     let final_url = Some(response.url().to_string());
 

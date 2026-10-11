@@ -18,7 +18,6 @@
 use super::manifest::ContentType;
 use super::network::is_forbidden_header;
 use crate::State;
-use crate::util::fetch::REQWEST_CLIENT;
 use crate::util::io;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -34,6 +33,11 @@ const MAX_DOWNLOAD_BYTES: u64 = 512 * 1024 * 1024;
 /// Cap on the expanded size of a world archive, so a zip bomb cannot fill the
 /// disk through decompression.
 const MAX_WORLD_UNPACKED_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
+/// Cap on a pack manifest read out of a staged archive. A real CurseForge or
+/// Modrinth manifest is well under a megabyte; the limit only stops a crafted
+/// entry from expanding to gigabytes in memory.
+const MAX_MANIFEST_BYTES: u64 = 8 * 1024 * 1024;
 
 /// The file a content source hands the launcher to install.
 ///
@@ -322,27 +326,39 @@ async fn download_inner(
         .into());
     }
 
-    if !source_id.is_empty()
-        && let Some(host) = url.host_str()
-    {
-        super::network::ensure_host_allowed(source_id, host).await?;
-    }
-
     let _permit = state.fetch_semaphore.0.acquire().await.map_err(|_| {
         crate::ErrorKind::OtherError("Download semaphore closed".to_string())
     })?;
 
-    let mut request = REQWEST_CLIENT.get(url);
-    if let Some(headers) = &descriptor.headers {
-        for (name, value) in headers {
+    let mut headers = HashMap::new();
+    if let Some(requested) = &descriptor.headers {
+        for (name, value) in requested {
             if is_forbidden_header(name) {
                 continue;
             }
-            request = request.header(name, value);
+            headers.insert(name.clone(), value.clone());
         }
     }
 
-    let mut response = request.send().await?;
+    // Follow redirects by hand so every hop's host is checked. A source's
+    // declared `hosts` list is only a boundary if a granted host cannot bounce
+    // the request to an ungranted one, and reqwest's default policy would do
+    // exactly that.
+    let mut response = crate::util::fetch::send_checked(
+        &crate::util::fetch::NO_REDIRECT_REQWEST_CLIENT,
+        reqwest::Method::GET,
+        url,
+        &headers,
+        None,
+        |host| async move {
+            if source_id.is_empty() {
+                Ok(())
+            } else {
+                super::network::ensure_host_allowed(source_id, &host).await
+            }
+        },
+    )
+    .await?;
     if !response.status().is_success() {
         return Err(crate::ErrorKind::OtherError(format!(
             "Download failed with HTTP {}",
@@ -915,12 +931,22 @@ pub async fn stage_modpack(
     let mut manifest_json = None;
     if probe.by_name("manifest.json").is_ok() {
         format = "curseforge".to_string();
-        let mut file = probe.by_name("manifest.json").map_err(|error| {
+        let file = probe.by_name("manifest.json").map_err(|error| {
             crate::ErrorKind::InputError(format!("Failed to read pack manifest: {error}"))
         })?;
+        // The manifest is attacker-controlled, so the read is bounded: a small
+        // compressed entry can expand to gigabytes, and the archive-level cap
+        // does not cover that. `take` stops at the limit; a manifest larger
+        // than a few MiB is not one this launcher would honour anyway.
         use std::io::Read;
         let mut text = String::new();
-        file.read_to_string(&mut text)?;
+        file.take(MAX_MANIFEST_BYTES)
+            .read_to_string(&mut text)
+            .map_err(|error| {
+                crate::ErrorKind::InputError(format!(
+                    "Failed to read pack manifest: {error}"
+                ))
+            })?;
         manifest_json = Some(text);
     } else if probe.by_name("modrinth.index.json").is_ok() {
         format = "modrinth".to_string();
