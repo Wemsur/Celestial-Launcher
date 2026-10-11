@@ -1550,6 +1550,13 @@ async function searchModrinth(requestParams: string, contentType: string) {
 let lastFailureKey = ''
 
 function reportSourceFailures(failures: { sourceId: string; message: string }[]) {
+    if (failures.length === 0) {
+        // A search with no failures means every source is healthy again, so the
+        // next failure of the same set must be reported afresh rather than
+        // suppressed as a repeat.
+        lastFailureKey = ''
+        return
+    }
     const key = failures
         .map((failure) => failure.sourceId)
         .sort()
