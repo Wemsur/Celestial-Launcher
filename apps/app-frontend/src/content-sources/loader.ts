@@ -165,6 +165,13 @@ async function loadOne(summary: SourceSummary): Promise<void> {
 			)
 			return
 		}
+		if (registered.length > 1) {
+			// One provider per source is the contract; extra registrations would
+			// be silently dropped, so name them rather than losing them quietly.
+			console.warn(
+				`[content-sources] "${summary.id}" registered ${registered.length} providers; only the first is used`,
+			)
+		}
 		registerSourceProvider(summary.id, provider)
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error)

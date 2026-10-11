@@ -1271,7 +1271,6 @@ function getCardActions(
 }
 
 /**
-/**
  * Install a row that came from a content source.
  *
  * With no instance in context this opens the same instance picker a Modrinth row
