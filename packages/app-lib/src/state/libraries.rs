@@ -18,17 +18,18 @@ fn retry_io<F, T>(mut f: F, max_attempts: u32) -> crate::Result<T>
 where
     F: FnMut() -> Result<T, std::io::Error>,
 {
-    // `ERROR_ACCESS_DENIED` on Windows is 5, the transient lock this exists for.
-    // On Unix errno 5 is `EIO` — an unrelated, usually permanent I/O failure —
-    // so retrying on the raw code there would sleep through a real error. Rust
-    // maps the Windows case to `PermissionDenied`, which is checked on both.
+    // `ERROR_ACCESS_DENIED` (5) and `ERROR_SHARING_VIOLATION` (32) on Windows are
+    // the transient locks this exists for. On Unix errno 5 is `EIO` — an
+    // unrelated, usually permanent I/O failure — so the raw code must not be
+    // retried there. Rust maps the Windows access-denied case to
+    // `PermissionDenied`, which is checked on every platform.
     fn is_transient_lock(error: &std::io::Error) -> bool {
         if error.kind() == std::io::ErrorKind::PermissionDenied {
             return true;
         }
         #[cfg(windows)]
         {
-            if error.raw_os_error() == Some(5) {
+            if matches!(error.raw_os_error(), Some(5) | Some(32)) {
                 return true;
             }
         }

@@ -197,6 +197,21 @@ fn sync_write(
     // editor, or an antivirus scanner can hold `instance.json` briefly. Retry a
     // few times rather than failing the write outright. `persist` hands the
     // temporary file back on failure, so the same bytes can be re-persisted.
+    fn is_transient_lock(error: &std::io::Error) -> bool {
+        if error.kind() == std::io::ErrorKind::PermissionDenied {
+            return true;
+        }
+        // `ERROR_ACCESS_DENIED`/`ERROR_SHARING_VIOLATION` on Windows. errno 5 is
+        // Unix `EIO`, a real failure that must not be retried.
+        #[cfg(windows)]
+        {
+            if matches!(error.raw_os_error(), Some(5) | Some(32)) {
+                return true;
+            }
+        }
+        false
+    }
+
     let mut named = tempfile;
     let mut attempt = 0;
     loop {
@@ -204,10 +219,7 @@ fn sync_write(
             Ok(_) => return std::io::Result::Ok(()),
             Err(error) => {
                 attempt += 1;
-                let transient = error.error.kind()
-                    == std::io::ErrorKind::PermissionDenied
-                    || error.error.raw_os_error() == Some(5);
-                if attempt >= 5 || !transient {
+                if attempt >= 5 || !is_transient_lock(&error.error) {
                     return Err(error.error);
                 }
                 named = error.file;
