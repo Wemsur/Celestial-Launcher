@@ -86,6 +86,7 @@
 							<tr
 								:class="getRowClass(row, getAbsoluteRowIndex(rowIndex))"
 								@click="handleRowClick(row, getAbsoluteRowIndex(rowIndex), $event)"
+								@contextmenu="handleRowContextMenu(row, getAbsoluteRowIndex(rowIndex), $event)"
 							>
 								<td
 									v-if="showSelection"
@@ -120,6 +121,7 @@
 								v-if="isRowBelowVisible(row, getAbsoluteRowIndex(rowIndex))"
 								:class="getRowBelowClass(row, getAbsoluteRowIndex(rowIndex))"
 								@click="handleRowClick(row, getAbsoluteRowIndex(rowIndex), $event)"
+								@contextmenu="handleRowContextMenu(row, getAbsoluteRowIndex(rowIndex), $event)"
 							>
 								<td :colspan="columnSpan" class="p-0">
 									<slot name="row-below" :row="row" :index="getAbsoluteRowIndex(rowIndex)" />
@@ -153,6 +155,7 @@
 							<tr
 								:class="getRowClass(row, getAbsoluteRowIndex(rowIndex))"
 								@click="handleRowClick(row, getAbsoluteRowIndex(rowIndex), $event)"
+								@contextmenu="handleRowContextMenu(row, getAbsoluteRowIndex(rowIndex), $event)"
 							>
 								<td
 									v-if="showSelection"
@@ -187,6 +190,7 @@
 								v-if="isRowBelowVisible(row, getAbsoluteRowIndex(rowIndex))"
 								:class="getRowBelowClass(row, getAbsoluteRowIndex(rowIndex))"
 								@click="handleRowClick(row, getAbsoluteRowIndex(rowIndex), $event)"
+								@contextmenu="handleRowContextMenu(row, getAbsoluteRowIndex(rowIndex), $event)"
 							>
 								<td :colspan="columnSpan" class="p-0">
 									<slot name="row-below" :row="row" :index="getAbsoluteRowIndex(rowIndex)" />
@@ -309,6 +313,7 @@ const bottomSpacerHeight = computed(() => {
 const emit = defineEmits<{
 	sort: [column: string, direction: SortDirection]
 	rowClick: [row: T, index: number, event: MouseEvent]
+	rowContextMenu: [row: T, index: number, event: MouseEvent]
 }>()
 
 const selectableRows = computed(() => props.selectionData ?? props.data)
@@ -422,6 +427,15 @@ function handleRowClick(row: T, rowIndex: number, event: MouseEvent) {
 	}
 
 	emit('rowClick', row, rowIndex, event)
+}
+
+/**
+ * Right-clicking a row, for callers that offer a menu on it. Emitted for every
+ * row rather than only clickable ones: a menu can act on a row that a click
+ * would not open, and the caller decides what it offers.
+ */
+function handleRowContextMenu(row: T, rowIndex: number, event: MouseEvent) {
+	emit('rowContextMenu', row, rowIndex, event)
 }
 
 function isSelected(row: T): boolean {

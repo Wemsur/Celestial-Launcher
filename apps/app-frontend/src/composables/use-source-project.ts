@@ -292,6 +292,10 @@ export function useSourceProject(): SourceProjectState {
 		await showSourceInstallModal((chosen) => run(chosen), {
 			title: project.value?.name ?? projectId.value,
 			iconUrl: project.value?.iconUrl ?? undefined,
+			sourceId: sourceId.value,
+			projectId: projectId.value,
+			projectType: String(contentType.value),
+			versions: versions.value,
 		})
 	}
 

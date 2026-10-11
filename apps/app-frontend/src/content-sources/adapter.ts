@@ -134,7 +134,14 @@ export function resultSourceId(
  * a source that does not know a figure leaves it empty, and the cell renders
  * empty rather than a made-up zero.
  */
-export type VersionRow = Labrinth.Versions.v3.Version & { displayUrlEnding: string }
+/**
+ * A source version as the versions table renders it, plus the source's own page
+ * for it — a field Modrinth's rows build from their slug instead of carrying.
+ */
+export type VersionRow = Labrinth.Versions.v3.Version & {
+	displayUrlEnding: string
+	url?: string
+}
 
 export function toVersionRow(version: ContentVersion): VersionRow {
 	return {
@@ -151,6 +158,7 @@ export function toVersionRow(version: ContentVersion): VersionRow {
 		loaders: version.loaders ?? [],
 		date_published: version.publishedAt ?? '',
 		downloads: version.downloads ?? 0,
+		url: version.url,
 		// `showFiles` is off, so the table never reads these; an empty list keeps
 		// the type honest rather than fabricating file entries.
 		files: [],

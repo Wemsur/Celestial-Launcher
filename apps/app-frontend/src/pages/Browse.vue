@@ -82,7 +82,7 @@ import {
 } from '@/content-sources/preferences'
 import { sourceProvider } from '@/content-sources/registry'
 import SourceSelector from '@/content-sources/SourceSelector.vue'
-import type { ContentQuery, ContentSort, ContentType } from '@/content-sources/types'
+import type { ContentQuery, ContentSort, ContentType, ContentVersion } from '@/content-sources/types'
 import { get_project, get_search_results_v3, get_version_many } from '@/helpers/cache.js'
 import { toError } from '@/helpers/errors'
 import {
@@ -1266,14 +1266,53 @@ function installForeignContent(
         return
     }
     if (installType !== 'skin' && !instance.value) {
-        void showSourceInstallModal(
-            (instanceId) => runForeignInstall(result, source, installType, instanceId),
-            { title: result.name, iconUrl: result.icon_url ?? undefined },
-        ).catch((error: unknown) => handleError(toError(error)))
+        void openForeignInstancePicker(result, source, installType)
         return
     }
 
     void runForeignInstall(result, source, installType, instance.value?.id)
+}
+
+/**
+ * The instance picker a browse-page install opens.
+ *
+ * A source's versions are read first so the picker can hold each instance's
+ * loader and game version against them — the same narrowing a Modrinth
+ * project's picker does. A source that cannot list versions opens the picker
+ * unfiltered rather than not at all, and asking again is cheap: the source
+ * caches its own answers.
+ */
+async function openForeignInstancePicker(
+    result: Labrinth.Search.v3.ResultSearchProject,
+    source: { sourceId: string; id: string },
+    installType: ContentType,
+) {
+    const provider = sourceProvider(source.sourceId)
+    let versions: ContentVersion[] = []
+    try {
+        versions =
+            (await provider?.versions?.(source.id, {
+                contentType: installType,
+                sort: 'newest',
+                page: 1,
+                limit: 50,
+            })) ?? []
+    } catch (error) {
+        // No versions only costs the narrowing; the picker still opens.
+        debugLog('could not read versions for the install picker', error)
+    }
+
+    await showSourceInstallModal(
+        (instanceId) => runForeignInstall(result, source, installType, instanceId),
+        {
+            title: result.name,
+            iconUrl: result.icon_url ?? undefined,
+            sourceId: source.sourceId,
+            projectId: source.id,
+            projectType: String(installType),
+            versions,
+        },
+    ).catch((error: unknown) => handleError(toError(error)))
 }
 
 /** Resolve the download and hand it to the launcher's install path. */

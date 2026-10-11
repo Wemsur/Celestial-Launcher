@@ -16,7 +16,9 @@ import type { Router } from 'vue-router'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
 import { trackEvent } from '@/helpers/analytics'
 import { sourceProvider } from '@/content-sources/registry'
-import { sourceStageModpack } from '@/content-sources/ipc'
+import { listInstalledSourceContent, sourceStageModpack } from '@/content-sources/ipc'
+import { toVersionRow } from '@/content-sources/adapter'
+import type { ContentVersion } from '@/content-sources/types'
 import type { ContentModpackPlan } from '@/content-sources/types'
 import {
 	get_organization,
@@ -672,6 +674,17 @@ export function createContentInstall(opts: {
 			title: string
 			iconUrl?: string
 			link?: string
+			/** Which source the content belongs to, for the installed check. */
+			sourceId?: string
+			projectId?: string
+			/** The content's type, which the compatibility rule is applied against. */
+			projectType?: string
+			/**
+			 * The content's versions, so an instance's loader and game version can
+			 * be held against them. Omit it and the list degrades to "everything is
+			 * compatible" — the picker still works, it just stops narrowing.
+			 */
+			versions?: ContentVersion[]
 		},
 	) {
 		currentProject = null
@@ -689,21 +702,67 @@ export function createContentInstall(opts: {
 		modalRef?.show()
 		trackEvent('ProjectInstallStart', { source: 'ContentSourceModal' })
 
+		const { sourceId, projectId, versions } = info ?? {}
+		const targets = getInstallTargets((versions ?? []).map(toVersionRow))
+
 		try {
-			const candidates = await list()
+			const listInstances = await list()
+			// Compatibility comes from the same backend call a Modrinth install
+			// uses, so "compatible" means the same thing on both pages. A foreign
+			// project id matches nothing there, so `installed` is filled in below
+			// from the source's own install records instead.
+			const candidates = targets.length
+				? await get_install_candidates(projectId ?? '', info?.projectType ?? 'mod', targets)
+				: listInstances.map((instance) => ({
+						...instance,
+						installed: false,
+						compatible: true,
+					}))
+
+			// One read per instance, in parallel: the records live with each
+			// instance, and the dialog must not open before it knows.
+			const installedHere = new Map<string, boolean>()
+			if (sourceId && projectId) {
+				await Promise.all(
+					candidates.map(async (candidate) => {
+						try {
+							const records = await listInstalledSourceContent(candidate.id)
+							installedHere.set(
+								candidate.id,
+								records.some(
+									(record) =>
+										record.source_id === sourceId && record.project_id === projectId,
+								),
+							)
+						} catch {
+							// Not knowing is the same as not installed here; the install
+							// itself will report any real failure.
+							installedHere.set(candidate.id, false)
+						}
+					}),
+				)
+			}
+
 			instanceMap = Object.fromEntries(
-				candidates.map((instance) => [
-					instance.id,
-					{ ...instance, installed: false, compatible: true },
+				candidates.map((candidate) => [
+					candidate.id,
+					{
+						...candidate,
+						installed: installedHere.get(candidate.id) ?? candidate.installed,
+					},
 				]),
 			)
-			instances.value = candidates.map((instance) => ({
-				id: instance.id,
-				name: instance.name,
-				iconUrl: getInstanceIconUrl(instance.icon_path),
-				installed: false,
-				compatible: true,
+			instances.value = candidates.map((candidate) => ({
+				id: candidate.id,
+				name: candidate.name,
+				iconUrl: getInstanceIconUrl(candidate.icon_path),
+				installed: installedHere.get(candidate.id) ?? candidate.installed,
+				compatible: candidate.compatible,
 			}))
+
+			if (!instances.value.some((i) => i.compatible && !i.installed)) {
+				defaultTab.value = 'new'
+			}
 		} catch (err) {
 			opts.handleError(err)
 		} finally {
@@ -804,13 +863,20 @@ export function createContentInstall(opts: {
 		return true
 	}
 
-	function getInstallTargets(versions: Labrinth.Versions.v2.Version[]) {
+	/**
+	 * `get_install_candidates` derives loader and version compatibility from the
+	 * content's versions; this only reads the two lists it compares against, so a
+	 * source's own version rows — which carry the same two — work here too.
+	 */
+	function getInstallTargets(
+		versions: { game_versions?: string[]; loaders?: string[] }[],
+	) {
 		const targets: { game_version: string; loader: string }[] = []
 		const seen = new Set<string>()
 
 		for (const version of versions) {
-			for (const gameVersion of version.game_versions) {
-				for (const loader of version.loaders) {
+			for (const gameVersion of version.game_versions ?? []) {
+				for (const loader of version.loaders ?? []) {
 					const key = `${gameVersion}\0${loader}`
 					if (seen.has(key)) continue
 					seen.add(key)

@@ -57,6 +57,7 @@
 		:row-below-visible="isFileRowVisible"
 		table-layout="auto"
 		@row-click="openVersionRow"
+		@row-context-menu="(version, _index, event) => emit('rowContextMenu', version, event)"
 	>
 		<template #cell-channel="{ row: version }">
 			<div class="flex items-center justify-center">
@@ -758,6 +759,11 @@ function openVersionRow(version: VersionTableRow) {
 	if (!link) return
 	router.push(link)
 }
+
+/** Re-emitted so a caller can hang its own menu on a version row. */
+const emit = defineEmits<{
+	rowContextMenu: [version: VersionTableRow, event: MouseEvent]
+}>()
 
 function updateQuery(newQueries: Record<string, string | string[] | undefined | null>) {
 	if (newQueries.page) {

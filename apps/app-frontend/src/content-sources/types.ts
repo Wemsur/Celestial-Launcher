@@ -230,6 +230,8 @@ export interface ContentVersion {
 	channel?: string
 	/** The changelog for this version, in the source's `detail_format`. */
 	body?: string
+	/** The version's page on the source's own site, when it has one. */
+	url?: string
 	/** The files this version offers, when there is more than one worth showing. */
 	files?: ContentFile[]
 }
