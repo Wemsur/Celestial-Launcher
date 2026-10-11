@@ -301,11 +301,19 @@ export default new createRouter({
 	linkActiveClass: 'router-link-active',
 	linkExactActiveClass: 'router-link-exact-active',
 	scrollBehavior(to, from) {
-		const toSplit = to.matched.some((record) => record.name === 'DiscoverSplitProject')
-		if (toSplit) {
+		// Both the Modrinth and the content-source detail panes are split-view
+		// routes with their own scroll container; the source ones were missed,
+		// so a source project opened at the previous project's scroll offset.
+		const isSplitProject = (route) =>
+			route.matched.some(
+				(record) =>
+					record.name === 'DiscoverSplitProject' ||
+					record.name === 'DiscoverSplitSourceProject',
+			)
+		if (isSplitProject(to)) {
 			// The detail pane is its own scroll container; reset it, never the list.
 			document.querySelector('.browse-detail-pane')?.scrollTo(0, 0)
-			if (from.matched.some((record) => record.name === 'DiscoverSplitProject')) return
+			if (isSplitProject(from)) return
 		}
 		if (to.path === from.path || to.name === 'Home') return
 		// Sometimes Vue's scroll behavior is not working as expected, so we need to manually scroll to top (especially on Linux)
