@@ -190,10 +190,31 @@ fn sync_write(
             )
         })?)?;
     tempfile.write_all(data.as_ref())?;
-    let tmp_path = tempfile.into_temp_path();
     let path = path.as_ref();
-    tmp_path.persist(path)?;
-    std::io::Result::Ok(())
+
+    // On Unix renaming over an open file is fine; on Windows it fails while the
+    // destination is held open without `FILE_SHARE_DELETE` — the launcher, an
+    // editor, or an antivirus scanner can hold `instance.json` briefly. Retry a
+    // few times rather than failing the write outright. `persist` hands the
+    // temporary file back on failure, so the same bytes can be re-persisted.
+    let mut named = tempfile;
+    let mut attempt = 0;
+    loop {
+        match named.persist(path) {
+            Ok(_) => return std::io::Result::Ok(()),
+            Err(error) => {
+                attempt += 1;
+                let transient = error.error.kind()
+                    == std::io::ErrorKind::PermissionDenied
+                    || error.error.raw_os_error() == Some(5);
+                if attempt >= 5 || !transient {
+                    return Err(error.error);
+                }
+                named = error.file;
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        }
+    }
 }
 
 pub fn is_same_disk(old_dir: &Path, new_dir: &Path) -> Result<bool> {
