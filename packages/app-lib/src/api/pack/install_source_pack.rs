@@ -263,10 +263,22 @@ async fn install_curseforge_pack(
         )
         .await?;
 
-        let folder = file.folder.as_deref().unwrap_or("mods");
-        let directory = instance_full_path.join(folder);
+        // The folder and file name come from the source's plan, which is
+        // untrusted: a folder like `../../..` or a name carrying a path
+        // separator would otherwise write anywhere on disk. Both are validated
+        // the same way the mrpack path validates an override entry.
+        let directory = instance_full_path.join(plan_folder(file.folder.as_deref())?);
         crate::util::io::create_dir_all(&directory).await?;
-        let target = directory.join(sanitize_file_name(&file.file_name));
+        let file_name = path_util::SafeRelativeUtf8UnixPathBuf::try_from(
+            file.file_name.clone(),
+        )
+        .map_err(|error| {
+            crate::ErrorKind::InputError(format!(
+                "Modpack plan names an unsafe file '{}': {error}",
+                file.file_name
+            ))
+        })?;
+        let target = directory.join(file_name.as_str());
         crate::util::io::write(&target, &bytes).await?;
 
         reporter
@@ -320,10 +332,24 @@ fn pack_source_path(file: &super::install_from::CreatePackFile) -> String {
     }
 }
 
-/// Zip extraction paths come from the archive, so a crafted name must not
-/// climb out of the folder it was assigned.
-fn sanitize_file_name(name: &str) -> String {
-    name.replace(['\\', '/'], "_")
+/// The instance-relative folder a plan file goes in.
+///
+/// The value comes from the source's plan, so it is validated rather than
+/// trusted: a folder like `../../..` would escape the instance. An absent
+/// folder defaults to `mods`, matching the plan contract.
+fn plan_folder(folder: Option<&str>) -> crate::Result<String> {
+    let folder = folder.unwrap_or("mods").trim();
+    if folder.is_empty() {
+        return Ok("mods".to_string());
+    }
+    path_util::SafeRelativeUtf8UnixPathBuf::try_from(folder.to_string())
+        .map(|path| path.as_str().to_string())
+        .map_err(|error| {
+            crate::ErrorKind::InputError(format!(
+                "Modpack plan names an unsafe folder '{folder}': {error}"
+            ))
+            .into()
+        })
 }
 
 /// Where staging keeps downloaded pack archives until their install runs.
