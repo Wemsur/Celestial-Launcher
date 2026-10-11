@@ -719,7 +719,7 @@ pub(crate) async fn migrate_instances_from_db(
     // while any are outstanding: listing reads only the sidecars, so an
     // instance whose `instance.json` was never written shows up as Broken
     // forever, and with `migrated` already set the import never runs again to
-    // repair it. Leaving the flag false makes the next launch retry ¡ª the
+    // repair it. Leaving the flag false makes the next launch retry â€” the
     // import is idempotent, so instances that already succeeded are simply
     // rewritten.
     let mut write_failures = 0usize;
@@ -746,11 +746,13 @@ pub(crate) async fn migrate_instances_from_db(
         } else {
             &instance.path
         };
-        let path_parts: Vec<&str> = path_to_walk.split('/').collect();
-
+        // Walk real path ancestors rather than splitting on `/`: on Windows a
+        // path uses `\`, so a `/` split yields one part and never matches a
+        // known library, collapsing every instance to its immediate parent.
+        let walk_path = Path::new(path_to_walk);
         let mut lib_path_opt: Option<String> = None;
-        for i in 1..path_parts.len() {
-            let candidate: String = path_parts[..i].join("/");
+        for ancestor in walk_path.ancestors().skip(1) {
+            let candidate = ancestor.to_string_lossy().to_string();
             if lib_map.contains_key(&candidate) {
                 lib_path_opt = Some(candidate);
                 break;
@@ -759,9 +761,25 @@ pub(crate) async fn migrate_instances_from_db(
 
         if lib_path_opt.is_none() {
             if let Some(parent) =
-                Path::new(path_to_walk).parent().map(|p| p.to_string_lossy().to_string())
+                walk_path.parent().map(|p| p.to_string_lossy().to_string())
             {
-                lib_path_opt = Some(parent);
+                // A `.minecraft` instance sits under `<library>/versions/`, so
+                // its immediate parent is `versions`; the library is one level
+                // above that. Registering `versions` as the library would make
+                // the scan look for `versions/versions`.
+                let parent_path = Path::new(&parent);
+                let lib_path = if parent_path
+                    .file_name()
+                    .is_some_and(|name| name == "versions")
+                {
+                    parent_path
+                        .parent()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or(parent)
+                } else {
+                    parent
+                };
+                lib_path_opt = Some(lib_path);
             }
         }
 
