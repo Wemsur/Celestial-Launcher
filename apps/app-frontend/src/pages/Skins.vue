@@ -1003,11 +1003,6 @@ async function processSkinFileBuffer(buffer: Uint8Array | ArrayBuffer) {
 	}
 }
 
-watch(
-	() => selectedSkin.value?.cape_id,
-	() => {},
-)
-
 watch(selectedSkin, () => {
 	earsFeaturesEnabled.value = true
 })
