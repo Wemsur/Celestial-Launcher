@@ -186,7 +186,10 @@ impl InstanceJson {
         fs::create_dir_all(dir)?;
         let json_path = dir.join("instance.json");
         let content = serde_json::to_string_pretty(self)?;
-        fs::write(&json_path, content)?;
+        // Atomic: a concurrent writer (the launch path updating `last_played`,
+        // say) must not leave a half-written file for the next scan to read as
+        // corrupt and list the instance as Broken.
+        crate::util::io::write_atomic_sync(content, &json_path)?;
         invalidate_instance_list_cache();
         Ok(())
     }
@@ -331,7 +334,7 @@ impl CelestialJson {
         fs::create_dir_all(dir)?;
         let json_path = dir.join("celestial.json");
         let content = serde_json::to_string_pretty(self)?;
-        fs::write(&json_path, content)?;
+        crate::util::io::write_atomic_sync(content, &json_path)?;
         invalidate_instance_list_cache();
         Ok(())
     }
@@ -451,7 +454,9 @@ pub async fn save_libraries_config(
 ) -> crate::Result<()> {
     let path = state.directories.settings_dir.join(LIBRARIES_FILE_NAME);
     let content = serde_json::to_string_pretty(config)?;
-    fs::write(&path, content)?;
+    // Atomic: the registry is read on every scan, and a truncated write would
+    // be read as "no libraries", making every instance in them disappear.
+    crate::util::io::write(&path, content.as_bytes()).await?;
     invalidate_instance_list_cache();
     Ok(())
 }

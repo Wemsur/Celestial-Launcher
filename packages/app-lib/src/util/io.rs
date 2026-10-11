@@ -165,6 +165,20 @@ pub async fn write(
     Ok(())
 }
 
+/// Write `data` to `path` atomically: to a temporary file in the same
+/// directory, then renamed over the target.
+///
+/// A plain `fs::write` truncates the target first, so a reader (or a second
+/// writer) that arrives mid-write sees a partial or interleaved file. The
+/// rename is the point: readers only ever see the old contents or the new ones.
+/// The parent directory must already exist.
+pub(crate) fn write_atomic_sync(
+    data: impl AsRef<[u8]>,
+    path: impl AsRef<Path>,
+) -> Result<(), std::io::Error> {
+    sync_write(data, path)
+}
+
 fn sync_write(
     data: impl AsRef<[u8]>,
     path: impl AsRef<Path>,
