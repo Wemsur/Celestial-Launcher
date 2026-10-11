@@ -419,9 +419,22 @@ fn content_source_kind(link: &InstanceLink) -> ContentSourceKind {
     }
 }
 
+/// Turn a user-supplied instance name into a safe directory name.
+///
+/// Separators and characters Windows forbids are replaced, but that alone is
+/// not enough: a name of `..` (or `.`) contains none of those and would resolve
+/// to the library's parent directory, so `instance.json` would be written
+/// outside the library. A name that is entirely dots is therefore replaced too,
+/// and the result is never empty.
 fn sanitize_instance_name(input: &str) -> String {
-    input.replace(
+    let replaced = input.replace(
         ['/', '\\', '?', '*', ':', '\'', '\"', '|', '<', '>', '!'],
         "_",
-    )
+    );
+    let trimmed = replaced.trim().trim_end_matches('.');
+    if trimmed.is_empty() {
+        "Instance".to_string()
+    } else {
+        trimmed.to_string()
+    }
 }
