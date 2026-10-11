@@ -64,7 +64,17 @@ export interface SourceFailure {
 
 export interface MergedResult {
 	items: MergedContentItem[]
-	/** Summed across sources; an upper bound when duplicates were merged. */
+	/**
+	 * The largest single source's total, not the sum.
+	 *
+	 * Paging is per-source — page N is page N from each active source — so the
+	 * deepest page any source can serve is `ceil(total / limit)` for the source
+	 * with the most results, and that is what the page control must advertise.
+	 * Summing the totals instead would claim pages that no source can fill: two
+	 * sources of 100 items each would advertise 10 pages when page 6 onward is
+	 * empty. An upper bound on the merged catalogue size, when one is wanted, is
+	 * the sum of the per-source totals; that is deliberately not what this is.
+	 */
 	total: number
 	failures: SourceFailure[]
 }
@@ -89,6 +99,9 @@ export async function searchAcrossSources(
 
 	const failures: SourceFailure[] = []
 	const perSource: SourceOffer[][] = []
+	// The page control is driven by the deepest source, not the summed catalogue
+	// size: page N asks every source for its page N, so no source can serve past
+	// its own last page. See `MergedResult.total`.
 	let total = 0
 
 	settled.forEach((result, index) => {
@@ -103,7 +116,7 @@ export async function searchAcrossSources(
 			})
 			return
 		}
-		total += result.value.total ?? result.value.items.length
+		total = Math.max(total, result.value.total ?? result.value.items.length)
 		const multiplier = sourceMultiplier(sourceId)
 		perSource.push(
 			result.value.items.map((card) => ({
