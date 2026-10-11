@@ -374,16 +374,17 @@ pub async fn update(
 
     // Move the old folder aside, move the new one in, then drop the backup.
     // Each rename is atomic, and a failure at any point is recovered from
-    // `backup` below.
+    // `backup` below. `rename_or_move` reports through `eyre`, so its error is
+    // converted to this module's `crate::Error`.
     if let Err(error) = io::rename_or_move(&destination, &backup).await {
         let _ = io::remove_dir_all(&staging).await;
-        return Err(error);
+        return Err(error.into());
     }
     if let Err(error) = io::rename_or_move(&staging, &destination).await {
         // Put the original back so the plugin is not left missing.
         let _ = io::rename_or_move(&backup, &destination).await;
         let _ = io::remove_dir_all(&staging).await;
-        return Err(error);
+        return Err(error.into());
     }
     let _ = io::remove_dir_all(&backup).await;
 
