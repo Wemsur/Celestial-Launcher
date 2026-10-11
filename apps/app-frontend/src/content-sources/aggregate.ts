@@ -4,8 +4,10 @@
  * Three rules shape the merge, all of them the user's:
  *
  * - Items with the same name *and* the same content type are one entry, however
- *   many sources offer them. Everything else keeps the order its own source
- *   gave it, so a single active source behaves exactly like it did before.
+ *   many sources offer them, and Modrinth's copy of it is the one drawn —
+ *   its artwork and counts are the launcher's own.
+ *   Everything else keeps the order its own source gave it, so a single active
+ *   source behaves exactly like it did before.
  * - The downloads sort is applied to each source's counts multiplied by that
  *   source's multiplier, so a small site's counts are not drowned by Modrinth's.
  *   A source that cannot supply the number behind the requested sort ranks last
@@ -18,7 +20,7 @@
  * exhaustively fetched, which is not what a paginated browse should do.
  */
 
-import { sourceMultiplier } from './preferences'
+import { MODRINTH_SOURCE_ID, sourceMultiplier } from './preferences'
 import type { ContentCard, ContentSort, ContentType } from './types'
 
 export interface FanOutRequest {
@@ -153,11 +155,19 @@ function merge(perSource: SourceOffer[][], sort: ContentSort): MergedContentItem
 
 	const items: MergedContentItem[] = []
 	for (const offers of groups.values()) {
-		// The primary is the offer with the strongest signal, so a merged row
-		// shows the icon and counts of whichever source knows the item best.
-		const primary = offers.reduce((best, offer) =>
-			(offer.adjustedDownloads ?? -1) > (best.adjustedDownloads ?? -1) ? offer : best,
-		)
+		/*
+		 * The row is drawn from Modrinth's offer whenever there is one: it is the
+		 * launcher's own catalogue, its icon and artwork are the ones a reader
+		 * recognises, and its counts are the ones the rest of the app quotes. Only
+		 * when a source is the sole carrier of an item does its card stand in —
+		 * and then the strongest signal picks between several such sources, so a
+		 * merged row still shows whichever of them knows the item best.
+		 */
+		const primary =
+			offers.find((offer) => offer.sourceId === MODRINTH_SOURCE_ID) ??
+			offers.reduce((best, offer) =>
+				(offer.adjustedDownloads ?? -1) > (best.adjustedDownloads ?? -1) ? offer : best,
+			)
 		items.push({ card: primary.card, offers, shared: offers.length > 1 })
 	}
 
