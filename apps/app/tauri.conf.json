@@ -97,7 +97,7 @@
 					"$APPDATA/caches/icons/*",
 					"$APPCONFIG/caches/icons/*",
 					"$CONFIG/caches/icons/*",
-					"$APPDATA/CelestialLauncher/custom_backgrounds/*",
+					"$APPDATA/custom_backgrounds/*",
 					"$APPDATA/profiles/*/saves/*/icon.png",
 					"$APPCONFIG/profiles/*/saves/*/icon.png",
 					"$CONFIG/profiles/*/saves/*/icon.png",
