@@ -126,6 +126,13 @@ function parseEntries(raw: string | null): Record<string, string>[] {
  */
 const entriesLoaded = ref(false)
 const reloadingEntries = ref(false)
+/**
+ * Set once the user has changed the list in this session. A reload must never
+ * overwrite those changes with what is on disk: the post-open refresh below
+ * fires on a timer, and if it lands between a row being added and its write
+ * completing it would read the old list and drop the new row from the UI.
+ */
+let entriesDirty = false
 
 async function reloadEntries(): Promise<void> {
 	const source = props.source
@@ -136,6 +143,12 @@ async function reloadEntries(): Promise<void> {
 		console.debug('[content-source-config]', source.id, 'manualEntries raw:', raw)
 		const parsed = parseEntries(raw)
 		console.debug('[content-source-config]', source.id, 'parsed entries:', parsed)
+		if (entriesDirty) {
+			// The user's list is authoritative now; keep it and just record that a
+			// read succeeded, so a later write is still allowed.
+			entriesLoaded.value = true
+			return
+		}
 		entries.value = parsed
 		entriesLoaded.value = true
 	} catch (error) {
@@ -240,6 +253,7 @@ async function persistEntries() {
  * write the source reads back as one JSON array.
  */
 function handleEntrySave(row: Record<string, string>, editIndex: number | undefined) {
+	entriesDirty = true
 	if (editIndex === undefined) {
 		entries.value = [...entries.value, row]
 	} else {
@@ -259,6 +273,7 @@ function openEditEntry(index: number) {
 }
 
 function removeEntry(index: number) {
+	entriesDirty = true
 	entries.value = entries.value.filter((_, position) => position !== index)
 	void persistEntries()
 }
@@ -304,6 +319,9 @@ function clearRefreshTimers() {
 }
 
 async function show() {
+	// A fresh open reads the source's current entries again, so the previous
+	// session's edits are no longer authoritative.
+	entriesDirty = false
 	// Open on whatever was read last; the reload below brings the list current.
 	const opening = load()
 	modal.value?.show()
