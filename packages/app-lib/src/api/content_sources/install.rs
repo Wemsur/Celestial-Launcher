@@ -931,6 +931,10 @@ pub async fn stage_modpack(
 
     let staging = super::super::pack::install_source_pack::staged_modpacks_dir(state);
     io::create_dir_all(&staging).await?;
+    // Staged packs are never read again after their install, so sweep the ones
+    // left by earlier runs before adding another: without this the folder grows
+    // by a full pack on every install.
+    prune_staged_modpacks(&staging).await;
     let name = descriptor
         .file_name
         .clone()
@@ -941,7 +945,7 @@ pub async fn stage_modpack(
         .collect();
     let staged_path = staging.join(format!(
         "{}-{}",
-        chrono::Utc::now().timestamp_millis(),
+        uuid::Uuid::new_v4(),
         if safe_name.is_empty() { "pack.zip".to_string() } else { safe_name }
     ));
     io::write(&staged_path, &bytes).await?;
@@ -985,4 +989,41 @@ pub async fn stage_modpack(
         format,
         manifest_json,
     })
+}
+
+/// Delete staged pack archives left over from earlier installs.
+///
+/// A staged archive is only read by the install that immediately follows it, so
+/// anything still present is a leftover — a cancelled install, a crash, or a
+/// pack from a previous run. Files younger than a short grace period are kept so
+/// a second install starting right after the first cannot delete the archive the
+/// first one is still reading.
+async fn prune_staged_modpacks(staging: &Path) {
+    const GRACE: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+    let Ok(mut entries) = io::read_dir(staging).await else {
+        return;
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let path = entry.path();
+        let Ok(metadata) = entry.metadata().await else {
+            continue;
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+        let fresh = metadata
+            .modified()
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|age| age < GRACE);
+        if fresh {
+            continue;
+        }
+        if let Err(error) = io::remove_file(&path).await {
+            tracing::warn!(
+                path = %path.display(),
+                "Could not remove a leftover staged modpack: {error}"
+            );
+        }
+    }
 }
