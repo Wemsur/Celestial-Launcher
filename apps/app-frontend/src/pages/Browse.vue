@@ -73,7 +73,7 @@ import {
     sourceSupportsType,
     sourceTintStyle,
 } from '@/content-sources/catalog'
-import { installSourceContent } from '@/content-sources/ipc'
+import { installSourceContent, listInstalledSourceContent } from '@/content-sources/ipc'
 import {
     isSourceActive,
     MODRINTH_SOURCE_ID,
@@ -239,6 +239,13 @@ const linkedInstanceProjectQuery = useQuery(
     })),
 )
 const installedProjectIds: Ref<string[] | null> = ref(null)
+/**
+ * `sourceId:projectId` keys of content installed into the current instance from
+ * a content source. The Modrinth-only `installedProjectIds` above cannot
+ * express these: a source row's project id is namespaced by its source, and a
+ * foreign project has no Modrinth id at all.
+ */
+const installedSourceKeys = ref<Set<string>>(new Set())
 const instanceHideInstalled = ref(route.query.ai === 'true')
 const newlyInstalled = ref<string[]>([])
 const hiddenInstanceProjectIds = ref<Set<string>>(new Set())
@@ -453,6 +460,26 @@ async function refreshInstalledProjectIds() {
     installedProjectIds.value = ids
 }
 
+/** Load the source-content install records for the instance in context. */
+async function refreshInstalledSourceKeys() {
+    const targetInstanceId = route.query.i as string | undefined
+    if (!targetInstanceId) {
+        installedSourceKeys.value = new Set()
+        return
+    }
+    try {
+        const records = await listInstalledSourceContent(targetInstanceId)
+        installedSourceKeys.value = new Set(
+            records.map((record) => `${record.source_id}:${record.project_id}`),
+        )
+    } catch (error) {
+        // Not knowing is the same as not installed; the install itself reports
+        // any real failure.
+        debugLog('could not load source install records', error)
+        installedSourceKeys.value = new Set()
+    }
+}
+
 async function initInstanceContext() {
     debugLog('initInstanceContext', {
         queryI: route.query.i,
@@ -464,6 +491,7 @@ async function initInstanceContext() {
     await Promise.all([
         initServerContext(),
         refreshInstalledProjectIds(),
+        refreshInstalledSourceKeys(),
         route.query.i ? instanceQuery.suspense().catch(handleError) : Promise.resolve(),
     ])
 
@@ -1050,6 +1078,12 @@ function getCardActions(
     const foreign = (result as SourcedSearchResult).__source
     if (foreign) {
         const isInstalling = installingProjectIds.value.has(result.project_id)
+        // A source row is "installed" when the current instance has a record for
+        // this source and project id. Only knowable with an instance in
+        // context; without one there is no record store to read.
+        const isInstalled =
+            !!route.query.i &&
+            installedSourceKeys.value.has(`${foreign.sourceId}:${foreign.id}`)
         const installType = (result.project_types?.[0] ?? currentProjectType) as ContentType
         // Without an instance in context the click opens the instance picker,
         // exactly as a Modrinth row does, so the button is never dead.
@@ -1057,11 +1091,15 @@ function getCardActions(
             {
                 key: 'install',
                 label: formatMessage(
-                    isInstalling ? messages.installingToServer : commonMessages.installButton,
+                    isInstalled
+                        ? commonMessages.installedLabel
+                        : isInstalling
+                            ? messages.installingToServer
+                            : commonMessages.installButton,
                 ),
-                icon: isInstalling ? SpinnerIcon : PlusIcon,
+                icon: isInstalled ? CheckIcon : isInstalling ? SpinnerIcon : PlusIcon,
                 iconClass: isInstalling ? 'animate-spin' : undefined,
-                disabled: isInstalling,
+                disabled: isInstalled || isInstalling,
                 color: 'brand',
                 type: 'outlined',
                 onClick: () => installForeignContent(result, foreign, installType),
@@ -1345,6 +1383,10 @@ async function runForeignInstall(
             },
         )
         void queryClient.invalidateQueries({ queryKey: instanceKeys.all })
+        installedSourceKeys.value = new Set([
+            ...installedSourceKeys.value,
+            `${source.sourceId}:${source.id}`,
+        ])
         addNotification({
             title: `已安装「${result.name}」`,
             text: `来自内容源「${sourceName}」，位置：${installed.relative_path}`,
