@@ -14,9 +14,36 @@ use super::manifest::ContentType;
 use crate::State;
 use crate::util::io;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock};
+use tokio::sync::{Mutex, OwnedMutexGuard};
 
 const FILE_NAME: &str = "source_content.json";
+
+/// Per-instance-directory locks, so a read-modify-write of `source_content.json`
+/// cannot interleave with another.
+///
+/// The write is atomic on its own (temp file plus rename), but `record_install`
+/// and `forget_install` each read the whole file, change one entry, and write it
+/// back. Two of those running at once — two installs finishing together, or an
+/// install racing a "stop tracking" — would each write a list based on the same
+/// starting point, and one change would be silently lost. The lock is per
+/// directory rather than global so installs into different instances still run
+/// in parallel.
+static STORE_LOCKS: LazyLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+async fn lock_store(instance_dir: &Path) -> OwnedMutexGuard<()> {
+    let lock = {
+        let mut locks = STORE_LOCKS.lock().await;
+        locks
+            .entry(instance_dir.to_path_buf())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
+    };
+    lock.lock_owned().await
+}
 
 /// One installed file, and everything needed to update or switch its version.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -138,6 +165,7 @@ pub async fn record_install(
     record.installed_at = Some(chrono::Utc::now().timestamp());
 
     let dir = instance_dir_of(instance_id, state).await?;
+    let _guard = lock_store(&dir).await;
     let mut store = read_store(&dir).await?;
     store
         .records
@@ -169,6 +197,7 @@ pub async fn forget_install(
     state: &State,
 ) -> crate::Result<()> {
     let dir = instance_dir_of(instance_id, state).await?;
+    let _guard = lock_store(&dir).await;
     let mut store = read_store(&dir).await?;
     store.records.retain(|record| record.id != record_id);
     write_store(&dir, &store).await?;
