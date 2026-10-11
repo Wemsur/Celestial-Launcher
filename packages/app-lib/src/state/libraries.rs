@@ -570,22 +570,19 @@ fn scan_libraries(libraries: &[LibraryInfo]) -> Vec<Instance> {
         // Determine which subdirectory to scan based on format. Modrinth
         // libraries hold their instances directly at the library root; only
         // `.minecraft` libraries nest them under `versions/`.
+        //
+        // A `.minecraft` library with no `versions/` yet has no instances. The
+        // library root must not be scanned as a fallback: it holds `libraries/`,
+        // `assets/`, `mods/` and the like, each of which would be listed as a
+        // phantom instance that the launcher then tries to operate on.
         let scan_root = match library.format {
             InstanceFormat::Modrinth => lib_path.to_path_buf(),
             InstanceFormat::Minecraft => lib_path.join("versions"),
         };
 
-        let entries = if scan_root.exists() {
-            match fs::read_dir(&scan_root) {
-                Ok(e) => e,
-                Err(_) => continue,
-            }
-        } else {
-            // Fallback: scan library root directly (backwards compatibility)
-            match fs::read_dir(lib_path) {
-                Ok(e) => e,
-                Err(_) => continue,
-            }
+        let entries = match fs::read_dir(&scan_root) {
+            Ok(e) => e,
+            Err(_) => continue,
         };
 
         for entry in entries {
@@ -1277,16 +1274,12 @@ pub async fn find_json_instance(
             InstanceFormat::Minecraft => lib_path.join("versions"),
         };
 
-        let entries = if scan_root.exists() {
-            match fs::read_dir(&scan_root) {
-                Ok(e) => e,
-                Err(_) => continue,
-            }
-        } else {
-            match fs::read_dir(lib_path) {
-                Ok(e) => e,
-                Err(_) => continue,
-            }
+        // No fallback to the library root: for a `.minecraft` library that
+        // would search `libraries/`, `assets/` and the like, and could match an
+        // id that belongs to no instance.
+        let entries = match fs::read_dir(&scan_root) {
+            Ok(e) => e,
+            Err(_) => continue,
         };
 
         for entry in entries {
