@@ -345,15 +345,47 @@ pub async fn update(
         .into());
     }
 
-    // Swap the folder contents: the bundle (index.js + manifest.json) lives
-    // here, while plugin data and storage sit in separate directories, so
-    // replacing this folder wholesale keeps user state intact.
-    io::remove_dir_all(&destination).await?;
-    io::create_dir_all(&destination).await?;
-    if let Err(error) = copy_dir(source, &destination).await {
-        let _ = io::remove_dir_all(&destination).await;
+    // Build the replacement beside the installed folder first, then swap it in
+    // with renames. Removing the destination before the copy means a failed
+    // copy (bad bundle, disk full, a locked file) leaves the plugin gone
+    // entirely, with its grants pointing at a folder that no longer exists.
+    let parent = destination.parent().ok_or_else(|| {
+        crate::ErrorKind::InputError(format!(
+            "Plugin '{}' has no parent directory",
+            manifest.id
+        ))
+    })?;
+    let staging = parent.join(format!(
+        ".update-{}-{}",
+        manifest.id,
+        uuid::Uuid::new_v4()
+    ));
+    let backup = parent.join(format!(
+        ".backup-{}-{}",
+        manifest.id,
+        uuid::Uuid::new_v4()
+    ));
+
+    io::create_dir_all(&staging).await?;
+    if let Err(error) = copy_dir(source, &staging).await {
+        let _ = io::remove_dir_all(&staging).await;
         return Err(error);
     }
+
+    // Move the old folder aside, move the new one in, then drop the backup.
+    // Each rename is atomic, and a failure at any point is recovered from
+    // `backup` below.
+    if let Err(error) = io::rename_or_move(&destination, &backup).await {
+        let _ = io::remove_dir_all(&staging).await;
+        return Err(error);
+    }
+    if let Err(error) = io::rename_or_move(&staging, &destination).await {
+        // Put the original back so the plugin is not left missing.
+        let _ = io::rename_or_move(&backup, &destination).await;
+        let _ = io::remove_dir_all(&staging).await;
+        return Err(error);
+    }
+    let _ = io::remove_dir_all(&backup).await;
 
     let mut registry = read_state(&state).await?;
     if let Some(record) =
