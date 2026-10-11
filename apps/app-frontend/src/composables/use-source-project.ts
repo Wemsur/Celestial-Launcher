@@ -264,40 +264,53 @@ export function useSourceProject(): SourceProjectState {
 		}
 
 	// A modpack *is* an instance: it runs the pack flow instead of the picker.
+	// `installing` is held across the whole flow — the library picker and the
+	// staging step take real time, and without it the install button stays
+	// enabled and can be clicked again mid-flow.
 	if (contentType.value === 'modpack') {
-		await showSourceModpackInstall({
-			sourceId: sourceId.value,
-			projectId: projectId.value,
-			versionId: options?.versionId,
-			title: project.value?.name ?? projectId.value,
-			iconUrl: project.value?.iconUrl ?? undefined,
-		})
-		forgetSourceProject(sourceId.value, projectId.value)
+		installing.value = true
+		try {
+			const installed = await showSourceModpackInstall({
+				sourceId: sourceId.value,
+				projectId: projectId.value,
+				versionId: options?.versionId,
+				title: project.value?.name ?? projectId.value,
+				iconUrl: project.value?.iconUrl ?? undefined,
+			})
+			// A cancelled picker installs nothing, so the project stays unknown
+			// to the page and must not be forgotten.
+			if (installed) {
+				forgetSourceProject(sourceId.value, projectId.value)
+				await refreshInstalled()
+			}
+		} finally {
+			installing.value = false
+		}
 		return
 	}
 
 	// A skin belongs to the launcher; everything else needs an instance.
 	if (contentType.value === 'skin') {
-			await run(undefined)
-			return
-		}
-		if (instanceId.value) {
-			await run(instanceId.value)
-			return
-		}
-		// Ask which instance first. The install then runs from the picker's own
-		// callback rather than from a promise wrapped around it — a picker the user
-		// cancels never calls back, and a promise waiting on that would never
-		// settle. The picker reports any failure itself.
-		await showSourceInstallModal((chosen) => run(chosen), {
-			title: project.value?.name ?? projectId.value,
-			iconUrl: project.value?.iconUrl ?? undefined,
-			sourceId: sourceId.value,
-			projectId: projectId.value,
-			projectType: String(contentType.value),
-			versions: versions.value,
-		})
+		await run(undefined)
+		return
 	}
+	if (instanceId.value) {
+		await run(instanceId.value)
+		return
+	}
+	// Ask which instance first. The install then runs from the picker's own
+	// callback rather than from a promise wrapped around it — a picker the user
+	// cancels never calls back, and a promise waiting on that would never
+	// settle. The picker reports any failure itself.
+	await showSourceInstallModal((chosen) => run(chosen), {
+		title: project.value?.name ?? projectId.value,
+		iconUrl: project.value?.iconUrl ?? undefined,
+		sourceId: sourceId.value,
+		projectId: projectId.value,
+		projectType: String(contentType.value),
+		versions: versions.value,
+	})
+}
 
 	return {
 		sourceId,
