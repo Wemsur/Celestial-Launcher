@@ -464,7 +464,28 @@ fn find_executable(dir: &Path) -> crate::Result<Option<PathBuf>> {
             return Ok(Some(path.clone()));
         }
     }
+
+    // On Unix a sidecar may ship as an interpreter script (`#!/bin/sh`, a Python
+    // entry point), which has no executable magic bytes. Windows never reaches
+    // here for its own bundles — the `.exe` branch above matches first — and a
+    // script is not runnable there anyway, so this is Unix-only.
+    #[cfg(unix)]
+    for path in &files {
+        if has_shebang(path)? {
+            return Ok(Some(path.clone()));
+        }
+    }
+
     Ok(None)
+}
+
+/// Whether a file starts with `#!`, the marker of a runnable script on Unix.
+#[cfg(unix)]
+fn has_shebang(path: &Path) -> crate::Result<bool> {
+    let mut file = std::fs::File::open(path)?;
+    let mut magic = [0u8; 2];
+    use std::io::Read;
+    Ok(file.read(&mut magic)? == 2 && magic == [b'#', b'!'])
 }
 
 fn collect_files(dir: &Path, out: &mut Vec<PathBuf>) -> crate::Result<()> {

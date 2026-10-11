@@ -352,7 +352,13 @@ pub async fn get_pack_export_candidates_for_parent(
     } else {
         instance_base_dir.clone()
     };
-    let parent_dir = io::canonicalize(parent_dir)?;
+    // Canonicalize both sides before the containment check: on macOS
+    // `canonicalize` resolves `/tmp`→`/private/tmp` and any symlinked library
+    // component, so comparing a canonical path against a non-canonical base
+    // would fail the prefix test and silently return nothing exportable.
+    let parent_dir = io::canonicalize(&parent_dir)?;
+    let instance_base_dir = io::canonicalize(&instance_base_dir)
+        .unwrap_or(instance_base_dir);
     if !parent_dir.starts_with(&instance_base_dir) {
         return Ok(Vec::new());
     }

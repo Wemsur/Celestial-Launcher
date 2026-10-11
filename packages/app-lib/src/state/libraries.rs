@@ -18,11 +18,28 @@ fn retry_io<F, T>(mut f: F, max_attempts: u32) -> crate::Result<T>
 where
     F: FnMut() -> Result<T, std::io::Error>,
 {
+    // `ERROR_ACCESS_DENIED` on Windows is 5, the transient lock this exists for.
+    // On Unix errno 5 is `EIO` — an unrelated, usually permanent I/O failure —
+    // so retrying on the raw code there would sleep through a real error. Rust
+    // maps the Windows case to `PermissionDenied`, which is checked on both.
+    fn is_transient_lock(error: &std::io::Error) -> bool {
+        if error.kind() == std::io::ErrorKind::PermissionDenied {
+            return true;
+        }
+        #[cfg(windows)]
+        {
+            if error.raw_os_error() == Some(5) {
+                return true;
+            }
+        }
+        false
+    }
+
     let mut attempt = 0;
     loop {
         match f() {
             Ok(v) => return Ok(v),
-            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied || e.raw_os_error() == Some(5) => {
+            Err(e) if is_transient_lock(&e) => {
                 attempt += 1;
                 if attempt >= max_attempts {
                     return Err(e.into());
@@ -98,8 +115,20 @@ impl From<&str> for InstanceFormat {
 
 impl InstanceFormat {
     /// Detect format from a library path string.
+    ///
+    /// The `.minecraft` folder is spelled differently per platform: `.minecraft`
+    /// on Windows and Linux, `minecraft` (no dot) under
+    /// `~/Library/Application Support/` on macOS. The match is on the last path
+    /// component and case-insensitive, so a macOS library is not misclassified
+    /// as Modrinth — which would make the scanner look for instances directly in
+    /// the library root and hide every real one. A path like `my.minecraft.old`
+    /// must not match, so the whole component is compared, not a substring.
     pub(crate) fn from_path(path: &str) -> Self {
-        if path.contains(".minecraft") {
+        let last = Path::new(path)
+            .file_name()
+            .map(|name| name.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_else(|| path.to_ascii_lowercase());
+        if last == ".minecraft" || last == "minecraft" {
             Self::Minecraft
         } else {
             Self::default()
