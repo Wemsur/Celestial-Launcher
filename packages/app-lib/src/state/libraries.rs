@@ -715,6 +715,15 @@ pub(crate) async fn migrate_instances_from_db(
 
     let mut lib_map: HashMap<String, LibraryInfo> = HashMap::new();
 
+    // Track sidecar writes that failed. `migrated` must not be set to `true`
+    // while any are outstanding: listing reads only the sidecars, so an
+    // instance whose `instance.json` was never written shows up as Broken
+    // forever, and with `migrated` already set the import never runs again to
+    // repair it. Leaving the flag false makes the next launch retry ¡ª the
+    // import is idempotent, so instances that already succeeded are simply
+    // rewritten.
+    let mut write_failures = 0usize;
+
     for record in &db_instances {
         let instance = &record.instance;
         let fallback_path =
@@ -783,6 +792,7 @@ pub(crate) async fn migrate_instances_from_db(
             instance_json.launch_overrides =
                 Some(InstanceLaunchOverridesData::from(&record.launch_overrides));
             if let Err(e) = instance_json.write_to_dir(&fallback_path) {
+                write_failures += 1;
                 tracing::warn!(
                     "Failed to write instance.json for {}: {e}",
                     instance.id
@@ -793,17 +803,6 @@ pub(crate) async fn migrate_instances_from_db(
 
     let libraries_vec: Vec<LibraryInfo> =
         lib_map.into_values().collect();
-
-    let config = LibrariesConfig {
-        libraries: libraries_vec,
-        migrated: true,
-        // Migration writes `created` into every sidecar it touches, so the data
-        // it produces is already at the current schema version.
-        schema_version: LIBRARIES_SCHEMA_VERSION,
-        active_library_path: None,
-    };
-
-    save_libraries_config(state, &config).await?;
 
     // Second pass: fix missing `link` and other fields in existing instance.json files.
     // All other metadata (version, loader) is derivable from the filesystem.
@@ -826,6 +825,7 @@ pub(crate) async fn migrate_instances_from_db(
                 json.launch_overrides =
                     Some(InstanceLaunchOverridesData::from(&record.launch_overrides));
                 if let Err(e) = json.write_to_dir(&dir) {
+                    write_failures += 1;
                     tracing::warn!(
                         "Failed to update instance.json for {}: {e}",
                         record.instance.id
@@ -841,6 +841,27 @@ pub(crate) async fn migrate_instances_from_db(
             }
         }
     }
+
+    // Only mark the import complete when every sidecar was written. See
+    // `write_failures` above: a failed write must not be recorded as done, or
+    // the instance stays Broken with nothing left to retry.
+    let config = LibrariesConfig {
+        libraries: libraries_vec,
+        migrated: write_failures == 0,
+        // Migration writes `created` into every sidecar it touches, so the data
+        // it produces is already at the current schema version.
+        schema_version: LIBRARIES_SCHEMA_VERSION,
+        active_library_path: None,
+    };
+
+    if write_failures > 0 {
+        tracing::warn!(
+            "Migration wrote {write_failures} instance sidecar(s) unsuccessfully; \
+             it will be retried on the next launch"
+        );
+    }
+
+    save_libraries_config(state, &config).await?;
 
     Ok(())
 }
