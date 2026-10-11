@@ -1170,30 +1170,6 @@ pub(crate) fn instance_assets_dir(
     }
 }
 
-/// Get the shared content directory for a library format.
-/// For Minecraft format: returns the library root shared dirs (mods/, config/, etc.)
-/// For Modrinth format: returns empty path (everything is instance-local)
-pub(crate) fn shared_content_dirs(
-    instance_dir: &Path,
-    library_format: &InstanceFormat,
-) -> Vec<PathBuf> {
-    match library_format {
-        InstanceFormat::Minecraft => {
-            let mut dirs = Vec::new();
-            if let Some(root) = instance_library_root(instance_dir, library_format) {
-                for dir_name in ["mods", "config", "saves", "resourcepacks", "shaderpacks", "datapacks"] {
-                    let shared = root.join(dir_name);
-                    if shared.exists() {
-                        dirs.push(shared);
-                    }
-                }
-            }
-            dirs
-        }
-        InstanceFormat::Modrinth => Vec::new(),
-    }
-}
-
 /// Get the version ID associated with a `.minecraft` format instance directory.
 /// Returns the instance directory name (e.g. `1.21.1self-x`).
 pub(crate) fn instance_version_id(instance_dir: &Path) -> String {

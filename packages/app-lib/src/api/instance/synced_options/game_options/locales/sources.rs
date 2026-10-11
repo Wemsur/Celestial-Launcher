@@ -83,14 +83,9 @@ pub(super) async fn snapshot_instance(
         state,
         &metadata.instance.path,
     );
-    let shared_dirs = crate::state::libraries::shared_content_dirs(
-        &instance_dir,
-        &metadata.instance.library_format,
-    );
     let scanned =
         crate::state::instances::adapters::filesystem::scan_content_files(
             &instance_dir,
-            &shared_dirs,
         )?;
     let scanned: Vec<_> = scanned
         .into_iter()

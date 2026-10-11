@@ -533,16 +533,11 @@ async fn sync_json_instance_content_files_internal(
     let _content_lock = state.lock_instance_content(&instance.id).await;
     let instance_dir =
         libraries::resolve_instance_dir(state, &instance.path);
-    let shared_dirs = libraries::shared_content_dirs(
-        &instance_dir,
-        &instance.library_format,
-    );
     tracing::info!(
         "sync_json_content_files: scanning directory '{}'",
         instance_dir.display()
     );
-    let scanned =
-        filesystem::scan_content_files(&instance_dir, &shared_dirs)?;
+    let scanned = filesystem::scan_content_files(&instance_dir)?;
 
     // Hashes recorded by the previous scan. Reusable because the key embeds the
     // file's size and mtime, so a hit proves the bytes are unchanged.
@@ -653,16 +648,11 @@ async fn sync_db_instance_content_files(
     let _content_lock = state.lock_instance_content(&instance.id).await;
     let instance_dir =
         libraries::resolve_instance_dir(state, &instance.path);
-    let shared_dirs = libraries::shared_content_dirs(
-        &instance_dir,
-        &instance.library_format,
-    );
     tracing::info!(
         "sync_db_content_files: scanning directory '{}'",
         instance_dir.display()
     );
-    let scanned =
-        filesystem::scan_content_files(&instance_dir, &shared_dirs)?;
+    let scanned = filesystem::scan_content_files(&instance_dir)?;
     // No hash reuse on this path: the DB rows carry no mtime, so a row cannot
     // prove a file is unchanged (a same-size edit would slip through). It still
     // gets the parallel, streaming hasher.

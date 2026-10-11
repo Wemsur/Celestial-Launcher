@@ -11,20 +11,22 @@ pub(crate) struct ScannedContentFile {
     pub hash_cache_key: String,
 }
 
+/// List the content files in one instance directory.
+///
+/// Only the instance directory is scanned. An earlier version also walked
+/// library-root `mods/`, `config/` and similar folders, but those files were
+/// reported under a bare `mods/<name>` path and then hashed by joining that
+/// path onto the instance directory — which does not contain them — so every
+/// one was silently dropped. It also contradicted the layout the launcher
+/// supports, where each instance (including each `.minecraft` version) owns its
+/// own content folders and shares none.
 pub(crate) fn scan_content_files(
     instance_dir: &Path,
-    shared_dirs: &[PathBuf],
 ) -> crate::Result<Vec<ScannedContentFile>> {
     let instance_dir = io::canonicalize(instance_dir)?;
     let mut files = Vec::new();
 
-    // Scan the instance directory first
     scan_instance_dir(&instance_dir, &mut files)?;
-
-    // For .minecraft format, also scan shared root-level directories
-    for shared_dir in shared_dirs {
-        scan_instance_dir(shared_dir, &mut files)?;
-    }
 
     Ok(files)
 }

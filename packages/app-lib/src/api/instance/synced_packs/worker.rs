@@ -277,12 +277,8 @@ async fn fingerprint(
         state,
         &metadata.instance.path,
     );
-    let shared_dirs = crate::state::libraries::shared_content_dirs(
-        &scan_root,
-        &metadata.instance.library_format,
-    );
     let mut files = tokio::task::spawn_blocking(move || {
-        filesystem::scan_content_files(&scan_root, &shared_dirs)
+        filesystem::scan_content_files(&scan_root)
     })
     .await??
     .into_iter()
