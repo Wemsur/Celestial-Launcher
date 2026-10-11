@@ -64,6 +64,12 @@ declare module '@celestial/plugin' {
 		path: string
 		name?: string
 		component: Component
+		/** Show in the sidebar apps drawer. Default true. */
+		sidebar?: boolean
+		/** Label under the drawer icon and as the nav tooltip. */
+		title?: string
+		/** SVG markup for the page's icon. */
+		icon?: string
 	}
 
 	export interface PluginFetchOptions {
