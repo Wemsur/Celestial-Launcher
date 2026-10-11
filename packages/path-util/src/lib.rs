@@ -102,30 +102,30 @@ impl TryFrom<String> for SafeRelativeUtf8UnixPathBuf {
     }
 }
 
-fn is_reserved_windows_device_name(component: &Utf8UnixComponent) -> bool {
-    let file_name = component.as_str().to_ascii_uppercase();
-
-    // Windows reserves some special DOS device names in every directory, which may be optionally
-    // followed by an extension or alternate data stream name and be case insensitive. Trying to
-    // write, read, or delete these files is usually not that useful even for malware, since they
-    // mostly refer to console and printer devices, but it's best to avoid them entirely anyway.
-    // References:
-    // https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions
-    // https://devblogs.microsoft.com/oldnewthing/20031022-00/?p=42073
-    // https://github.com/wine-mirror/wine/blob/01269452e0fbb1f081d506bd64996590a553e2b9/dlls/ntdll/path.c#L66
-    const RESERVED_WINDOWS_DEVICE_NAMES: &[&str] = &[
-        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5",
-        "COM6", "COM7", "COM8", "COM9", "COM¹", "COM²", "COM³", "LPT1", "LPT2",
-        "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9", "LPT¹", "LPT²",
-        "LPT³", "CONIN$", "CONOUT$",
-    ];
-
-    RESERVED_WINDOWS_DEVICE_NAMES.iter().any(|name| {
-        file_name.starts_with(name)
-            && (file_name[name.len()..].is_empty()
-                || file_name[name.len()..].starts_with('.')
-                || file_name[name.len()..].starts_with(':'))
+/// Whether a bare file or directory name is a reserved Windows device name
+/// (`CON`, `NUL`, `COM1`, …, optionally with an extension or ADS suffix).
+///
+/// Exposed so id validators that use a name as a folder name can reject the
+/// same set; on Windows such a folder cannot be created at all.
+pub fn is_reserved_windows_device_name_str(name: &str) -> bool {
+    let upper = name.to_ascii_uppercase();
+    RESERVED_WINDOWS_DEVICE_NAMES.iter().any(|reserved| {
+        upper.starts_with(reserved)
+            && (upper[reserved.len()..].is_empty()
+                || upper[reserved.len()..].starts_with('.')
+                || upper[reserved.len()..].starts_with(':'))
     })
+}
+
+const RESERVED_WINDOWS_DEVICE_NAMES: &[&str] = &[
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5",
+    "COM6", "COM7", "COM8", "COM9", "COM¹", "COM²", "COM³", "LPT1", "LPT2",
+    "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9", "LPT¹", "LPT²",
+    "LPT³", "CONIN$", "CONOUT$",
+];
+
+fn is_reserved_windows_device_name(component: &Utf8UnixComponent) -> bool {
+    is_reserved_windows_device_name_str(component.as_str())
 }
 
 #[test]

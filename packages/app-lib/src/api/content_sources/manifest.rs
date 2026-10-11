@@ -383,6 +383,7 @@ pub fn is_valid_source_id(id: &str) -> bool {
         && !id.starts_with('.')
         && !id.ends_with('.')
         && !id.contains("..")
+        && !path_util::is_reserved_windows_device_name_str(id)
         && id.chars().all(|character| {
             character.is_ascii_alphanumeric()
                 || matches!(character, '.' | '-' | '_')

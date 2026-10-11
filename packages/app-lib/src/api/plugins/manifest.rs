@@ -280,6 +280,7 @@ pub fn is_valid_plugin_id(id: &str) -> bool {
         && !id.starts_with('.')
         && !id.ends_with('.')
         && !id.contains("..")
+        && !path_util::is_reserved_windows_device_name_str(id)
         && id.chars().all(|character| {
             character.is_ascii_alphanumeric()
                 || matches!(character, '.' | '-' | '_')
@@ -377,6 +378,15 @@ mod tests {
         }
         for id in ["com.example.demo", "seed_viewer", "a-b.c"] {
             assert!(is_valid_plugin_id(id), "id {id} was rejected");
+        }
+    }
+
+    /// A reserved Windows device name cannot be a folder name there, so the
+    /// plugin's folder could never be created.
+    #[test]
+    fn reserved_windows_device_names_are_rejected() {
+        for id in ["con", "NUL", "com1", "lpt9", "aux.txt"] {
+            assert!(!is_valid_plugin_id(id), "id {id} was accepted");
         }
     }
 

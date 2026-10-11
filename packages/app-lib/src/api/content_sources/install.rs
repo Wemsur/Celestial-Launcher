@@ -594,10 +594,17 @@ async fn install_world(
 
 /// The world's name: the archive's name without its extension.
 fn world_name_from(file_name: &str) -> String {
-    let stem = file_name
-        .strip_suffix(".zip")
-        .or_else(|| file_name.strip_suffix(".ZIP"))
-        .unwrap_or(file_name);
+    // Case-insensitive: `.Zip`/`.ZIP` are all the same extension, and a
+    // case-sensitive strip would leave the extension in the world's name on
+    // Linux while stripping it on Windows/macOS. Truncation goes through the
+    // extension's own byte range rather than `len() - 4`, which would split a
+    // multi-byte character and panic.
+    let stem = match file_name.rfind('.') {
+        Some(index) if file_name[index..].eq_ignore_ascii_case(".zip") => {
+            &file_name[..index]
+        }
+        _ => file_name,
+    };
     let stem = stem.trim();
     if stem.is_empty() {
         "World".to_string()
