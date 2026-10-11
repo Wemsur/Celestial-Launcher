@@ -2351,6 +2351,9 @@
   "instance.worlds.game_mode.unknown": {
     "defaultMessage": "未知游戏模式"
   },
+  "instances.content-install.all-libraries": {
+    "defaultMessage": "全部库"
+  },
   "instances.content-install.compatible-count": {
     "defaultMessage": "{count} 个兼容 {count, plural, one {实例} other {实例}}"
   },
@@ -2380,6 +2383,9 @@
   },
   "instances.content-install.loader-label": {
     "defaultMessage": "加载器"
+  },
+  "instances.content-install.library-label": {
+    "defaultMessage": "库"
   },
   "instances.content-install.name-label": {
     "defaultMessage": "名称"

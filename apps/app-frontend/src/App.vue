@@ -1339,6 +1339,7 @@ const {
 	preferredGameVersion: contentInstallPreferredGameVersion,
 	releaseGameVersions: contentInstallReleaseGameVersions,
 	projectInfo: contentInstallProjectInfo,
+	libraries: contentInstallLibraries,
 	handleInstallToInstance,
 	handleCreateAndInstall,
 	prepareNewInstance,
@@ -2981,6 +2982,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 		:preferred-game-version="contentInstallPreferredGameVersion"
 		:release-game-versions="contentInstallReleaseGameVersions"
 		:project-info="contentInstallProjectInfo"
+		:libraries="contentInstallLibraries"
 		:randomize-icon="randomizeCreationIcon"
 		:customize-icon="customizeContentInstallIcon"
 		@install="handleInstallToInstance"

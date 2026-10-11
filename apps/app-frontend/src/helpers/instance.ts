@@ -60,6 +60,8 @@ export type InstanceInstallCandidate = {
 	loader: InstanceLoader
 	installed: boolean
 	compatible: boolean
+	/** Registered library the instance lives in; `null` if it is in none. */
+	library_path?: string | null
 }
 
 export async function get_install_candidates(

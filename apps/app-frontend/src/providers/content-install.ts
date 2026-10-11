@@ -1,6 +1,7 @@
 import type { Labrinth } from '@modrinth/api-client'
 import {
 	type ContentInstallInstance,
+	type ContentInstallLibrary,
 	type ContentInstallProjectInfo,
 	type ContentItem,
 	createContext,
@@ -43,6 +44,7 @@ import {
 	remove_project,
 	type ResolveContentPlan,
 } from '@/helpers/instance'
+import { library_default_path, library_list, libraryDisplayLabel } from '@/helpers/library'
 import { get_game_versions } from '@/helpers/tags'
 import type { GameInstance, InstanceLoader } from '@/helpers/types'
 import type { AppEvents } from '@/providers/app-events'
@@ -133,7 +135,29 @@ function sortLoaders(loaders: string[]): string[] {
 type InstallTargetInstance = Pick<
 	GameInstance,
 	'id' | 'name' | 'icon_path' | 'game_version' | 'loader'
->
+> & { library_path?: string | null }
+
+/**
+ * The registered library an instance directory belongs to, matched by the
+ * longest library path that prefixes it — the same rule the backend applies, so
+ * a nested library is not shadowed by its parent. `null` for an instance under
+ * no registered library.
+ */
+function libraryPathForInstance(
+	instancePath: string | null | undefined,
+	libraries: ContentInstallLibrary[],
+): string | null {
+	if (!instancePath) return null
+	const normalized = instancePath.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '')
+	let best: ContentInstallLibrary | null = null
+	for (const library of libraries) {
+		const root = library.path.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '')
+		if (normalized === root || normalized.startsWith(`${root}/`)) {
+			if (!best || library.path.length > best.path.length) best = library
+		}
+	}
+	return best?.path ?? null
+}
 
 export interface ContentInstallContext {
 	instances: Ref<ContentInstallInstance[]>
@@ -145,6 +169,12 @@ export interface ContentInstallContext {
 	preferredGameVersion: Ref<string | null>
 	releaseGameVersions: Ref<Set<string>>
 	projectInfo: Ref<ContentInstallProjectInfo | null>
+	/**
+	 * Registered libraries, so the picker can offer a per-library filter once
+	 * more than one exists. Empty until `library_list` answers, which the modal
+	 * treats as "one library" and hides the filter for.
+	 */
+	libraries: Ref<ContentInstallLibrary[]>
 	handleInstallToInstance: (instance: ContentInstallInstance) => Promise<void>
 	handleCreateAndInstall: (data: {
 		name: string
@@ -223,6 +253,27 @@ export function createContentInstall(opts: {
 	const preferredLoader = ref<string | null>(null)
 	const preferredGameVersion = ref<string | null>(null)
 	const releaseGameVersions = ref<Set<string>>(new Set())
+	const libraries = ref<ContentInstallLibrary[]>([])
+
+	/**
+	 * Read the library list for the picker's filter. Best-effort: a failure just
+	 * leaves the list empty, which the modal reads as "one library" and shows no
+	 * filter for — the install itself still resolves its library the usual way.
+	 */
+	async function refreshLibraries() {
+		try {
+			const [config, defaultPath] = await Promise.all([
+				library_list(),
+				library_default_path().catch(() => null),
+			])
+			libraries.value = (config.libraries ?? []).map((library) => ({
+				path: library.path,
+				label: libraryDisplayLabel(library, defaultPath),
+			}))
+		} catch {
+			libraries.value = []
+		}
+	}
 
 	const projectInfo = ref<ContentInstallProjectInfo | null>(null)
 	const installingItems = ref<Map<string, ContentItem[]>>(new Map())
@@ -617,6 +668,10 @@ export function createContentInstall(opts: {
 			.catch(() => {})
 
 		try {
+			// The picker filters by library; the library list must be in hand
+			// before the instance list is built, since the `list()` fallback below
+			// matches each instance against it.
+			await refreshLibraries()
 			// `get_install_candidates` derives loader and version compatibility from
 			// the content's versions; with nothing in the project (a source-provided
 			// entry) there is nothing to derive from, so the raw instance list is used
@@ -631,6 +686,10 @@ export function createContentInstall(opts: {
 						...instance,
 						installed: false,
 						compatible: true,
+						// The candidate call resolves the library backend-side; this
+						// fallback carries only the instance path, so it is matched
+						// against the library list here instead.
+						library_path: libraryPathForInstance(instance.path, libraries.value),
 					}))
 			const newInstanceMap: Record<string, InstallTargetInstance> = {}
 			const newInstances: ContentInstallInstance[] = candidates.map((instance) => {
@@ -642,6 +701,7 @@ export function createContentInstall(opts: {
 					installed: instance.installed,
 					compatible: instance.compatible,
 					installing: false,
+					libraryPath: instance.library_path ?? null,
 				}
 			})
 
@@ -706,6 +766,7 @@ export function createContentInstall(opts: {
 		const targets = getInstallTargets((versions ?? []).map(toVersionRow))
 
 		try {
+			await refreshLibraries()
 			const listInstances = await list()
 			// Compatibility comes from the same backend call a Modrinth install
 			// uses, so "compatible" means the same thing on both pages. A foreign
@@ -717,6 +778,7 @@ export function createContentInstall(opts: {
 						...instance,
 						installed: false,
 						compatible: true,
+						library_path: libraryPathForInstance(instance.path, libraries.value),
 					}))
 
 			// One read per instance, in parallel: the records live with each
@@ -758,6 +820,7 @@ export function createContentInstall(opts: {
 				iconUrl: getInstanceIconUrl(candidate.icon_path),
 				installed: installedHere.get(candidate.id) ?? candidate.installed,
 				compatible: candidate.compatible,
+				libraryPath: candidate.library_path ?? null,
 			}))
 
 			if (!instances.value.some((i) => i.compatible && !i.installed)) {
@@ -1260,6 +1323,7 @@ export function createContentInstall(opts: {
 		preferredGameVersion,
 		releaseGameVersions,
 		projectInfo,
+		libraries,
 		handleInstallToInstance,
 		handleCreateAndInstall,
 		prepareNewInstance,

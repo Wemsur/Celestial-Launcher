@@ -66,6 +66,35 @@
 			class="flex flex-col gap-3 bg-surface-2 py-4"
 			style="height: 400px; overflow-y: auto"
 		>
+			<!--
+				Library filter, shaped like `NavTabs` but without its container
+				background or sliding indicator, and one size down. Shown only when
+				there is more than one library to choose between.
+			-->
+			<div
+				v-if="libraryOptions.length > 1"
+				class="flex flex-wrap items-center gap-1 px-6"
+				role="radiogroup"
+				:aria-label="formatMessage(messages.libraryLabel)"
+			>
+				<button
+					v-for="option in libraryOptions"
+					:key="option.path ?? ''"
+					type="button"
+					role="radio"
+					:aria-checked="selectedLibrary === option.path"
+					class="cursor-pointer rounded-full border-0 px-3 py-1 text-xs font-bold transition-colors"
+					:class="
+						selectedLibrary === option.path
+							? 'bg-button-bgSelected text-button-textSelected'
+							: 'text-contrast hover:bg-button-bg'
+					"
+					@click="selectedLibrary = option.path"
+				>
+					{{ option.label }}
+				</button>
+			</div>
+
 			<div class="flex items-start gap-3 px-6">
 				<Input
 					v-model="searchFilter"
@@ -377,6 +406,14 @@ const messages = defineMessages({
 		id: 'instances.content-install.game-version-placeholder',
 		defaultMessage: 'Select game version',
 	},
+	libraryLabel: {
+		id: 'instances.content-install.library-label',
+		defaultMessage: 'Library',
+	},
+	allLibraries: {
+		id: 'instances.content-install.all-libraries',
+		defaultMessage: 'All libraries',
+	},
 	compatibleCount: {
 		id: 'instances.content-install.compatible-count',
 		defaultMessage: '{count} compatible {count, plural, one {instance} other {instances}}',
@@ -394,6 +431,8 @@ export interface ContentInstallInstance {
 	installed: boolean
 	compatible: boolean
 	installing?: boolean
+	/** Registered library the instance lives in; `null` for one outside them all. */
+	libraryPath?: string | null
 }
 
 export interface ContentInstallProjectOwner {
@@ -410,6 +449,11 @@ export interface ContentInstallProjectInfo {
 	owner?: ContentInstallProjectOwner | null
 }
 
+export interface ContentInstallLibrary {
+	path: string
+	label: string
+}
+
 const props = defineProps<{
 	instances: ContentInstallInstance[]
 	compatibleLoaders: string[]
@@ -420,6 +464,12 @@ const props = defineProps<{
 	preferredLoader?: string | null
 	preferredGameVersion?: string | null
 	projectInfo?: ContentInstallProjectInfo | null
+	/**
+	 * Registered libraries, so the picker can filter the instance list when more
+	 * than one exists. Labels are resolved by the caller — this package has no
+	 * access to the launcher's library settings.
+	 */
+	libraries?: ContentInstallLibrary[]
 	randomizeIcon?: () => Promise<{ path: string; previewUrl: string } | null>
 	customizeIcon?: () => void
 }>()
@@ -456,8 +506,28 @@ const formatTabLabel = (item: Tab) => tabLabels[item]()
 const searchFilter = ref('')
 const hideUninstallable = ref(true)
 
+/**
+ * Selected library, by path. `null` means "all libraries". Only meaningful when
+ * more than one is registered; with one (or none) the row is not shown at all.
+ */
+const selectedLibrary = ref<string | null>(null)
+
+const libraryOptions = computed(() => {
+	if (!props.libraries || props.libraries.length <= 1) return []
+	return [
+		{ path: null as string | null, label: formatMessage(messages.allLibraries) },
+		...props.libraries.map((library) => ({
+			path: library.path,
+			label: library.label,
+		})),
+	]
+})
+
 const filteredInstances = computed(() => {
 	let list = props.instances
+	if (selectedLibrary.value !== null) {
+		list = list.filter((i) => i.libraryPath === selectedLibrary.value)
+	}
 	if (hideUninstallable.value) list = list.filter((i) => i.compatible && !i.installed)
 	if (searchFilter.value) {
 		const query = searchFilter.value.toLowerCase()
@@ -471,7 +541,19 @@ const filteredInstances = computed(() => {
 	})
 })
 
-const compatibleCount = computed(() => props.instances.filter((i) => i.compatible).length)
+/**
+ * The library filter and the compatible count both read the same list, so the
+ * count has to follow the filter: a row saying "12 compatible" while the list
+ * shows one library's 3 would read as a bug.
+ */
+const compatibleCount = computed(
+	() =>
+		props.instances.filter(
+			(i) =>
+				i.compatible &&
+				(selectedLibrary.value === null || i.libraryPath === selectedLibrary.value),
+		).length,
+)
 
 const instanceName = ref('')
 const selectedLoader = ref<string | null>(null)
@@ -527,6 +609,9 @@ function resetState() {
 	tab.value = props.defaultTab ?? 'existing'
 	searchFilter.value = ''
 	hideUninstallable.value = false
+	// Open on every library: the filter is there to narrow, and starting narrowed
+	// would hide instances the user has not yet noticed are in another library.
+	selectedLibrary.value = null
 	instanceName.value = `New instance (${props.instances.length + 1})`
 	iconPath.value = null
 	iconPreviewUrl.value = null

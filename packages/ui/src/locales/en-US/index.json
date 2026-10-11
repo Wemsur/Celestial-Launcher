@@ -2369,6 +2369,9 @@
   "instance.worlds.game_mode.unknown": {
     "defaultMessage": "Unknown game mode"
   },
+  "instances.content-install.all-libraries": {
+    "defaultMessage": "All libraries"
+  },
   "instances.content-install.compatible-count": {
     "defaultMessage": "{count} compatible {count, plural, one {instance} other {instances}}"
   },
@@ -2398,6 +2401,9 @@
   },
   "instances.content-install.loader-label": {
     "defaultMessage": "Loader"
+  },
+  "instances.content-install.library-label": {
+    "defaultMessage": "Library"
   },
   "instances.content-install.name-label": {
     "defaultMessage": "Name"

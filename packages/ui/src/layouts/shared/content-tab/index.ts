@@ -15,6 +15,7 @@ export { default as ContentUpdaterModal } from './components/modals/content-upda
 export { default as ContentDependencyWarningModal } from './components/modals/ContentDependencyWarningModal.vue'
 export type {
 	ContentInstallInstance,
+	ContentInstallLibrary,
 	ContentInstallProjectInfo,
 	ContentInstallProjectOwner,
 } from './components/modals/ContentInstallModal.vue'

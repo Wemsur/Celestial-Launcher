@@ -26,6 +26,7 @@ use async_zip::tokio::read::fs::ZipFileReader;
 use dashmap::DashMap;
 use sqlx::SqlitePool;
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 #[derive(Clone, Debug)]
 struct ResolvedContentScope {
@@ -163,11 +164,19 @@ pub(crate) async fn get_instance_install_candidates(
     let installed =
         installed_instance_ids(project_id, &instances, state).await?;
 
+    let libraries_config = libraries::get_libraries_config(state).await?;
+
     Ok(instances
         .into_iter()
         .map(|meta| {
             let loader = meta.applied_content_set.loader;
             let game_version = meta.applied_content_set.game_version;
+            // Resolve first: a legacy DB row stores a path relative to the
+            // instances dir, which would never prefix-match a library root.
+            let instance_dir =
+                libraries::resolve_instance_dir(state, &meta.instance.path);
+            let library_path =
+                library_path_for_instance(&instance_dir, &libraries_config);
             InstanceInstallCandidate {
                 compatible: instance_matches_targets(
                     project_type,
@@ -181,9 +190,32 @@ pub(crate) async fn get_instance_install_candidates(
                 icon_path: meta.instance.icon_path,
                 game_version,
                 loader,
+                library_path,
             }
         })
         .collect())
+}
+
+/// The registered library an instance lives in, spelled the way
+/// `libraries.json` spells it.
+///
+/// A library owns an instance when the instance's directory sits under the
+/// library's path — true for both formats, since a Modrinth library holds
+/// instances directly and a `.minecraft` one under `versions/`. The longest
+/// matching path wins, so a library nested inside another is not shadowed by its
+/// parent. `None` for an instance under no registered library (a legacy DB row
+/// with a stale path), which simply never matches a library tab.
+fn library_path_for_instance(
+    instance_path: impl AsRef<Path>,
+    config: &libraries::LibrariesConfig,
+) -> Option<String> {
+    let instance = instance_path.as_ref();
+    config
+        .libraries
+        .iter()
+        .filter(|library| instance.starts_with(Path::new(&library.path)))
+        .max_by_key(|library| library.path.len())
+        .map(|library| library.path.clone())
 }
 
 /// Which of `instances` already have `project_id` installed.
