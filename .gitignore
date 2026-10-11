@@ -103,3 +103,9 @@ packages/tooling-config/script-utils/import-sort.js
 /build-release.sh
 /CURRENT-TASK.md
 /HANDOFF.md
+
+# Vite's config-hash scratch file, emitted next to vite.config.ts
+packages/*/vite.config.ts.timestamp-*.mjs
+
+# ZCode editor's per-project ignore file; not project config
+/.zcodeignore
