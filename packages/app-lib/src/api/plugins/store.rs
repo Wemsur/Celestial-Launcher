@@ -511,8 +511,10 @@ fn extract_zip(bytes: &[u8], dest: &Path) -> crate::Result<()> {
             continue;
         }
 
-        total = total.saturating_add(entry.size());
-        if total > MAX_ARCHIVE_BYTES {
+        // The declared size is a cheap early reject; the real bound is the
+        // bytes actually written below, since a crafted entry can understate
+        // its header and still expand past the cap.
+        if total.saturating_add(entry.size()) > MAX_ARCHIVE_BYTES {
             return Err(crate::ErrorKind::InputError(format!(
                 "Plugin archive is larger than {} MiB",
                 MAX_ARCHIVE_BYTES / (1024 * 1024)
@@ -524,7 +526,15 @@ fn extract_zip(bytes: &[u8], dest: &Path) -> crate::Result<()> {
             std::fs::create_dir_all(parent)?;
         }
         let mut out = std::fs::File::create(&out_path)?;
-        std::io::copy(&mut entry, &mut out)?;
+        let written = std::io::copy(&mut entry, &mut out)?;
+        total = total.saturating_add(written);
+        if total > MAX_ARCHIVE_BYTES {
+            return Err(crate::ErrorKind::InputError(format!(
+                "Plugin archive is larger than {} MiB",
+                MAX_ARCHIVE_BYTES / (1024 * 1024)
+            ))
+            .into());
+        }
     }
 
     Ok(())

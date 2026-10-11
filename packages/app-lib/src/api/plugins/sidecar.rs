@@ -27,6 +27,9 @@ use tokio::sync::Mutex;
 /// A sidecar bundle is a small native tool; the cap only stops a hostile URL
 /// from streaming an unbounded download into memory.
 const MAX_ARCHIVE_BYTES: usize = 128 * 1024 * 1024;
+/// Cap on the expanded size of a sidecar bundle, so a compressed archive
+/// cannot fill the disk as it is unpacked.
+const MAX_UNPACKED_BYTES: u64 = 512 * 1024 * 1024;
 /// Cap on a control response, mirroring the network proxy.
 const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 /// Placeholder in a sidecar's argument list that the launcher rewrites to the
@@ -355,6 +358,22 @@ fn extract(
     }
     std::fs::create_dir_all(dir)?;
 
+    // Count the bytes actually written, not the archive's declared sizes: a
+    // crafted bundle can expand far past its download size, and this extraction
+    // runs before anything has looked at what is inside.
+    let mut written_total: u64 = 0;
+    let mut account = |bytes: u64| -> crate::Result<()> {
+        written_total = written_total.saturating_add(bytes);
+        if written_total > MAX_UNPACKED_BYTES {
+            return Err(crate::ErrorKind::InputError(format!(
+                "Sidecar bundle expands to more than {} MiB",
+                MAX_UNPACKED_BYTES / (1024 * 1024)
+            ))
+            .into());
+        }
+        Ok(())
+    };
+
     match archive {
         "tar.gz" | "tgz" => {
             let decoder =
@@ -374,7 +393,7 @@ fn extract(
                     std::fs::create_dir_all(parent)?;
                 }
                 let mut out = std::fs::File::create(&out_path)?;
-                std::io::copy(&mut entry, &mut out)?;
+                account(std::io::copy(&mut entry, &mut out)?)?;
             }
         }
         "zip" => {
@@ -402,10 +421,11 @@ fn extract(
                     std::fs::create_dir_all(parent)?;
                 }
                 let mut out = std::fs::File::create(&out_path)?;
-                std::io::copy(&mut file, &mut out)?;
+                account(std::io::copy(&mut file, &mut out)?)?;
             }
         }
         _ => {
+            account(bytes.len() as u64)?;
             std::fs::write(dir.join(filename), bytes)?;
         }
     }

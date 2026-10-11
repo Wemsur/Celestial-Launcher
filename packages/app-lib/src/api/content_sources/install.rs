@@ -145,15 +145,26 @@ pub async fn install_content(
                 ))
             })?;
             let instance_dir = instance_dir(instance_id, state).await?;
-            let previous = super::installed::list_installed(instance_id, state)
-                .await
-                .unwrap_or_default()
-                .into_iter()
-                .find(|record| {
-                    record.content_type == content_type
-                        && record.source_id == meta.source_id
-                        && record.project_id == meta.project_id
-                });
+            // A read failure here only costs the supersede step, so it is not
+            // fatal — but it must be visible, since silently treating it as
+            // "nothing installed" would leave two versions of a mod on disk.
+            let previous = match super::installed::list_installed(instance_id, state).await {
+                Ok(records) => records,
+                Err(error) => {
+                    tracing::warn!(
+                        instance = %instance_id,
+                        "Could not read the install records before installing; \
+                         an older copy of this project may be left in place: {error}"
+                    );
+                    Vec::new()
+                }
+            }
+            .into_iter()
+            .find(|record| {
+                record.content_type == content_type
+                    && record.source_id == meta.source_id
+                    && record.project_id == meta.project_id
+            });
             let placed =
                 install_loose_file(&instance_dir, folder, &file_name, &bytes).await?;
             supersede_previous_file(&instance_dir, folder, previous.as_ref(), &placed)
@@ -645,8 +656,10 @@ fn extract_world_zip(bytes: &[u8], dest: &Path) -> crate::Result<()> {
             continue;
         }
 
-        total = total.saturating_add(entry.size());
-        if total > MAX_WORLD_UNPACKED_BYTES {
+        // Count bytes actually written rather than the entry's declared size:
+        // a hostile archive can understate the header while still expanding to
+        // far more, so trusting it would let a zip bomb through.
+        if total.saturating_add(entry.size()) > MAX_WORLD_UNPACKED_BYTES {
             return Err(crate::ErrorKind::InputError(
                 "The world archive expands to more than the allowed size"
                     .to_string(),
@@ -658,7 +671,17 @@ fn extract_world_zip(bytes: &[u8], dest: &Path) -> crate::Result<()> {
             std::fs::create_dir_all(parent)?;
         }
         let mut out = std::fs::File::create(&out_path)?;
-        std::io::copy(&mut entry, &mut out)?;
+        let written = std::io::copy(&mut entry, &mut out)?;
+        total = total.saturating_add(written);
+        if total > MAX_WORLD_UNPACKED_BYTES {
+            // Stop and report: the declared sizes looked fine but the real
+            // expansion is over the cap. The caller removes the world folder.
+            return Err(crate::ErrorKind::InputError(
+                "The world archive expands to more than the allowed size"
+                    .to_string(),
+            )
+            .into());
+        }
     }
 
     Ok(())
