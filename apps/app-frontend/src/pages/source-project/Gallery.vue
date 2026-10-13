@@ -11,6 +11,7 @@
 				:src="image.url"
 				:alt="image.title ?? ''"
 				loading="lazy"
+				referrerpolicy="no-referrer"
 				class="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
 			/>
 		</a>

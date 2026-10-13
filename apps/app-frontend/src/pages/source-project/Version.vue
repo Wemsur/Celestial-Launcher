@@ -85,6 +85,8 @@ import { installedManifest } from '@/content-sources/catalog'
 import { useSourceProject } from '@/composables/use-source-project'
 import { toError } from '@/helpers/errors'
 
+import { stripImageReferrer } from './strip-image-referrer'
+
 const route = useRoute()
 const { formatMessage } = useVIntl()
 const { handleError } = injectNotificationManager()
@@ -122,7 +124,7 @@ const isMarkdown = computed(
 // of through the shared filter's image proxy. See Description.
 const sourceHosts = computed(() => installedManifest(sourceId.value)?.hosts ?? [])
 const rendered = computed(() =>
-	translateHtml(renderHighlightedString(body.value, sourceHosts.value)),
+	stripImageReferrer(translateHtml(renderHighlightedString(body.value, sourceHosts.value))),
 )
 
 const files = computed(() => filesOf(version.value))

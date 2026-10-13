@@ -15,6 +15,7 @@
 		:src="src"
 		:alt="alt"
 		:loading="loading"
+		referrerpolicy="no-referrer"
 		@load="onLoad"
 		@error="onError"
 		@contextmenu="onFullImageContextMenu($event, rawSrc)"

@@ -21,6 +21,8 @@ import { useContentTranslation } from '@/composables/use-content-translation.ts'
 import { installedManifest } from '@/content-sources/catalog'
 import { useSourceProject } from '@/composables/use-source-project'
 
+import { stripImageReferrer } from './strip-image-referrer'
+
 const { formatMessage } = useVIntl()
 const { sourceId, project } = useSourceProject()
 const { translate, translateHtml } = useContentTranslation()
@@ -53,6 +55,6 @@ const isMarkdown = computed(
 // would otherwise proxy them to wsrv.nl, which a source's CDN rarely survives.
 const sourceHosts = computed(() => installedManifest(sourceId.value)?.hosts ?? [])
 const rendered = computed(() =>
-	translateHtml(renderHighlightedString(body.value, sourceHosts.value)),
+	stripImageReferrer(translateHtml(renderHighlightedString(body.value, sourceHosts.value))),
 )
 </script>
