@@ -33,8 +33,10 @@ pub use data::{
 };
 pub use install::{
     DownloadedSkin, FileHash, InstallDescriptor, InstallMetadata, InstalledContent,
-    SKINS_DIR, StagedModpack, install_content, list_downloaded_skins, skins_dir,
-    stage_modpack,
+    SKINS_DIR, StagedModpack, download_staging_dir, install_content,
+    install_content_from_path, is_safe_staged_file_name, list_downloaded_skins,
+    prepare_staged_download, skins_dir, stage_modpack, staged_download_target,
+    take_staged_download,
 };
 pub use installed::{
     SourceContentRecord, forget_install, list_installed, record_install,
@@ -45,7 +47,7 @@ pub use manifest::{
     SourceDetailFormat, SourceSettingField, SourceSettingOption,
     SourceSettingType, is_valid_source_id,
 };
-pub use network::{SourceFetchRequest, SourceFetchResponse, fetch};
+pub use network::{SourceFetchRequest, SourceFetchResponse, ensure_host_allowed, fetch};
 pub use store::{
     SourceRecord, SourceSummary, content_sources_dir, get, install,
     install_from_url, latest_release_tag, list, read_entry, resolve_entry,

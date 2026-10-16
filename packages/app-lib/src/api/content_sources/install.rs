@@ -117,11 +117,27 @@ pub async fn install_content(
 ) -> crate::Result<InstalledContent> {
     let file_name = file_name_for(&descriptor)?;
     let bytes = download(&descriptor, &meta.source_id, state).await?;
+    place_installed(instance_id, content_type, &file_name, &bytes, meta, state).await
+}
 
+/// Place already-fetched bytes as content.
+///
+/// This is the shared tail of every install. The bytes may have come from the
+/// network — a `resolve_download` descriptor — or from a file a browser window
+/// downloaded, and where they land is decided the same way either way; keeping
+/// one copy is what stops the two paths from drifting apart.
+async fn place_installed(
+    instance_id: &str,
+    content_type: ContentType,
+    file_name: &str,
+    bytes: &[u8],
+    meta: InstallMetadata,
+    state: &State,
+) -> crate::Result<InstalledContent> {
     // A skin belongs to the launcher and has no version to track, so it is not
     // recorded; everything else is.
     if content_type == ContentType::Skin {
-        let placed = install_skin(&file_name, &bytes, state).await?;
+        let placed = install_skin(file_name, bytes, state).await?;
         return Ok(InstalledContent {
             relative_path: placed.relative_path,
             file_name: placed.file_name,
@@ -132,7 +148,7 @@ pub async fn install_content(
     let placed = match content_type {
         ContentType::World => {
             let instance_dir = instance_dir(instance_id, state).await?;
-            install_world(&instance_dir, &file_name, &bytes).await?
+            install_world(&instance_dir, file_name, bytes).await?
         }
         ContentType::Mod
         | ContentType::ResourcePack
@@ -166,7 +182,7 @@ pub async fn install_content(
                     && record.project_id == meta.project_id
             });
             let placed =
-                install_loose_file(&instance_dir, folder, &file_name, &bytes).await?;
+                install_loose_file(&instance_dir, folder, file_name, bytes).await?;
             supersede_previous_file(&instance_dir, folder, previous.as_ref(), &placed)
                 .await;
             placed
@@ -203,6 +219,198 @@ pub async fn install_content(
         file_name: placed.file_name,
         record_id: Some(record.id),
     })
+}
+
+/// Install a file the launcher already has on disk.
+///
+/// Some sources cannot hand over a URL: mcmod's downloads sit behind a captcha
+/// the user solves in a browser window the launcher opened, and the file that
+/// results exists only as a path. The path is therefore **untrusted input from
+/// the frontend** and is re-checked here rather than believed — it must be a
+/// plain file directly inside the launcher's own staging directory, so a
+/// compromised webview cannot name `~/.ssh/id_rsa` and have it installed.
+///
+/// The name and the placement go through exactly the same rules the
+/// descriptor path uses, so a file arriving this way is no more trusted than one
+/// fetched from the network.
+pub async fn install_content_from_path(
+    instance_id: &str,
+    content_type: ContentType,
+    staged_path: &Path,
+    meta: InstallMetadata,
+    state: &State,
+) -> crate::Result<InstalledContent> {
+    let staging = download_staging_dir(state);
+    // `canonicalize` resolves symlinks and `..`, so a path that merely *looks*
+    // like it is under the staging directory is rejected. The staging directory
+    // itself is created first, so a file that has never been staged fails here
+    // rather than at the existence check below.
+    io::create_dir_all(&staging).await?;
+    let root = io::canonicalize(&staging).map_err(|error| {
+        crate::ErrorKind::InputError(format!(
+            "Could not resolve the download staging directory: {error}"
+        ))
+    })?;
+    let candidate = io::canonicalize(staged_path).map_err(|error| {
+        crate::ErrorKind::InputError(format!(
+            "The staged download could not be read: {error}"
+        ))
+    })?;
+
+    // A staged download lives one directory below the staging root — in the
+    // per-download folder the window created — so the file inside it is checked
+    // by walking up exactly that far, never by a string prefix.
+    let allowed = candidate
+        .parent()
+        .and_then(Path::parent)
+        .is_some_and(|parent| parent == root);
+    if !allowed {
+        return Err(crate::ErrorKind::InputError(
+            "The staged download is not inside the launcher's download \
+             directory"
+                .to_string(),
+        )
+        .into());
+    }
+
+    let file_name = candidate
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .ok_or_else(|| {
+            crate::ErrorKind::InputError(
+                "The staged download has no file name".to_string(),
+            )
+        })?;
+    // The name is the site's own, so it carries the same characters a URL's last
+    // segment might; sanitise then check, the way `file_name_for` does, rather
+    // than trusting a name because the launcher chose the directory around it.
+    let file_name = sanitize_file_name(&file_name);
+    if !path_util::is_safe_file_name(&file_name) {
+        return Err(crate::ErrorKind::InputError(format!(
+            "Refusing to install a file named '{file_name}'"
+        ))
+        .into());
+    }
+
+    let bytes = io::read(&candidate).await?;
+    if bytes.len() as u64 > MAX_DOWNLOAD_BYTES {
+        return Err(crate::ErrorKind::InputError(format!(
+            "The staged download is over the {} MiB limit",
+            MAX_DOWNLOAD_BYTES / (1024 * 1024)
+        ))
+        .into());
+    }
+
+    let result =
+        place_installed(instance_id, content_type, &file_name, &bytes, meta, state)
+            .await;
+    // The staged download has served its purpose whether or not the install
+    // worked; its whole per-download folder goes, so the staging directory does
+    // not grow by a jar per attempt.
+    if let Some(folder) = candidate.parent()
+        && let Err(error) = io::remove_dir_all(folder).await
+    {
+        tracing::warn!(
+            path = %folder.display(),
+            "Could not remove the staged download after installing: {error}"
+        );
+    }
+    result
+}
+
+/// Where a browser-window download is saved before it is installed.
+///
+/// Inside the launcher's metadata directory, and a **single** directory whose
+/// immediate children are per-download folders: the staging-path check above
+/// accepts only a file one level below this, which is what makes "is this file
+/// ours?" a structural answer rather than a string one.
+pub fn download_staging_dir(state: &State) -> PathBuf {
+    state.directories.metadata_dir().join("downloads")
+}
+
+/// A fresh folder in the staging directory for one download.
+///
+/// A folder per download is what lets the site's own file name survive (the
+/// installed mod is then named as the site named it) while still being unique,
+/// and the folder is what the install removes afterwards.
+pub async fn prepare_staged_download(state: &State) -> crate::Result<PathBuf> {
+    let dir = download_staging_dir(state);
+    io::create_dir_all(&dir).await?;
+    // Leftovers from a cancelled window would otherwise accumulate; anything
+    // past the grace period is a download nobody came back for.
+    prune_staged_downloads(&dir).await;
+
+    let folder = dir.join(uuid::Uuid::new_v4().to_string());
+    io::create_dir_all(&folder).await?;
+    Ok(folder)
+}
+
+/// Whether a downloaded file's own name is safe to keep as the staged name.
+///
+/// The name comes from the site's response, so it is untrusted: `is_safe_file_name`
+/// rejects separators, `..` and reserved Windows device names, and anything it
+/// rejects falls back to the launcher's own suggested name.
+pub fn is_safe_staged_file_name(name: &str) -> bool {
+    path_util::is_safe_file_name(name)
+}
+
+/// Where inside a per-download folder a download should land: the site's own
+/// suggested name, sanitised, or a fallback when it has none usable.
+///
+/// The suggested name comes from the site, so it is sanitised and checked the
+/// same way any other untrusted name is — a download whose suggested name
+/// carried a path separator or a `..` must not decide its own location.
+pub fn staged_download_target(folder: &Path, suggested: Option<&str>) -> PathBuf {
+    let name = suggested
+        .map(sanitize_file_name)
+        .filter(|name| path_util::is_safe_file_name(name))
+        .unwrap_or_else(|| "download".to_string());
+    folder.join(name)
+}
+
+/// The one file a finished download left in its staging folder.
+///
+/// The window wrote to a folder it created empty, so whatever is in it is the
+/// download; taking the first file avoids depending on the exact name the site
+/// ended up using.
+pub async fn take_staged_download(folder: &Path) -> crate::Result<Option<PathBuf>> {
+    let mut entries = io::read_dir(folder).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        if entry.file_type().await?.is_file() {
+            return Ok(Some(entry.path()));
+        }
+    }
+    Ok(None)
+}
+
+/// Delete per-download folders left over from earlier, unfinished downloads.
+async fn prune_staged_downloads(staging: &Path) {
+    const GRACE: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+    let Ok(mut entries) = io::read_dir(staging).await else {
+        return;
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let Ok(metadata) = entry.metadata().await else {
+            continue;
+        };
+        if !metadata.is_dir() {
+            continue;
+        }
+        let fresh = metadata
+            .modified()
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|age| age < GRACE);
+        if fresh {
+            continue;
+        }
+        if let Err(error) = io::remove_dir_all(&entry.path()).await {
+            tracing::warn!(
+                path = %entry.path().display(),
+                "Could not remove a leftover staged download: {error}"
+            );
+        }
+    }
 }
 
 /// The instance folder a loose content type goes into.

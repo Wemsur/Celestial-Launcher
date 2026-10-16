@@ -16,6 +16,7 @@ import { useRoute } from 'vue-router'
 
 import { installedManifest, sourceAppearance } from '@/content-sources/catalog'
 import { installSourceContent, listInstalledSourceContent } from '@/content-sources/ipc'
+import { canInstall, installViaOpenDownload } from '@/content-sources/open-download'
 import { sourceProvider } from '@/content-sources/registry'
 import type {
 	ContentFile,
@@ -226,34 +227,47 @@ export function useSourceProject(): SourceProjectState {
 		fileId?: string
 	}): Promise<void> {
 		const current = provider.value
-		if (!current?.resolveDownload) {
+		if (!current || !canInstall(current)) {
 			throw new Error('该内容源不支持直接下载。')
 		}
 
 		const run = async (targetInstanceId?: string) => {
 			installing.value = true
 			try {
-				const descriptor = await current.resolveDownload(
-					projectId.value,
-					options?.versionId,
-					options?.fileId,
-				)
-				const result = await installSourceContent(
-					targetInstanceId,
-					contentType.value,
-					descriptor,
-					{
-						sourceId: sourceId.value,
-						projectId: projectId.value,
-						versionId: options?.versionId,
-						versionName: options?.versionName,
-						name: project.value?.name ?? projectId.value,
-						iconUrl: project.value?.iconUrl ?? undefined,
-						// A hand-picked file is remembered as the rule, so a later
-						// update check matches the same asset rather than re-guessing.
-						installRule: options?.fileId ? { fileId: options.fileId } : undefined,
-					},
-				)
+				const metadata = {
+					sourceId: sourceId.value,
+					projectId: projectId.value,
+					versionId: options?.versionId,
+					versionName: options?.versionName,
+					name: project.value?.name ?? projectId.value,
+					iconUrl: project.value?.iconUrl ?? undefined,
+					// A hand-picked file is remembered as the rule, so a later
+					// update check matches the same asset rather than re-guessing.
+					installRule: options?.fileId ? { fileId: options.fileId } : undefined,
+				}
+				// A source with a direct URL downloads on its own; one that can only
+				// offer a page opens a window for the user to fetch the file.
+				const result = current.resolveDownload
+					? await installSourceContent(
+							targetInstanceId,
+							contentType.value,
+							await current.resolveDownload(
+								projectId.value,
+								options?.versionId,
+								options?.fileId,
+							),
+							metadata,
+						)
+					: await installViaOpenDownload({
+							provider: current,
+							sourceId: sourceId.value,
+							projectId: projectId.value,
+							contentType: contentType.value,
+							versionId: options?.versionId,
+							fileId: options?.fileId,
+							instanceId: targetInstanceId,
+							meta: metadata,
+						})
 				void queryClient.invalidateQueries({ queryKey: ['instance'] })
 				forgetSourceProject(sourceId.value, projectId.value)
 				await refreshInstalled()

@@ -42,6 +42,11 @@ export interface SourceCapabilities {
 	versions: boolean
 	/** Produce a fetchable file for a project/version. */
 	resolve_download: boolean
+	/**
+	 * Offer a page the launcher opens in a window, for content whose file cannot
+	 * be fetched directly (a site download behind a captcha).
+	 */
+	open_download: boolean
 	/** Given installed items, report whether newer versions exist. */
 	update_check: boolean
 }
@@ -241,6 +246,11 @@ export interface ContentProject extends ContentCard {
 	body?: string
 	gallery?: { url: string; title?: string }[]
 	license?: string
+	/**
+	 * The project's own outbound links. A link to another catalogue's page (a
+	 * CurseForge or Modrinth URL) is recognized by the launcher and turned into a
+	 * jump to that source's own project page when the source is installed.
+	 */
 	links?: { label: string; url: string }[]
 	versions?: ContentVersion[]
 }
@@ -296,6 +306,18 @@ export interface ContentSourceProvider {
 		versionId?: string,
 		fileId?: string,
 	): Promise<DownloadDescriptor>
+	/**
+	 * The page the launcher opens so the user can fetch the file themselves, for
+	 * content behind a captcha or a sign-in. Implement it when the manifest sets
+	 * `open_download`; the launcher captures what the user downloads and installs
+	 * it, so the file never passes through the source.
+	 */
+	openDownload?(
+		id: string,
+		contentType: ContentType,
+		versionId?: string,
+		fileId?: string,
+	): Promise<{ url: string; fileName?: string }>
 	checkUpdate?(items: UpdateQueryItem[]): Promise<UpdateResult[]>
 	/**
 	 * The sidebar filter groups this source offers, per content type. A source

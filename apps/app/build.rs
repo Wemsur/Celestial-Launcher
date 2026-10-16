@@ -529,6 +529,8 @@ fn main() {
                         "content_source_read_entry",
                         "content_source_fetch",
                         "content_source_install_content",
+                        "content_source_install_content_from_path",
+                        "content_source_open_download_window",
                         "content_source_list_installed",
                         "content_source_forget_installed",
                         "content_source_list_downloaded_skins",

@@ -869,7 +869,14 @@ export function createContentInstall(opts: {
 		const { sourceId, projectId, versionId, title, iconUrl } = options
 		const provider = sourceProvider(sourceId)
 		if (!provider?.resolveDownload) {
-			throw new Error('该内容源不支持直接下载。')
+			// A catalogue source with no files of its own: the pack lives somewhere
+			// else, and the source's own project page names where. Pointing at those
+			// links is more use than a bare "unsupported", because the launcher turns
+			// a recognized one (a CurseForge URL) into a jump to the source that can
+			// actually install it.
+			throw new Error(
+				'这个整合包在来源站上没有可直接下载的文件，请到详情页的「相关链接」里找它的发布页。',
+			)
 		}
 
 		const { cancelled, library } = await pickInstallLibrary()

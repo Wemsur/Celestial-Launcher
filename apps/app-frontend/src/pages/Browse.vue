@@ -74,6 +74,7 @@ import {
     sourceTintStyle,
 } from '@/content-sources/catalog'
 import { installSourceContent, listInstalledSourceContent } from '@/content-sources/ipc'
+import { canInstall, installViaOpenDownload } from '@/content-sources/open-download'
 import {
     isSourceActive,
     MODRINTH_SOURCE_ID,
@@ -1283,7 +1284,7 @@ function installForeignContent(
     installType: ContentType,
 ) {
     const provider = sourceProvider(source.sourceId)
-    if (!provider?.resolveDownload) {
+    if (!canInstall(provider)) {
         handleError(new Error('该内容源不支持直接下载。'))
         return
     }
@@ -1363,24 +1364,33 @@ async function runForeignInstall(
         selectableSources().find((candidate) => candidate.id === source.sourceId)?.name ??
         source.sourceId
     const provider = sourceProvider(source.sourceId)
-    if (!provider?.resolveDownload) {
+    if (!provider || !canInstall(provider)) {
         throw new Error('该内容源不支持直接下载。')
     }
 
     setProjectInstalling(result.project_id, true)
     try {
-        const descriptor = await provider.resolveDownload(source.id)
-        const installed = await installSourceContent(
-            targetInstanceId,
-            installType,
-            descriptor,
-            {
-                sourceId: source.sourceId,
-                projectId: source.id,
-                name: result.name,
-                iconUrl: result.icon_url ?? undefined,
-            },
-        )
+        const metadata = {
+            sourceId: source.sourceId,
+            projectId: source.id,
+            name: result.name,
+            iconUrl: result.icon_url ?? undefined,
+        }
+        const installed = provider.resolveDownload
+            ? await installSourceContent(
+                    targetInstanceId,
+                    installType,
+                    await provider.resolveDownload(source.id),
+                    metadata,
+                )
+            : await installViaOpenDownload({
+                    provider,
+                    sourceId: source.sourceId,
+                    projectId: source.id,
+                    contentType: installType,
+                    instanceId: targetInstanceId,
+                    meta: metadata,
+                })
         void queryClient.invalidateQueries({ queryKey: instanceKeys.all })
         installedSourceKeys.value = new Set([
             ...installedSourceKeys.value,

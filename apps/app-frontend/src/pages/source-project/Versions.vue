@@ -10,7 +10,7 @@
 		>
 			<template #actions="{ version }">
 				<IconButton
-					v-if="provider?.resolveDownload"
+					v-if="canInstall(provider)"
 					v-tooltip="formatMessage(commonMessages.installButton)"
 					type="quiet"
 					color="green"
@@ -63,6 +63,7 @@ import ContextMenu from '@/components/ui/ContextMenu.vue'
 import { sourceProjectBasePathOf } from '@/composables/use-split-view.ts'
 import { useSourceProject } from '@/composables/use-source-project'
 import { toVersionRow } from '@/content-sources/adapter'
+import { canInstall } from '@/content-sources/open-download'
 import { toError } from '@/helpers/errors'
 import { get_game_versions, get_loaders } from '@/helpers/tags.js'
 

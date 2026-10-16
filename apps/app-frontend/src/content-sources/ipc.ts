@@ -268,6 +268,45 @@ export function installSourceContent(
 	})
 }
 
+/**
+ * Open a source's download page in a launcher window and wait for the user to
+ * fetch the file. Resolves to the staged file's absolute path, or null when the
+ * window was closed without a download. The URL's host is checked backend-side
+ * against the source's declared hosts.
+ */
+export function openSourceDownloadWindow(
+	sourceId: string,
+	url: string,
+	fileName?: string,
+): Promise<string | null> {
+	return invoke<string | null>('plugin:content-sources|content_source_open_download_window', {
+		sourceId,
+		url,
+		fileName: fileName ?? null,
+	})
+}
+
+/**
+ * Install a file the launcher already staged. The backend refuses any path that
+ * is not inside its own download staging directory.
+ */
+export function installSourceContentFromPath(
+	instanceId: string | undefined,
+	contentType: string,
+	stagedPath: string,
+	meta?: InstallMetadata,
+): Promise<InstalledContent> {
+	return invoke<InstalledContent>(
+		'plugin:content-sources|content_source_install_content_from_path',
+		{
+			instanceId: instanceId ?? null,
+			contentType,
+			stagedPath,
+			meta: meta ?? null,
+		},
+	)
+}
+
 /** Everything installed from a content source into an instance. */
 export function listInstalledSourceContent(
 	instanceId: string,

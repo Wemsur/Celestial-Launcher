@@ -94,6 +94,12 @@ pub struct SourceCapabilities {
     pub versions: bool,
     #[serde(default)]
     pub resolve_download: bool,
+    /// Produce a *page* the launcher opens in a browser window, for content
+    /// whose file cannot be fetched directly — a site download behind a captcha,
+    /// where the user completes the download themselves. The launcher captures
+    /// the resulting file and installs it; the source still never places it.
+    #[serde(default)]
+    pub open_download: bool,
     #[serde(default)]
     pub update_check: bool,
 }

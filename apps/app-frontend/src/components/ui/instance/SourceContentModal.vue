@@ -16,6 +16,7 @@ import {
 	listInstalledSourceContent,
 	type SourceContentRecord,
 } from '@/content-sources/ipc'
+import { canInstall, installViaOpenDownload } from '@/content-sources/open-download'
 import { sourceProvider } from '@/content-sources/registry'
 import type { ContentType, ContentVersion, UpdateQueryItem } from '@/content-sources/types'
 import { toError } from '@/helpers/errors'
@@ -185,22 +186,39 @@ async function checkForUpdates() {
 
 async function applyVersion(record: SourceContentRecord, versionId?: string) {
 	const provider = sourceProvider(record.source_id)
-	if (!provider?.resolveDownload) {
+	if (!provider || !canInstall(provider)) {
 		handleError(new Error('该内容源不支持直接下载。'))
 		return
 	}
 
 	busyId.value = record.id
 	try {
-		const descriptor = await provider.resolveDownload(record.project_id, versionId)
-		await installSourceContent(props.instanceId, record.content_type, descriptor, {
+		const metadata = {
 			sourceId: record.source_id,
 			projectId: record.project_id,
 			versionId,
 			name: record.name,
 			iconUrl: record.icon_url ?? undefined,
 			installRule: (record.install_rule as Record<string, unknown> | null) ?? undefined,
-		})
+		}
+		if (provider.resolveDownload) {
+			await installSourceContent(
+				props.instanceId,
+				record.content_type,
+				await provider.resolveDownload(record.project_id, versionId),
+				metadata,
+			)
+		} else {
+			await installViaOpenDownload({
+				provider,
+				sourceId: record.source_id,
+				projectId: record.project_id,
+				contentType: record.content_type as ContentType,
+				versionId,
+				instanceId: props.instanceId,
+				meta: metadata,
+			})
+		}
 		addNotification({
 			title: isWorld(record)
 				? `已下载「${record.name}」的新副本`

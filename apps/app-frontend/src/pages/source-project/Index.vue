@@ -46,7 +46,7 @@
 					color="brand"
 					size="xl"
 					native-type="button"
-					:disabled="installing || !provider?.resolveDownload"
+					:disabled="installing || !canInstall(provider)"
 					@click="runInstall()"
 				>
 					<SpinnerIcon v-if="installing" class="animate-spin" />
@@ -99,7 +99,18 @@
 					>
 						<LinkIcon class="shrink-0" aria-hidden="true" />
 						<span class="min-w-0 truncate">{{ link.label }}</span>
-						<ExternalIcon class="shrink-0" aria-hidden="true" />
+						<!--
+							A link the launcher can open as another source's project page is
+							marked as an in-app jump (a plain arrow) rather than an external
+							one, so the reader can tell which links leave the launcher and
+							which land on a page they can install from.
+						-->
+						<RightArrowIcon
+							v-if="crossSourceTarget(link.url)"
+							class="shrink-0"
+							aria-hidden="true"
+						/>
+						<ExternalIcon v-else class="shrink-0" aria-hidden="true" />
 					</button>
 				</div>
 			</div>
@@ -185,6 +196,7 @@ import {
 	HeartIcon,
 	LinkIcon,
 	MoreVerticalIcon,
+	RightArrowIcon,
 	SpinnerIcon,
 	TagIcon,
 	UserIcon,
@@ -208,12 +220,16 @@ import { computed, onScopeDispose, watchEffect } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 
 import {
+	browseListLocation,
 	setSplitDetailColor,
 	sourceProjectBasePathOf,
 	useSplitView,
 } from '@/composables/use-split-view.ts'
 import { useSourceProject } from '@/composables/use-source-project'
 import { sourceTintStyle } from '@/content-sources/catalog'
+import { canOpenCrossSourceLink, crossSourceLinkOf } from '@/content-sources/cross-source-link'
+import { canInstall } from '@/content-sources/open-download'
+import { MODRINTH_SOURCE_ID } from '@/content-sources/preferences'
 import { toError } from '@/helpers/errors'
 
 const route = useRoute()
@@ -329,7 +345,59 @@ const moreActions = computed(() => {
 })
 
 function openLink(url: string) {
+	// A link into another installed source's catalogue becomes an in-app jump to
+	// that source's own project page, where the install actually lives; anything
+	// else opens in the browser as before.
+	const target = crossSourceTarget(url)
+	if (target) {
+		void router.push(sourceProjectLocation(target))
+		return
+	}
 	void openUrl(url)
+}
+
+/**
+ * The project a link points into, when the launcher can open it: a CurseForge or
+ * Modrinth URL whose source is installed. Undefined for every other link, which
+ * the template renders as an external one.
+ */
+function crossSourceTarget(url: string) {
+	const link = crossSourceLinkOf(url)
+	return canOpenCrossSourceLink(link) ? link : undefined
+}
+
+/**
+ * Where another source's project opens, in the same shape this page uses: the
+ * split pane when split view is on, full width otherwise. The content type rides
+ * in the path for the split route and in the query for the full-width one, the
+ * same split the discover list's own cross-source links use.
+ *
+ * Modrinth is the built-in source rather than a plugin, and its project page is
+ * a different route (`/project/<id>`, or `/browse/<type>/p/<id>` in split view)
+ * keyed by slug — so it is routed to its own page rather than the source one.
+ */
+function sourceProjectLocation(target: { sourceId: string; projectId: string; contentType: string }) {
+	const project = encodeURIComponent(target.projectId)
+	if (target.sourceId === MODRINTH_SOURCE_ID) {
+		if (splitViewActive.value) {
+			return {
+				path: `/browse/${target.contentType}/p/${project}`,
+				query: browseListLocation(route).query,
+			}
+		}
+		return { path: `/project/${project}` }
+	}
+	const source = encodeURIComponent(target.sourceId)
+	if (splitViewActive.value) {
+		return {
+			path: `/browse/${target.contentType}/s/${source}/${project}`,
+			query: browseListLocation(route).query,
+		}
+	}
+	return {
+		path: `/source/${source}/${project}`,
+		query: { type: target.contentType },
+	}
 }
 
 function formatDate(iso: string): string {

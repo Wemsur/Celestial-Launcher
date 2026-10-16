@@ -137,7 +137,11 @@ pub async fn fetch(
 }
 
 /// Whether `host` is covered by the hosts the source declared in its manifest.
-pub(super) async fn ensure_host_allowed(
+///
+/// Public because the launcher's own browser-download window has to apply the
+/// same check before it opens a page: a `WebviewWindow` is outside the network
+/// proxy, so without this a source could aim a launcher window at any host.
+pub async fn ensure_host_allowed(
     source_id: &str,
     host: &str,
 ) -> crate::Result<()> {

@@ -20,7 +20,7 @@
 				</div>
 				<div class="flex shrink-0 items-center gap-2">
 					<Button
-						v-if="provider?.resolveDownload && !files.length"
+						v-if="canInstall(provider) && !files.length"
 						color="brand"
 						:disabled="installing"
 						@click="installVersion()"
@@ -83,6 +83,7 @@ import { useRoute } from 'vue-router'
 import { useContentTranslation } from '@/composables/use-content-translation.ts'
 import { installedManifest } from '@/content-sources/catalog'
 import { useSourceProject } from '@/composables/use-source-project'
+import { canInstall } from '@/content-sources/open-download'
 import { toError } from '@/helpers/errors'
 
 import { stripImageReferrer } from './strip-image-referrer'

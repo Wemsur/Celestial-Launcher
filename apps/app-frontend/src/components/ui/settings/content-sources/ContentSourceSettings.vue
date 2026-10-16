@@ -58,6 +58,7 @@ const CAPABILITY_LABELS: Record<keyof SourceCapabilities, string> = {
 	detail: '详情页',
 	versions: '版本列表',
 	resolve_download: '直接下载',
+	open_download: '开窗下载',
 	update_check: '更新检查',
 }
 
