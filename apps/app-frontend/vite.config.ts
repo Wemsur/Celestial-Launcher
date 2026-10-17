@@ -12,7 +12,7 @@ const apiClientSource = resolve(projectRootDir, '../../packages/api-client/src/i
 
 // The dev server's port, kept in one place: `tauri.conf.json`'s `devUrl` has to
 // name the same one, and the CSP served in dev has to allow its websocket.
-const serverPort = 5173
+const serverPort = 8004
 
 // Load .env from app-lib manually instead of using Vite's envDir, which would auto-load .env.local and override values
 const envFilePath = resolve(appLibEnvDir, '.env')
@@ -87,7 +87,7 @@ export default defineConfig({
 					// The dev server's own websocket has to be allowed, or HMR is
 					// blocked by the very CSP being served. Derived from the port
 					// above rather than hardcoded: it was pinned to 1420 while the
-					// server moved to 5173, which broke HMR for a year.
+					// server moved ports, which broke HMR for a year.
 					if (directive === 'connect-src') {
 						sources = Array.isArray(sources) ? sources : [sources]
 						sources.push(`ws://localhost:${serverPort}`)
