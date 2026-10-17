@@ -2,7 +2,6 @@ use crate::state::instances::{InstanceLaunchOverridesData, adapters::sqlite::ins
 use crate::state::{ContentSet, Instance, InstanceLink, ReleaseChannel, State};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
@@ -10,7 +9,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 use tokio::fs as tokio_fs;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
+
+mod version_resolve;
+
+pub(crate) use version_resolve::{resolve_version_dir, resolve_version_info};
 
 /// Retry a closure on `std::io::Error`, with 200ms delay between attempts.
 /// Modeled after PCL2's Retrier: handles Windows file locks that clear quickly.
@@ -1228,37 +1231,16 @@ pub(crate) fn instance_version_id(instance_dir: &Path) -> String {
         .to_string()
 }
 
-/// Read and parse the version info JSON from the instance directory.
-/// For .minecraft format instances, this is `<version>.json` in the instance dir.
-/// Falls back to scanning for any `.json` file if no `<version_id>.json` exists.
+/// Read a version directory's manifest, with PCL2's shape handling applied.
+///
+/// Returns the flattened, inheritance-resolved manifest — the single
+/// `VersionInfo` the launcher should use, whether the file on disk was a plain
+/// manifest, an `inheritsFrom` layer, or HMCL `patches`. `None` when the
+/// directory holds no manifest.
 pub fn read_version_json_from_instance_dir(
     instance_dir: &Path,
-) -> crate::Result<Option<serde_json::Value>> {
-    let version_id = instance_version_id(instance_dir);
-    let target_path = instance_dir.join(format!("{version_id}.json"));
-    if target_path.exists() {
-        let content = fs::read_to_string(&target_path)?;
-        let val: serde_json::Value = serde_json::from_str(&content)?;
-        return Ok(Some(val));
-    }
-    // Fall back to scanning for any .json
-    if let Ok(entries) = fs::read_dir(instance_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("json") {
-                let content = match fs::read_to_string(&path) {
-                    Ok(c) => c,
-                    Err(_) => continue,
-                };
-                let val: serde_json::Value = match serde_json::from_str(&content) {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
-                return Ok(Some(val));
-            }
-        }
-    }
-    Ok(None)
+) -> Option<serde_json::Value> {
+    resolve_version_info(instance_dir)
 }
 
 /// Check if a Minecraft-format instance has its own local version data
@@ -1397,85 +1379,21 @@ pub async fn find_json_instance(
     Ok(None)
 }
 
-/// Detect the Minecraft game version from the instance directory.
+/// The Minecraft game version a `.minecraft` version directory describes.
 ///
-/// For `.minecraft` format: reads `clientVersion` from the first version JSON
-/// found in the instance directory.
-/// For Modrinth-style profiles that share a global `versions/` cache:
-/// scans `versions/<id>/<id>.json` entries and returns the first match.
-/// Falls back to the instance directory name if nothing is found.
+/// Reproduces PCL2's `McVersion.VanillaName` cascade (see
+/// [`version_resolve`]), which covers every manifest shape a `.minecraft`
+/// directory can hold: a plain manifest, an `inheritsFrom` layer, and HMCL's
+/// `patches` format.
+///
+/// Returns `None` when the manifest gives no version to go on. The directory
+/// name is deliberately *not* used as a fallback — a folder called `NewPVP` is
+/// a name, not a version, and resolving it makes `resolve_minecraft_manifest`
+/// fail with "Invalid game version: NewPVP", which reads like a broken instance
+/// instead of an unreadable manifest.
 pub fn detect_game_version_from_dir(dir: &Path) -> Option<String> {
-    // 1. Read clientVersion from a version JSON directly in the instance
-    //    directory (`.minecraft` format: `versions/<instance>/<version>.json`)
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
-                continue;
-            }
-            let content = match fs::read_to_string(&path) {
-                Ok(c) => c,
-                Err(_) => continue,
-            };
-            let Ok(val) = serde_json::from_str::<Value>(&content) else {
-                continue;
-            };
-            if let Some(cv) = val.get("clientVersion").and_then(|v| v.as_str()) {
-                if !cv.is_empty() {
-                    debug!(
-                        "Read clientVersion '{}' from {}",
-                        cv,
-                        path.display()
-                    );
-                    return Some(cv.to_string());
-                }
-            }
-            // Fall back to the JSON filename stem if it looks like a version ID
-            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                if stem.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false)
-                    && stem.contains('.')
-                {
-                    debug!(
-                        "Using JSON stem '{}' as version from {}",
-                        stem,
-                        path.display()
-                    );
-                    return Some(stem.to_string());
-                }
-            }
-        }
-    }
-
-    // 2. Check for a shared versions/ cache (Modrinth-style profiles)
-    let versions_dir = dir.join("versions");
-    if versions_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&versions_dir) {
-            let mut best: Option<String> = None;
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    let id = path.file_name()?.to_str()?;
-                    let json_path = path.join(format!("{id}.json"));
-                    if json_path.exists() {
-                        debug!(
-                            "Found version manifest at {}: {id}",
-                            json_path.display()
-                        );
-                        best = Some(id.to_string());
-                    }
-                }
-            }
-            if let Some(v) = best {
-                return Some(v);
-            }
-        }
-    }
-
-    // 3. Fallback: use the instance directory name (e.g. "1.21.4" or "My Instance")
-    dir.file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .map(|s| s.to_string())
+    let folder_name = instance_version_id(dir);
+    resolve_version_dir(dir, &folder_name).and_then(|r| r.vanilla_name)
 }
 
 /// Detect the Minecraft game version from a jar filename. Handles both
@@ -1518,123 +1436,20 @@ pub fn detect_game_version_from_jar_name(name: &str) -> Option<String> {
     versions.into_iter().last().map(String::from)
 }
 
-/// Detect the loader from the instance directory by reading the first version
-/// JSON in it. Falls back to Vanilla if no JSON is found.
+/// The loader a `.minecraft` version directory uses.
+///
+/// Resolved the same way PCL2 classifies a version, and through the same
+/// manifest discovery as [`detect_game_version_from_dir`] — so a version that
+/// resolves its game version also gets its loader read, from the same file.
+///
+/// Returns `Vanilla` when the directory has no readable manifest. This is the
+/// one place a silent default is right: every caller already treats a version
+/// with no loader as vanilla, and a `.minecraft` instance genuinely may be one.
 pub fn detect_loader_from_dir(dir: &Path) -> crate::state::ModLoader {
-    let entries = match fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return crate::state::ModLoader::Vanilla,
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
-            continue;
-        };
-        if ext != "json" {
-            continue;
-        }
-        let content = match fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-        let Ok(val) = serde_json::from_str::<Value>(&content) else {
-            continue;
-        };
-        if val.get("mainClass").and_then(|v| v.as_str()).is_none() {
-            continue;
-        }
-        return detect_loader_from_json(&val);
-    }
-    crate::state::ModLoader::Vanilla
-}
-
-/// The loader a launcher version JSON describes.
-///
-/// The libraries are read first: the artifacts a loader puts on the classpath
-/// are the structural truth, and the class name often says nothing at all. A
-/// NeoForge 21.1 install boots through
-/// `cpw.mods.bootstraplauncher.BootstrapLauncher`, which names no loader, and
-/// legacy entry points — `net.minecraft.launchwrapper.Launch`,
-/// `cpw.mods.modlauncher.Launcher` — are as anonymous. The class name is only
-/// the fallback for a JSON whose libraries were pruned.
-fn detect_loader_from_json(val: &Value) -> crate::state::ModLoader {
-    let from_libraries = detect_loader_from_libraries(val);
-    if from_libraries != crate::state::ModLoader::Vanilla {
-        return from_libraries;
-    }
-
-    let main_class = val
-        .get("mainClass")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default();
-    detect_loader_from_main_class(main_class)
-}
-
-/// The loader whose own artifacts appear in a version JSON's `libraries`.
-///
-/// NeoForge is resolved before Forge: a NeoForge install carries the odd
-/// `net.minecraftforge` artifact too — 21.1.251 ships
-/// `net.minecraftforge:srgutils:0.4.15` — so testing Forge first would call it
-/// Forge. The reverse cannot happen: no Forge install carries `net.neoforged`.
-fn detect_loader_from_libraries(val: &Value) -> crate::state::ModLoader {
-    use crate::state::ModLoader;
-
-    let Some(libraries) = val.get("libraries").and_then(|v| v.as_array()) else {
-        return ModLoader::Vanilla;
-    };
-
-    let (mut fabric, mut quilt, mut neoforge, mut forge) = (false, false, false, false);
-    for name in libraries
-        .iter()
-        .filter_map(|library| library.get("name").and_then(|v| v.as_str()))
-        .map(str::to_lowercase)
-    {
-        if name.starts_with("net.neoforged") {
-            neoforge = true;
-        } else if name.starts_with("net.minecraftforge") {
-            forge = true;
-        } else if name.starts_with("net.fabricmc:fabric-loader") {
-            fabric = true;
-        } else if name.starts_with("org.quiltmc:quilt-loader") {
-            quilt = true;
-        }
-    }
-
-    if neoforge {
-        ModLoader::NeoForge
-    } else if forge {
-        ModLoader::Forge
-    } else if fabric {
-        ModLoader::Fabric
-    } else if quilt {
-        ModLoader::Quilt
-    } else {
-        ModLoader::Vanilla
-    }
-}
-
-/// Parse a Minecraft launcher `mainClass` string and return the corresponding loader.
-fn detect_loader_from_main_class(main_class: &str) -> crate::state::ModLoader {
-    let mc = main_class.to_lowercase();
-    if mc.contains("knot")
-        || mc.contains("fabric.loader")
-        || mc.contains("fabricmc")
-    {
-        return crate::state::ModLoader::Fabric;
-    }
-    if mc.contains("quilt") {
-        return crate::state::ModLoader::Quilt;
-    }
-    if mc.contains("neoforge") {
-        return crate::state::ModLoader::NeoForge;
-    }
-    if mc.contains("forge") {
-        return crate::state::ModLoader::Forge;
-    }
-    crate::state::ModLoader::Vanilla
+    let folder_name = instance_version_id(dir);
+    resolve_version_dir(dir, &folder_name)
+        .map(|resolved| resolved.loader)
+        .unwrap_or(crate::state::ModLoader::Vanilla)
 }
 
 /// Check whether an instance is quarantined — covers both DB-backed and

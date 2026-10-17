@@ -447,14 +447,26 @@ async fn install_minecraft_inner(
         == libraries::InstanceFormat::Minecraft
         && libraries::instance_has_local_version(&instance_path, &local_version_id);
 
-    let mut version_info = if minecraft_has_local
-        && instance_path.join(format!("{local_version_id}.json")).exists()
-    {
-        let json_content = tokio::fs::read_to_string(
-            instance_path.join(format!("{local_version_id}.json")),
-        )
-        .await?;
-        serde_json::from_str(&json_content)?
+    let mut version_info = if minecraft_has_local {
+        // Resolved through PCL2's rules rather than parsed straight from the
+        // file: an HMCL `patches` version and an `inheritsFrom` layer both leave
+        // `assetIndex`, `downloads` and `assets` to their fragments or their
+        // parent, so `from_str` on the raw file rejects them — and an instance
+        // written by PCL2 or HMCL is exactly that shape.
+        match libraries::read_version_json_from_instance_dir(&instance_path) {
+            Some(json) => serde_json::from_value(json)?,
+            None => download::download_version_info(
+                &state,
+                version,
+                loader_version.as_ref(),
+                Some(repairing),
+                loading_bar.as_ref(),
+                reporter.as_ref(),
+                Some(&instance_path),
+                Some(&local_version_id),
+            )
+            .await?,
+        }
     } else {
         download::download_version_info(
             &state,
@@ -1002,14 +1014,24 @@ pub async fn launch_minecraft(
         == libraries::InstanceFormat::Minecraft
         && libraries::instance_has_local_version(&instance_path, &local_version_id);
 
-    let mut version_info = if minecraft_has_local
-        && instance_path.join(format!("{local_version_id}.json")).exists()
-    {
-        let json_content = tokio::fs::read_to_string(
-            instance_path.join(format!("{local_version_id}.json")),
-        )
-        .await?;
-        serde_json::from_str(&json_content)?
+    let mut version_info = if minecraft_has_local {
+        // Same resolution as the install path above: PCL2's rules, so a
+        // `.minecraft` version written by PCL2 or HMCL loads instead of failing
+        // to parse.
+        match libraries::read_version_json_from_instance_dir(&instance_path) {
+            Some(json) => serde_json::from_value(json)?,
+            None => download::download_version_info(
+                &state,
+                version,
+                loader_version.as_ref(),
+                None,
+                None,
+                None,
+                Some(&instance_path),
+                Some(&local_version_id),
+            )
+            .await?,
+        }
     } else {
         download::download_version_info(
             &state,
