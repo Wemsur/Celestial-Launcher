@@ -1477,6 +1477,27 @@ pub async fn is_instance_quarantined(
         .unwrap_or(false))
 }
 
+/// Clear a path's read-only attribute, ignoring "does not exist".
+///
+/// PCL2 does the same before every move (`FileUtils.Move` /
+/// `DirectoryUtils.Move`). On Windows a read-only destination makes `rename`
+/// fail with `ERROR_ACCESS_DENIED`, which is indistinguishable from the
+/// transient lock `retry_io` waits out — so the attribute has to go first.
+fn clear_readonly(path: &Path) {
+    let Ok(metadata) = fs::metadata(path) else {
+        return;
+    };
+    let mut permissions = metadata.permissions();
+    if !permissions.readonly() {
+        return;
+    }
+    tracing::info!("rename_minecraft_instance: clearing read-only on {:?}", path);
+    permissions.set_readonly(false);
+    // A file held open by another process keeps its attribute; that is fine,
+    // the move is retried separately.
+    let _ = fs::set_permissions(path, permissions);
+}
+
 /// Rename a `.minecraft`-format instance directory and its version files.
 /// Returns the new absolute instance directory path on success.
 pub(crate) fn rename_minecraft_instance(
@@ -1506,11 +1527,12 @@ pub(crate) fn rename_minecraft_instance(
         new_dir
     );
 
-    // Rename the instance directory.
-    // On Windows, os error 5 (Access Denied) often means a transient lock
-    // (antivirus, indexer, etc.). We retry with a short delay, matching the
-    // approach used by PCL2 launcher's Retrier.
-    if new_dir.exists() {
+    // A case-only difference (`fabric` → `Fabric`) is not a collision: on
+    // Windows those are the same directory, and `exists()` reports it either
+    // way, so treating it as taken would make an instance's capitalization
+    // impossible to fix. Only a *different* name means a real clash.
+    let same_directory = old_filestem.eq_ignore_ascii_case(new_name);
+    if !same_directory && new_dir.exists() {
         tracing::warn!(
             "rename_minecraft_instance: target dir already exists! old_dir={:?} new_dir={:?}",
             old_dir,
@@ -1525,10 +1547,24 @@ pub(crate) fn rename_minecraft_instance(
         );
     }
     info!("rename_minecraft_instance: renaming directory {:?} → {:?}", old_dir, new_dir);
-    let new_dir = retry_io(
+    let new_dir = match retry_io(
         || fs::rename(old_dir, &new_dir).map(|_| new_dir.clone()),
         5,
-    )?;
+    ) {
+        Ok(dir) => dir,
+        Err(error) => {
+            tracing::warn!(
+                "rename_minecraft_instance: directory rename failed after retries: {error}"
+            );
+            return Err(crate::ErrorKind::InputError(format!(
+                "Cannot rename instance '{old_filestem}'. The folder is held open by \
+                 another program — for example File Explorer, a running game, antivirus \
+                 software or the Windows search indexer. Close whatever has it open and \
+                 try again."
+            ))
+            .into());
+        }
+    };
     info!("rename_minecraft_instance: directory rename succeeded");
 
     // List entries to debug what files exist
@@ -1571,6 +1607,11 @@ pub(crate) fn rename_minecraft_instance(
             src,
             dst
         );
+        // PCL2 clears `ReadOnly` on both ends before moving (`FileUtils.Move`).
+        // A read-only destination is rejected with `ERROR_ACCESS_DENIED` — the
+        // same os error 5 a lock produces, so retrying alone would not help.
+        clear_readonly(&src);
+        clear_readonly(&dst);
         match retry_io(
             || fs::rename(&src, &dst).map(|_| ()),
             3,
@@ -1603,8 +1644,61 @@ pub(crate) fn rename_minecraft_instance(
         );
     }
 
+    rewrite_version_json_id(&new_dir, new_name);
+
     tracing::info!("rename_minecraft_instance: completed successfully, returning {:?}", new_dir);
     Ok(new_dir)
+}
+
+/// Rewrite the renamed manifest's `id` in place, as PCL2 does after moving it.
+///
+/// PCL2 sets `JsonObject("id") = NewName` before writing the new `.json`. Left
+/// alone, the file would be named after the new directory while still claiming
+/// the old id, and `inheritsFrom` links and loader detection both read that
+/// field. Only the file that was just renamed is touched; a manifest that kept
+/// a non-standard name is left exactly as it is.
+fn rewrite_version_json_id(new_dir: &Path, new_name: &str) {
+    let json_path = new_dir.join(format!("{new_name}.json"));
+    let Ok(content) = fs::read_to_string(&json_path) else {
+        return;
+    };
+    let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&content) else {
+        return;
+    };
+    if json.get("id").and_then(|v| v.as_str()) == Some(new_name) {
+        return;
+    }
+    let Some(object) = json.as_object_mut() else {
+        return;
+    };
+    let previous = object
+        .insert("id".to_string(), serde_json::Value::String(new_name.to_string()))
+        .and_then(|v| v.as_str().map(str::to_string));
+    match serde_json::to_string_pretty(&json) {
+        Ok(pretty) => {
+            clear_readonly(&json_path);
+            // Atomic for the same reason the sidecars are: a launch reading the
+            // manifest concurrently must never see a truncated file.
+            if let Err(error) = crate::util::io::write_atomic_sync(pretty, &json_path) {
+                tracing::warn!(
+                    "rename_minecraft_instance: failed to update id in {:?}: {}",
+                    json_path,
+                    error
+                );
+                return;
+            }
+            tracing::info!(
+                "rename_minecraft_instance: id rewritten {previous:?} → {new_name}"
+            );
+        }
+        Err(error) => {
+            tracing::warn!(
+                "rename_minecraft_instance: failed to serialize {:?}: {}",
+                json_path,
+                error
+            );
+        }
+    }
 }
 
 #[cfg(test)]
