@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TrashIcon, FolderOpenIcon, PlusIcon, PlugIcon, TriangleAlertIcon, DownloadIcon, SettingsIcon } from '@modrinth/assets'
+import { DownloadIcon, FolderOpenIcon, PlugIcon, PlusIcon, SettingsIcon, TrashIcon, TriangleAlertIcon } from '@modrinth/assets'
 import {
 	Button,
 	defineMessages,
@@ -18,16 +18,18 @@ import {
 	openPluginFolder,
 	pluginCrashLog,
 	pluginGetHotReload,
-	pluginLatestRelease,
 	pluginIconUrl,
+	pluginLatestRelease,
 	pluginSetHotReload,
 	setPluginEnabled,
 	setPluginGranted,
 	uninstallPlugin,
 	updatePluginFromUrl,
 } from '@/plugin-host/ipc'
-import { fetchStorePlugins, type StorePlugin } from '@/plugin-host/store'
+import { fetchStorePlugins, pluginDownloadUrl, type StorePlugin } from '@/plugin-host/store'
 import type { PluginSummary } from '@/plugin-host/types'
+
+import GithubMirrorSetting from '../GithubMirrorSetting.vue'
 import PluginSettingsModal from './PluginSettingsModal.vue'
 
 const { formatMessage } = useVIntl()
@@ -399,7 +401,7 @@ async function installFromStore(entry: StorePlugin) {
 	if (busy.value) return
 	busy.value = entry.id
 	try {
-		await installPluginFromUrl(entry.download, entry.repo)
+		await installPluginFromUrl(pluginDownloadUrl(entry), entry.repo)
 		await loadPlugins()
 		await reload()
 		tab.value = 'installed'
@@ -413,7 +415,7 @@ async function installFromStore(entry: StorePlugin) {
 function updateFromStore(plugin: PluginSummary, entry: StorePlugin) {
 	return withBusy(plugin.id, async () => {
 		unloadPlugin(plugin.id)
-		await updatePluginFromUrl(entry.download, entry.repo)
+		await updatePluginFromUrl(pluginDownloadUrl(entry), entry.repo)
 		await loadPlugins()
 		await reload()
 	})
@@ -649,6 +651,8 @@ function updateFromStore(plugin: PluginSummary, entry: StorePlugin) {
 					{{ formatMessage(messages.storeRefresh) }}
 				</Button>
 			</div>
+
+			<GithubMirrorSetting @refresh="loadStore(true)" />
 
 			<p v-if="storeLoading" class="mt-6 mb-0 text-secondary">
 				{{ formatMessage(messages.storeLoading) }}

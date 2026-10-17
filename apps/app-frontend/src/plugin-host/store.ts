@@ -8,6 +8,9 @@
  * same manifest validation and permission approval as a hand-placed plugin.
  */
 
+import { ensureUiPreferencesLoaded, uiPreferences } from '@/composables/use-ui-preferences'
+import { fetchJsonWithMirror, mirroredUrl } from '@/helpers/github-mirror'
+
 const DEFAULT_REGISTRY_URL =
 	'https://raw.githubusercontent.com/Wemsur/Celestial-Plugin-Store/refs/heads/main/plugins.json'
 
@@ -53,22 +56,37 @@ export function setRegistryUrl(url: string): void {
 }
 
 /**
+ * A store entry's download URL, routed through the mirror when the user has it
+ * on. GitHub release downloads are the worst case for a blocked network — a
+ * direct `github.com/.../releases/download/...` was measured at 60s to zero
+ * bytes — so the same switch that speeds up the index has to cover these too.
+ *
+ * Only `github.com` and the asset hosts are rewritten; an entry pointing at
+ * some other host is left exactly as the store wrote it.
+ */
+export function pluginDownloadUrl(entry: StorePlugin): string {
+	if (!uiPreferences.githubMirrorEnabled) return entry.download
+	return mirroredUrl(entry.download, uiPreferences.githubMirrorId)
+}
+
+/**
  * Fetch and validate the store index.
  *
  * Uses the browser `fetch` rather than the plugin network proxy on purpose:
  * this is the launcher fetching its own configured index, not a plugin reaching
  * out, so it is not subject to plugin grants. The registry host must be allowed
- * by the launcher CSP's `connect-src`.
+ * by the launcher CSP's `connect-src` — which is why the mirror hosts are
+ * listed there too, not just `raw.githubusercontent.com`.
+ *
+ * When the user has turned the GitHub mirror on, the index is fetched through
+ * it first and falls back to a direct request if the mirror fails.
  */
 export async function fetchStorePlugins(): Promise<StorePlugin[]> {
-	const response = await fetch(registryUrl(), {
-		headers: { accept: 'application/json' },
+	await ensureUiPreferencesLoaded()
+	const data = await fetchJsonWithMirror<RegistryFile>(registryUrl(), {
+		enabled: uiPreferences.githubMirrorEnabled,
+		mirrorId: uiPreferences.githubMirrorId,
 	})
-	if (!response.ok) {
-		throw new Error(`插件商店请求失败：HTTP ${response.status}`)
-	}
-
-	const data = (await response.json()) as RegistryFile
 	if (!data || !Array.isArray(data.plugins)) {
 		throw new Error('插件商店索引格式无效：缺少 plugins 数组')
 	}

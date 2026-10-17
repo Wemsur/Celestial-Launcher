@@ -9,6 +9,9 @@
  * index separate for now lets sources be curated on their own.
  */
 
+import { ensureUiPreferencesLoaded, uiPreferences } from '@/composables/use-ui-preferences'
+import { fetchJsonWithMirror, mirroredUrl } from '@/helpers/github-mirror'
+
 const DEFAULT_REGISTRY_URL =
 	'https://raw.githubusercontent.com/Wemsur/Celestial-Plugin-Store/refs/heads/main/content-sources.json'
 
@@ -53,15 +56,27 @@ export function setSourceRegistryUrl(url: string): void {
 	}
 }
 
-export async function fetchStoreSources(): Promise<StoreContentSource[]> {
-	const response = await fetch(sourceRegistryUrl(), {
-		headers: { accept: 'application/json' },
-	})
-	if (!response.ok) {
-		throw new Error(`内容源商店请求失败：HTTP ${response.status}`)
-	}
+/**
+ * A store entry's download URL, routed through the mirror when the user has it
+ * on. Same reasoning as the plugin store: release downloads are the slowest
+ * and most blockable part, so the switch has to cover them, not just the index.
+ */
+export function sourceDownloadUrl(entry: StoreContentSource): string {
+	if (!uiPreferences.githubMirrorEnabled) return entry.download
+	return mirroredUrl(entry.download, uiPreferences.githubMirrorId)
+}
 
-	const data = (await response.json()) as RegistryFile
+/**
+ * Fetch and validate the store index, through the mirror when it is on. Falls
+ * back to a direct request if the mirror fails, so turning the mirror on can
+ * never be worse than leaving it off.
+ */
+export async function fetchStoreSources(): Promise<StoreContentSource[]> {
+	await ensureUiPreferencesLoaded()
+	const data = await fetchJsonWithMirror<RegistryFile>(sourceRegistryUrl(), {
+		enabled: uiPreferences.githubMirrorEnabled,
+		mirrorId: uiPreferences.githubMirrorId,
+	})
 	if (!data || !Array.isArray(data.sources)) {
 		throw new Error('内容源商店索引格式无效：缺少 sources 数组')
 	}

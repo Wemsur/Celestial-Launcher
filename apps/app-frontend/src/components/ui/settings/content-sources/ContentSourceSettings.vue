@@ -32,10 +32,11 @@ import {
 import { loadContentSources } from '@/content-sources/loader'
 import { MODRINTH_SOURCE_ID } from '@/content-sources/preferences'
 import { contentSourceErrors } from '@/content-sources/registry'
-import { fetchStoreSources, type StoreContentSource } from '@/content-sources/store'
+import { fetchStoreSources, sourceDownloadUrl, type StoreContentSource } from '@/content-sources/store'
 import type { ContentType, SourceCapabilities, SourceSummary } from '@/content-sources/types'
-
 import { toError } from '@/helpers/errors'
+
+import GithubMirrorSetting from '../GithubMirrorSetting.vue'
 import ContentSourceMultiplierModal from './ContentSourceMultiplierModal.vue'
 import SourceConfigModal from './SourceConfigModal.vue'
 
@@ -323,7 +324,7 @@ function showStore() {
 
 function installFromStore(entry: StoreContentSource) {
 	return withBusy(entry.id, async () => {
-		await installSourceFromUrl(entry.download, entry.repo)
+		await installSourceFromUrl(sourceDownloadUrl(entry), entry.repo)
 		await loadContentSources()
 		await reload()
 		tab.value = 'installed'
@@ -535,6 +536,8 @@ function installFromStore(entry: StoreContentSource) {
 					{{ formatMessage(messages.storeRefresh) }}
 				</Button>
 			</div>
+
+			<GithubMirrorSetting @refresh="loadStore(true)" />
 
 			<p v-if="storeLoading" class="mt-6 mb-0 text-secondary">
 				{{ formatMessage(messages.storeLoading) }}

@@ -14,6 +14,8 @@
 // Not localStorage either, so preferences survive a webview data wipe.
 import { invoke } from '@tauri-apps/api/core'
 
+import { DEFAULT_MIRROR_ID } from '@/helpers/github-mirror'
+
 export interface UiPreferencesFile {
 	version: 1
 	/** Compact "Jump in" list at the top of the right sidebar, above the play account. */
@@ -24,11 +26,23 @@ export interface UiPreferencesFile {
 	 * statement about launch rather than a live mirror of the sidebar.
 	 */
 	sidebarVisibleOnStartup: boolean
+	/**
+	 * Whether the two stores reach GitHub through a mirror. Direct access to
+	 * `raw.githubusercontent.com` and release assets times out on some networks,
+	 * so the store indexes and their downloads can be routed through a proxy.
+	 */
+	githubMirrorEnabled: boolean
+	/** Which mirror to use, by its id in `helpers/github-mirror.ts`. */
+	githubMirrorId: string
 }
 
 export const UI_PREFERENCE_DEFAULTS: Omit<UiPreferencesFile, 'version'> = {
 	jumpBackInSidebar: true,
 	sidebarVisibleOnStartup: true,
+	// Off by default: a mirror is a third party, and the store works without one
+	// wherever GitHub itself is reachable.
+	githubMirrorEnabled: false,
+	githubMirrorId: DEFAULT_MIRROR_ID,
 }
 
 /** `null` when nothing has been saved yet, so the caller keeps its defaults. */
