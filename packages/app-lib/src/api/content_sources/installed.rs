@@ -60,6 +60,10 @@ pub struct SourceContentRecord {
     /// Relative to the instance folder, e.g. `mods/example.jar`.
     pub relative_path: String,
     pub name: String,
+    /// The project's author as the source reported it, so the instance's
+    /// content list can show who made a file it has no Modrinth metadata for.
+    #[serde(default)]
+    pub author: Option<String>,
     #[serde(default)]
     pub icon_url: Option<String>,
     /// Opaque rule the source matched its download with, so a later check can
@@ -148,7 +152,10 @@ async fn instance_dir_of(
 /// Remember an install, replacing any earlier record for the same file.
 ///
 /// Replacing by path is the point: installing a newer version of the same mod
-/// writes to the same path, and it should look like one item, not two.
+/// writes to the same path, and it should look like one item, not two. The
+/// comparison ignores the `.disabled` suffix, because disabling a file renames
+/// it — and an update to a disabled file must still replace its record rather
+/// than add a second one beside it.
 pub async fn record_install(
     instance_id: &str,
     mut record: SourceContentRecord,
@@ -167,24 +174,60 @@ pub async fn record_install(
     let dir = instance_dir_of(instance_id, state).await?;
     let _guard = lock_store(&dir).await;
     let mut store = read_store(&dir).await?;
-    store
-        .records
-        .retain(|existing| existing.relative_path != record.relative_path);
+    let incoming = base_relative_path(&record.relative_path);
+    store.records.retain(|existing| {
+        base_relative_path(&existing.relative_path) != incoming
+    });
     store.records.push(record.clone());
     write_store(&dir, &store).await?;
     Ok(record)
 }
 
+/// A record's path without the suffix a disabled file carries.
+fn base_relative_path(relative_path: &str) -> &str {
+    relative_path.trim_end_matches(".disabled")
+}
+
+/// The file a record describes, whichever name it currently has on disk.
+///
+/// Disabling a content file renames it rather than moving it, so a record whose
+/// path no longer exists may still describe a file the user turned off. Reading
+/// only the recorded path made those records look deleted, which dropped them
+/// from the source-content list and left them un-updatable.
+fn existing_path(dir: &Path, relative_path: &str) -> Option<PathBuf> {
+    let path = dir.join(relative_path);
+    if path.is_file() || path.is_dir() {
+        return Some(path);
+    }
+    // A record written before a disable already carries the suffix, so it is
+    // stripped first rather than appended twice.
+    let disabled = dir.join(format!("{}.disabled", base_relative_path(relative_path)));
+    disabled.is_file().then_some(disabled)
+}
+
 /// Everything installed from a content source into an instance.
+///
+/// The returned `relative_path` is the file's *current* path, including the
+/// `.disabled` suffix when the user has turned it off, so the caller can match
+/// it against the instance's own content list.
 pub async fn list_installed(
     instance_id: &str,
     state: &State,
 ) -> crate::Result<Vec<SourceContentRecord>> {
     let dir = instance_dir_of(instance_id, state).await?;
     let mut records = read_store(&dir).await?.records;
-    records.retain(|record| {
-        let path = dir.join(&record.relative_path);
-        path.is_file() || path.is_dir()
+    records.retain_mut(|record| {
+        let Some(path) = existing_path(&dir, &record.relative_path) else {
+            return false;
+        };
+        if let Ok(relative) = path.strip_prefix(&dir) {
+            record.relative_path = relative
+                .components()
+                .map(|component| component.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/");
+        }
+        true
     });
     records.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
     Ok(records)
@@ -229,6 +272,7 @@ mod tests {
                 content_type: ContentType::World,
                 relative_path: "saves/City".to_string(),
                 name: "City".to_string(),
+                author: Some("pixelmap".to_string()),
                 icon_url: None,
                 install_rule: None,
                 installed_at: None,
@@ -238,5 +282,11 @@ mod tests {
         let decoded: SourceContentFile = serde_json::from_slice(&encoded).unwrap();
         assert_eq!(decoded.records.len(), 1);
         assert_eq!(decoded.records[0].content_type, ContentType::World);
+    }
+
+    #[test]
+    fn a_disabled_file_still_matches_its_record() {
+        assert_eq!(base_relative_path("mods/a.jar.disabled"), "mods/a.jar");
+        assert_eq!(base_relative_path("mods/a.jar"), "mods/a.jar");
     }
 }

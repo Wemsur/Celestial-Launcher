@@ -230,6 +230,8 @@ export interface InstallMetadata {
 	versionId?: string
 	versionName?: string
 	name?: string
+	/** The project's author as the source reported it. */
+	author?: string
 	iconUrl?: string
 	installRule?: Record<string, unknown>
 }
@@ -244,6 +246,7 @@ export interface SourceContentRecord {
 	content_type: string
 	relative_path: string
 	name: string
+	author?: string | null
 	icon_url?: string | null
 	install_rule?: Record<string, unknown> | null
 	installed_at?: number | null

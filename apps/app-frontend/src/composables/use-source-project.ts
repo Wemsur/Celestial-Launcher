@@ -91,6 +91,35 @@ export function forgetSourceProject(sourceId: string, projectId: string): void {
 	}
 }
 
+/**
+ * The version a download would resolve to when the user did not name one.
+ *
+ * A record without a version cannot be checked for updates: the source is asked
+ * "is this newer than what is installed" and has nothing to compare against. So
+ * an install records the version it actually gets, read from the same listing
+ * the project page shows.
+ */
+async function resolvedVersionId(
+	provider: ContentSourceProvider | undefined,
+	projectId: string,
+	contentType: ContentType,
+): Promise<string | undefined> {
+	if (!provider?.versions) return undefined
+	try {
+		const versions = await provider.versions(projectId, {
+			contentType,
+			sort: 'newest',
+			page: 1,
+			limit: 1,
+		})
+		return versions[0]?.id
+	} catch {
+		// No version only costs the record its current-version marker; the
+		// install itself still works.
+		return undefined
+	}
+}
+
 export interface SourceProjectState {
 	sourceId: ComputedRef<string>
 	projectId: ComputedRef<string>
@@ -234,12 +263,20 @@ export function useSourceProject(): SourceProjectState {
 		const run = async (targetInstanceId?: string) => {
 			installing.value = true
 			try {
+				// An update check compares the installed version against the
+				// source's answer, so an install that did not name a version has to
+				// record the one it actually resolved. Otherwise the record has no
+				// `currentVersionId` and every check reports an update.
+				const versionId =
+					options?.versionId ??
+					(await resolvedVersionId(current, projectId.value, contentType.value))
 				const metadata = {
 					sourceId: sourceId.value,
 					projectId: projectId.value,
-					versionId: options?.versionId,
+					versionId,
 					versionName: options?.versionName,
 					name: project.value?.name ?? projectId.value,
+					author: project.value?.author ?? undefined,
 					iconUrl: project.value?.iconUrl ?? undefined,
 					// A hand-picked file is remembered as the rule, so a later
 					// update check matches the same asset rather than re-guessing.
@@ -253,7 +290,7 @@ export function useSourceProject(): SourceProjectState {
 							contentType.value,
 							await current.resolveDownload(
 								projectId.value,
-								options?.versionId,
+								versionId,
 								options?.fileId,
 							),
 							metadata,
@@ -263,7 +300,7 @@ export function useSourceProject(): SourceProjectState {
 							sourceId: sourceId.value,
 							projectId: projectId.value,
 							contentType: contentType.value,
-							versionId: options?.versionId,
+							versionId,
 							fileId: options?.fileId,
 							instanceId: targetInstanceId,
 							meta: metadata,

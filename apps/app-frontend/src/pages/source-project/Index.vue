@@ -27,7 +27,12 @@
 			:project="headerProject"
 			:project-v3="headerProjectV3"
 			stack-actions-when-narrow
-			@category="(category) => router.push(`${browsePath}?f=categories:${category}`)"
+			@category="
+				(category) =>
+					router.push(
+						`${browsePath}${browsePath.includes('?') ? '&' : '?'}f=categories:${category}`,
+					)
+			"
 		>
 			<template #actions>
 				<Button
@@ -222,7 +227,7 @@ import { RouterView, useRoute, useRouter } from 'vue-router'
 import {
 	browseListLocation,
 	setSplitDetailColor,
-	sourceProjectBasePathOf,
+	sourceProjectHref,
 	useSplitView,
 } from '@/composables/use-split-view.ts'
 import { useSourceProject } from '@/composables/use-source-project'
@@ -385,7 +390,7 @@ function sourceProjectLocation(target: { sourceId: string; projectId: string; co
 				query: browseListLocation(route).query,
 			}
 		}
-		return { path: `/project/${project}` }
+		return { path: `/project/${project}`, query: browseListLocation(route).query }
 	}
 	const source = encodeURIComponent(target.sourceId)
 	if (splitViewActive.value) {
@@ -396,7 +401,9 @@ function sourceProjectLocation(target: { sourceId: string; projectId: string; co
 	}
 	return {
 		path: `/source/${source}/${project}`,
-		query: { type: target.contentType },
+		// The type lives in the query here, and the browse context (an instance,
+		// a server, a world) rides along so the page stays associated with it.
+		query: { ...browseListLocation(route).query, type: target.contentType },
 	}
 }
 
@@ -407,26 +414,35 @@ function formatDate(iso: string): string {
 
 const browsePath = computed(() => {
 	const type = contentType.value
-	return `/browse/${type}`
+	const query = new URLSearchParams()
+	for (const [key, value] of Object.entries(route.query)) {
+		// `type` describes this project, not the list the category opens on.
+		if (key === 'type') continue
+		for (const entry of Array.isArray(value) ? value : [value]) {
+			if (entry !== null && entry !== undefined && entry !== '') {
+				query.append(key, String(entry))
+			}
+		}
+	}
+	const queryString = query.toString()
+	return queryString ? `/browse/${type}?${queryString}` : `/browse/${type}`
 })
-
-const basePath = computed(() => sourceProjectBasePathOf(route))
 
 const tabLinks = computed(() => [
 	{
 		label: formatMessage(messages.descriptionTab),
-		href: basePath.value,
+		href: sourceProjectHref(route),
 	},
 	{
 		label: formatMessage(messages.versionsTab),
-		href: `${basePath.value}/versions`,
+		href: sourceProjectHref(route, '/versions'),
 		// Keeps the tab lit while one release's own page is open.
 		subpages: ['/versions', '/version/'],
 		shown: versions.value.length > 0,
 	},
 	{
 		label: formatMessage(messages.galleryTab),
-		href: `${basePath.value}/gallery`,
+		href: sourceProjectHref(route, '/gallery'),
 		shown: (project.value?.gallery?.length ?? 0) > 0,
 	},
 ])

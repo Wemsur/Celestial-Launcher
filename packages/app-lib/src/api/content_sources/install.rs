@@ -82,6 +82,11 @@ pub struct InstallMetadata {
     /// Display name shown in the installed list; the file name is the fallback.
     #[serde(default)]
     pub name: Option<String>,
+    /// The project's author as the source reported it. The launcher has no
+    /// Modrinth metadata for a source's project, so without this the installed
+    /// row would have no author to show next to the source it came from.
+    #[serde(default)]
+    pub author: Option<String>,
     #[serde(default)]
     pub icon_url: Option<String>,
     /// Opaque rule the source matched its download with, so a later check can
@@ -181,8 +186,16 @@ async fn place_installed(
                     && record.source_id == meta.source_id
                     && record.project_id == meta.project_id
             });
+            // Updating a file the user turned off must leave it off: writing the
+            // new version under the enabled name would silently re-enable it.
+            let file_name = match previous.as_ref() {
+                Some(previous) if previous.relative_path.ends_with(".disabled") => {
+                    format!("{file_name}.disabled")
+                }
+                _ => file_name.to_string(),
+            };
             let placed =
-                install_loose_file(&instance_dir, folder, file_name, bytes).await?;
+                install_loose_file(&instance_dir, folder, &file_name, bytes).await?;
             supersede_previous_file(&instance_dir, folder, previous.as_ref(), &placed)
                 .await;
             placed
@@ -207,12 +220,29 @@ async fn place_installed(
         content_type,
         relative_path: placed.relative_path.clone(),
         name: meta.name.unwrap_or_else(|| placed.file_name.clone()),
+        author: meta.author,
         icon_url: meta.icon_url,
         install_rule: meta.install_rule,
         installed_at: None,
     };
     let record =
         super::installed::record_install(instance_id, record, state).await?;
+
+    // The file was written straight into the instance directory, outside the
+    // launcher's own install path, so nothing else knows the content changed.
+    // Flag the content cache now: otherwise the instance's content list keeps
+    // showing the old file set until its next background rescan.
+    if let Ok(scope) = crate::state::instances::commands::resolve_content_scope(
+        instance_id, None, state,
+    )
+    .await
+    {
+        crate::state::instances::commands::invalidate_content_cache(
+            &scope.instance,
+            state,
+        )
+        .await;
+    }
 
     Ok(InstalledContent {
         relative_path: placed.relative_path,

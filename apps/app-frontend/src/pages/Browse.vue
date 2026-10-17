@@ -1432,17 +1432,29 @@ async function runForeignInstall(
 
     setProjectInstalling(result.project_id, true)
     try {
+        // The record's `currentVersionId` is what a later update check compares
+        // against, so the version actually resolved here has to be recorded —
+        // otherwise every check would report the item as outdated.
+        const versionId =
+            (await provider.versions?.(source.id, {
+                contentType: installType,
+                sort: 'newest',
+                page: 1,
+                limit: 1,
+            }))?.[0]?.id ?? undefined
         const metadata = {
             sourceId: source.sourceId,
             projectId: source.id,
+            versionId,
             name: result.name,
+            author: result.author || undefined,
             iconUrl: result.icon_url ?? undefined,
         }
         const installed = provider.resolveDownload
             ? await installSourceContent(
                     targetInstanceId,
                     installType,
-                    await provider.resolveDownload(source.id),
+                    await provider.resolveDownload(source.id, versionId),
                     metadata,
                 )
             : await installViaOpenDownload({
@@ -1450,6 +1462,7 @@ async function runForeignInstall(
                     sourceId: source.sourceId,
                     projectId: source.id,
                     contentType: installType,
+                    versionId,
                     instanceId: targetInstanceId,
                     meta: metadata,
                 })

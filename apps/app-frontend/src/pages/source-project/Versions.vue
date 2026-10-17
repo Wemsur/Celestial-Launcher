@@ -60,7 +60,7 @@ import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import ContextMenu from '@/components/ui/ContextMenu.vue'
-import { sourceProjectBasePathOf } from '@/composables/use-split-view.ts'
+import { sourceProjectHref } from '@/composables/use-split-view.ts'
 import { useSourceProject } from '@/composables/use-source-project'
 import { toVersionRow } from '@/content-sources/adapter'
 import { canInstall } from '@/content-sources/open-download'
@@ -96,7 +96,7 @@ const tableProject = computed(() => ({
 type VersionRef = { id: string; name?: string; url?: string }
 
 function versionHref(version: VersionRef) {
-	return `${sourceProjectBasePathOf(route)}/version/${encodeURIComponent(version.id)}`
+	return sourceProjectHref(route, `/version/${encodeURIComponent(version.id)}`)
 }
 
 function versionUrl(version: VersionRef): string | undefined {

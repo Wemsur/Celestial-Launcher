@@ -1131,6 +1131,7 @@ mod tests {
                 granted: vec!["style".to_string()],
                 installed_at: Some(1_700_000_000),
                 source: Some("https://example.com/plugin.zip".to_string()),
+                pinned_pages: Vec::new(),
             }],
             hot_reload: true,
         };

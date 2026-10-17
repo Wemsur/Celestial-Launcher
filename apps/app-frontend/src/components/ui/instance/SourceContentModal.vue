@@ -10,6 +10,7 @@ import { Button, defineMessages, injectNotificationManager, NewModal, useVIntl }
 import { computed, ref } from 'vue'
 
 import { selectableSources } from '@/content-sources/catalog'
+import { checkSourceUpdates, sourceUpdateSupport } from '@/content-sources/installed-content'
 import {
 	forgetInstalledSourceContent,
 	installSourceContent,
@@ -18,7 +19,7 @@ import {
 } from '@/content-sources/ipc'
 import { canInstall, installViaOpenDownload } from '@/content-sources/open-download'
 import { sourceProvider } from '@/content-sources/registry'
-import type { ContentType, ContentVersion, UpdateQueryItem } from '@/content-sources/types'
+import type { ContentType, ContentVersion } from '@/content-sources/types'
 import { toError } from '@/helpers/errors'
 
 const props = defineProps<{
@@ -120,66 +121,32 @@ function hide() {
 	modal.value?.hide()
 }
 
-/**
- * Ask every source that has installed content here whether anything is newer.
- *
- * Each source is asked once and its answers are applied as soon as they arrive,
- * so a slow source does not hold up the ones that already replied.
- */
+/** Ask every source that has installed content here whether anything is newer. */
 async function checkForUpdates() {
 	checking.value = true
 	checks.value = {}
 
-	const bySource = new Map<string, SourceContentRecord[]>()
+	const answers = await checkSourceUpdates(records.value, {
+		gameVersion: props.gameVersion,
+		loader: props.loader,
+	})
+	const next: Record<string, CheckState> = {}
 	for (const record of records.value) {
-		// A world is never replaced on disk, so "is there a newer version" has no
-		// meaning for it: the way to get a newer one is to download it again.
 		if (isWorld(record)) continue
-		const list = bySource.get(record.source_id)
-		if (list) {
-			list.push(record)
-		} else {
-			bySource.set(record.source_id, [record])
+		const answer = answers[record.id]
+		if (answer?.status === 'error') {
+			next[record.id] = { status: 'error', message: answer.message }
+		} else if (answer?.status === 'ok') {
+			next[record.id] = {
+				status: 'ok',
+				latestVersionId: answer.latestVersionId,
+				latestVersionName: answer.latestVersionName,
+			}
+		} else if (!sourceUpdateSupport(record).canCheck) {
+			next[record.id] = { status: 'unsupported' }
 		}
 	}
-
-	await Promise.all(
-		[...bySource.entries()].map(async ([sourceId, items]) => {
-			const provider = sourceProvider(sourceId)
-			if (!provider?.checkUpdate) {
-				for (const item of items) {
-					checks.value = { ...checks.value, [item.id]: { status: 'unsupported' } }
-				}
-				return
-			}
-
-			try {
-				const query: UpdateQueryItem[] = items.map((item) => ({
-					id: item.project_id,
-					contentType: item.content_type as ContentType,
-					currentVersionId: item.version_id ?? undefined,
-					gameVersion: props.gameVersion,
-					loader: props.loader,
-					installRule: (item.install_rule as Record<string, unknown> | null) ?? undefined,
-				}))
-				const results = await provider.checkUpdate(query)
-				const byProject = new Map(results.map((result) => [result.id, result]))
-				const next = { ...checks.value }
-				for (const item of items) {
-					const result = byProject.get(item.project_id)
-					next[item.id] = { status: 'ok', ...result }
-				}
-				checks.value = next
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error)
-				const next = { ...checks.value }
-				for (const item of items) {
-					next[item.id] = { status: 'error', message }
-				}
-				checks.value = next
-			}
-		}),
-	)
+	checks.value = next
 
 	checking.value = false
 }
@@ -198,6 +165,7 @@ async function applyVersion(record: SourceContentRecord, versionId?: string) {
 			projectId: record.project_id,
 			versionId,
 			name: record.name,
+			author: record.author ?? undefined,
 			iconUrl: record.icon_url ?? undefined,
 			installRule: (record.install_rule as Record<string, unknown> | null) ?? undefined,
 		}

@@ -182,6 +182,30 @@ export function sourceProjectBasePathOf(route: RouteLike): string {
 	return `/source/${source}/${project}`
 }
 
+/**
+ * A source project's page at `suffix`, keeping the query that describes the
+ * browse context.
+ *
+ * The instance association (`?i=`, plus the server/world context params) lives
+ * in the query, and the discover list reads it from there. A tab link that
+ * dropped it looked like a fresh, unassociated browse session: the list would
+ * lose the instance it was filtering for as soon as the reader opened the
+ * versions tab. Modrinth's own project page carries the query the same way.
+ */
+export function sourceProjectHref(route: RouteLike, suffix = ''): string {
+	const path = `${sourceProjectBasePathOf(route)}${suffix}`
+	const params = new URLSearchParams()
+	for (const [key, value] of Object.entries(route.query)) {
+		for (const entry of Array.isArray(value) ? value : [value]) {
+			if (entry !== null && entry !== undefined && entry !== '') {
+				params.append(key, String(entry))
+			}
+		}
+	}
+	const queryString = params.toString()
+	return queryString ? `${path}?${queryString}` : path
+}
+
 /** `/browse/<type>`, keeping the open detail pane when the split view is active. */
 export function browsePathFor(projectType: string, route: RouteLike): string {
 	const base = `/browse/${projectType}`

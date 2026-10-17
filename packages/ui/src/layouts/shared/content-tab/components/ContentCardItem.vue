@@ -31,6 +31,7 @@ import type {
 	ClientWarningType,
 	ContentCardProject,
 	ContentCardVersion,
+	ContentOrigin,
 	ContentOwner,
 	ContentSource,
 } from '../types'
@@ -69,6 +70,8 @@ interface Props {
 	versionLink?: string | RouteLocationRaw
 	owner?: ContentOwner
 	source?: ContentSource
+	/** The content source this file was installed from. */
+	origin?: ContentOrigin
 	external?: boolean
 	enabled?: boolean
 	locked?: boolean
@@ -99,6 +102,7 @@ const props = withDefaults(defineProps<Props>(), {
 	versionLink: undefined,
 	owner: undefined,
 	source: undefined,
+	origin: undefined,
 	external: false,
 	enabled: undefined,
 	locked: false,
@@ -257,6 +261,30 @@ const installTooltip = computed(() => {
 					</div>
 
 					<div class="flex min-w-0 items-center gap-1">
+						<AutoLink
+							v-if="origin"
+							:target="
+								typeof origin.link === 'string' && origin.link.startsWith('http')
+									? '_blank'
+									: undefined
+							"
+							:to="origin.link"
+							class="flex shrink-0 items-center gap-1 !decoration-secondary"
+							:class="{ 'hover:underline': origin.link }"
+							:title="origin.name"
+						>
+							<Avatar
+								:src="origin.iconUrl ?? undefined"
+								:alt="origin.name"
+								size="1.25rem"
+								no-shadow
+								class="shrink-0 rounded-md"
+							/>
+							<span class="max-w-32 truncate text-sm leading-5 text-secondary">{{
+								origin.name
+							}}</span>
+						</AutoLink>
+						<BulletDivider v-if="origin" class="shrink-0" />
 						<template v-if="source">
 							<AutoLink
 								:target="
@@ -302,7 +330,10 @@ const installTooltip = computed(() => {
 							/>
 							<span class="text-sm leading-5 text-secondary">{{ owner.name }}</span>
 						</AutoLink>
-						<span v-else-if="external" class="flex items-center gap-1 text-secondary">
+						<span
+						v-else-if="external && !origin"
+						class="flex items-center gap-1 text-secondary"
+					>
 							<UploadIcon class="size-4 shrink-0" />
 							<span class="text-sm leading-5">{{ formatMessage(messages.uploaded) }}</span>
 						</span>

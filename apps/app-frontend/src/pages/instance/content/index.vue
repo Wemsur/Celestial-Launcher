@@ -161,6 +161,21 @@ import { useManagedContentPolicy } from '@/composables/instances/use-managed-con
 import { useSyncedPackActions } from '@/composables/instances/use-synced-pack-actions'
 import { useAppEvent } from '@/composables/use-app-event'
 import { type FeatureFlag, useAppSettings } from '@/composables/use-app-settings.ts'
+import {
+	canTrackUpdates,
+	checkSourceUpdates,
+	indexSourceRecords,
+	latestSourceVersion,
+	sourceOriginOf,
+	sourceRecordFor,
+	type SourceRecordsByPath,
+	type SourceUpdateAnswers,
+	sourceUpdateSupport,
+} from '@/content-sources/installed-content'
+import { installSourceContent, listInstalledSourceContent } from '@/content-sources/ipc'
+import { canInstall, installViaOpenDownload } from '@/content-sources/open-download'
+import { sourceProvider } from '@/content-sources/registry'
+import type { ContentType } from '@/content-sources/types'
 import { trackEvent } from '@/helpers/analytics'
 import { get_project_versions, get_version, get_version_many } from '@/helpers/cache.js'
 import {
@@ -240,6 +255,10 @@ const messages = defineMessages({
 		id: 'app.instance.content.source-content',
 		defaultMessage: 'Content sources',
 	},
+	openSourcePage: {
+		id: 'app.instance.content.open-source-page',
+		defaultMessage: 'Open on its content source',
+	},
 	contentTypeProject: {
 		id: 'app.instance.mods.content-type-project',
 		defaultMessage: 'project',
@@ -255,6 +274,19 @@ const messages = defineMessages({
 	bulkUpdateFinishing: {
 		id: 'app.instance.mods.bulk-update.finishing',
 		defaultMessage: 'Finishing update...',
+	},
+	bulkUpdateSourceFailed: {
+		id: 'app.instance.mods.bulk-update.source-failed',
+		defaultMessage: 'Some source content could not be updated',
+	},
+	bulkUpdateSourceFailedBody: {
+		id: 'app.instance.mods.bulk-update.source-failed-body',
+		defaultMessage:
+			'{count, plural, one {# file from a content source} other {# files from content sources}} could not be updated. Check the content source it came from and try again.',
+	},
+	sourceCannotInstall: {
+		id: 'app.instance.mods.source-cannot-install',
+		defaultMessage: '{source} cannot install this content automatically. Try updating it from the source itself.',
 	},
 })
 
@@ -318,6 +350,78 @@ const loading = ref(
 	queryClient.getQueryData(instanceKeys.content(instancePage.instanceId.value)) === undefined,
 )
 const projects = ref<ContentItem[]>([])
+
+/*
+ * Content sources are a second, independent view of the same instance: a file a
+ * source placed is an ordinary file to the launcher, so the content list has no
+ * author, version or update badge for it. The source's install records supply
+ * all three, keyed by the path the list reports.
+ */
+const sourceRecords = ref<SourceRecordsByPath>(new Map())
+/** Update answers from the sources, keyed by install-record id. */
+const sourceUpdates = ref<SourceUpdateAnswers>({})
+
+function recordOf(item: ContentItem) {
+	return sourceRecordFor(sourceRecords.value, item.file_path)
+}
+
+async function loadSourceRecords(): Promise<SourceRecordsByPath> {
+	const instanceId = instance.value?.id
+	if (!instanceId) return new Map()
+	try {
+		const records = await listInstalledSourceContent(instanceId)
+		const byPath = indexSourceRecords(records)
+		sourceRecords.value = byPath
+		return byPath
+	} catch (error) {
+		// Not knowing is the same as no source content; the file is still listed,
+		// just without its origin.
+		debug('could not load source install records', { error })
+		sourceRecords.value = new Map()
+		return new Map()
+	}
+}
+
+/**
+ * Ask the sources whether their installed content has newer versions.
+ *
+ * Runs separately from the launcher's own Modrinth check: a source's check is a
+ * plugin function that only exists in the webview, so the backend cannot call
+ * it. The answers are folded into the same `has_update` flags the list uses.
+ *
+ * Throttled like the launcher's own check: this runs on every content refresh,
+ * and each source's check is real network traffic, so asking again within a few
+ * minutes would only cost requests for an answer that has not changed.
+ */
+const SOURCE_UPDATE_CHECK_INTERVAL = 5 * 60_000
+let lastSourceUpdateCheck = 0
+
+async function refreshSourceUpdates(force = false) {
+	if (!force && Date.now() - lastSourceUpdateCheck < SOURCE_UPDATE_CHECK_INTERVAL) return
+	lastSourceUpdateCheck = Date.now()
+
+	const records = [...new Set(sourceRecords.value.values())]
+	if (records.length === 0) {
+		sourceUpdates.value = {}
+		return
+	}
+	const answers = await checkSourceUpdates(records, {
+		gameVersion: instance.value?.game_version,
+		loader: instance.value?.loader,
+	})
+	sourceUpdates.value = answers
+}
+
+function sourceUpdateVersionId(item: ContentItem): string | null {
+	const record = recordOf(item)
+	if (!record) return null
+	return latestSourceVersion(sourceUpdates.value, record)
+}
+
+/** The launcher's update badge, extended to files a content source installed. */
+function hasSourceUpdate(item: ContentItem): boolean {
+	return canUpdateProject(item) || Boolean(sourceUpdateVersionId(item))
+}
 
 const installingBuffer = ref<ContentItem[]>([])
 const handledInstallRevision = ref(0)
@@ -1059,8 +1163,18 @@ async function bulkUpdateAllProjects(onProgress?: (status: BulkOperationStatus) 
 			})
 		}
 
-		await update_all(instance.value.id)
+		// The Modrinth pass and the source pass are independent: one failing
+		// should not cancel the other. The Modrinth error is rethrown after the
+		// source pass so the caller still sees it.
+		let modrinthError: unknown = null
+		try {
+			await update_all(instance.value.id)
+		} catch (error) {
+			modrinthError = error
+		}
+		await updateAllSourceContent(onProgress)
 		await refreshContentState('must_revalidate')
+		if (modrinthError) throw modrinthError
 	} catch (err) {
 		handleError(err as Error)
 		throw err
@@ -1069,12 +1183,129 @@ async function bulkUpdateAllProjects(onProgress?: (status: BulkOperationStatus) 
 	}
 }
 
+/**
+ * Update every source-installed file whose source can apply an update itself.
+ *
+ * Deliberately narrower than the single-item path: a source that can only open
+ * a download window needs the user in front of it, so it is left out of "update
+ * all" and stays a per-row action. A file the user disabled is updated too —
+ * the install keeps it disabled — because "update all" should not silently
+ * leave something stale just because it is currently off.
+ */
+async function updateAllSourceContent(onProgress?: (status: BulkOperationStatus) => void) {
+	const pending = projects.value.filter((item) => {
+		if (item.locked || !canMutateContent(item)) return false
+		const record = recordOf(item)
+		if (!record || !canTrackUpdates(record)) return false
+		if (!sourceUpdateVersionId(item)) return false
+		return sourceUpdateSupport(record).canApplyAutomatically
+	})
+	if (pending.length === 0) return
+
+	const total = pending.length
+	let current = 0
+	let failed = 0
+	for (const item of pending) {
+		onProgress?.({
+			message: formatMessage(messages.bulkUpdateDownloadingProjects, { current, total }),
+			progress: current,
+			total,
+		})
+		try {
+			await updateSourceContent(item, sourceUpdateVersionId(item)!)
+		} catch (error) {
+			failed += 1
+			debug('bulk source update failed', { file: item.file_path, error })
+		}
+		current += 1
+	}
+
+	onProgress?.({
+		message: formatMessage(messages.bulkUpdateFinishing),
+		progress: total,
+		total,
+	})
+	if (failed > 0) {
+		addNotification({
+			title: formatMessage(messages.bulkUpdateSourceFailed),
+			text: formatMessage(messages.bulkUpdateSourceFailedBody, { count: failed }),
+			type: 'warning',
+		})
+	}
+}
+
+/**
+ * Apply a newer version of content a content source installed.
+ *
+ * The launcher's own update path resolves a Modrinth version and rewrites the
+ * content entries, which a source's project has none of. Instead the source is
+ * asked for the new version's file — the same descriptor an install uses — and
+ * the launcher installs it over the existing file, replacing its record.
+ *
+ * A source that can only open a download window needs the user to fetch the
+ * file, so this cannot run silently; the caller decides whether to allow it.
+ */
+async function updateSourceContent(item: ContentItem, versionId: string) {
+	const record = recordOf(item)
+	if (!record) throw new Error('This file is not tracked by a content source.')
+	const provider = sourceProvider(record.source_id)
+	if (!provider || !canInstall(provider)) {
+		throw new Error(
+			formatMessage(messages.sourceCannotInstall, { source: sourceOriginOf(record).name }),
+		)
+	}
+
+	const metadata = {
+		sourceId: record.source_id,
+		projectId: record.project_id,
+		versionId,
+		name: record.name,
+		author: record.author ?? undefined,
+		iconUrl: record.icon_url ?? undefined,
+		installRule: (record.install_rule as Record<string, unknown> | null) ?? undefined,
+	}
+
+	if (provider.resolveDownload) {
+		await installSourceContent(
+			instance.value.id,
+			record.content_type,
+			await provider.resolveDownload(record.project_id, versionId),
+			metadata,
+		)
+	} else {
+		await installViaOpenDownload({
+			provider,
+			sourceId: record.source_id,
+			projectId: record.project_id,
+			contentType: record.content_type as ContentType,
+			versionId,
+			instanceId: instance.value.id,
+			meta: metadata,
+		})
+	}
+}
+
 async function updateProject(mod: ContentItem) {
-	if (!canUpdateProject(mod) || mod.locked) return
+	if (mod.locked || !canMutateContent(mod)) return
+	const record = recordOf(mod)
+	const sourceVersionId = sourceUpdateVersionId(mod)
+	// A source-installed file has no Modrinth version to switch to, so its
+	// update is the source's own answer rather than `canUpdateProject`.
+	if (!(record && sourceVersionId) && !canUpdateProject(mod)) return
 	const operation = beginContentOperation(mod)
 	if (!operation) return
 
 	try {
+		if (record && sourceVersionId) {
+			await updateSourceContent(mod, sourceVersionId)
+			addNotification({
+				title: `已更新「${record.name}」`,
+				text: `来自内容源「${sourceOriginOf(record).name}」`,
+				type: 'success',
+			})
+			return
+		}
+
 		const updateVersionId = mod.update_version_id!
 		await switch_project_version_with_dependencies(
 			instance.value.id,
@@ -1126,8 +1357,17 @@ async function switchProjectVersion(mod: ContentItem, version: Labrinth.Versions
 
 async function handleUpdate(id: string) {
 	const item = projects.value.find((p) => getContentItemId(p) === id)
-	if (!item || item.locked || !canUpdateProject(item) || !item.project?.id || !item.version?.id)
+	if (!item || item.locked) return
+
+	// Content a source installed has no Modrinth versions to pick from, so its
+	// update goes straight to the source's own answer rather than the version
+	// picker the Modrinth path opens.
+	if (recordOf(item) && sourceUpdateVersionId(item)) {
+		await updateProject(item).catch(() => {})
 		return
+	}
+
+	if (!canUpdateProject(item) || !item.project?.id || !item.version?.id) return
 
 	const requestId = beginUpdateRequest()
 	const itemId = getContentItemId(item)
@@ -1331,7 +1571,9 @@ async function refreshManagedContentItems(cacheBehaviour?: CacheBehaviour) {
 }
 
 async function refreshContentState(cacheBehaviour?: CacheBehaviour) {
-	await initProjects(cacheBehaviour)
+	// A revalidating refresh follows something that just changed, so the source
+	// update check runs again rather than waiting out its throttle.
+	await initProjects(cacheBehaviour, 0, cacheBehaviour === 'must_revalidate')
 	await refreshManagedContentItems(cacheBehaviour)
 }
 
@@ -1613,6 +1855,20 @@ function getOverflowOptions(item: ContentItem): ButtonMenuOption[] {
 		)
 	}
 
+	// A source-installed row has no Modrinth page behind it, so the one link
+	// worth offering is the source's own project page.
+	const origin = recordOf(item)
+	if (origin) {
+		options.push({
+			id: 'open-source-page',
+			label: formatMessage(messages.openSourcePage),
+			icon: CompassIcon,
+			action: () => {
+				void router.push(sourceOriginOf(origin).link)
+			},
+		})
+	}
+
 	return options
 }
 
@@ -1636,15 +1892,47 @@ async function handleContentFreeze(item: ContentItem, frozen: boolean) {
 	}
 }
 
-async function initProjects(cacheBehaviour?: CacheBehaviour, staleTime = 0) {
+async function initProjects(
+	cacheBehaviour?: CacheBehaviour,
+	staleTime = 0,
+	forceSourceUpdates = false,
+) {
 	if (!instance.value) return
 
-	const contentData = await queryClient.fetchQuery({
-		...instanceContentQueryOptions(instance.value.id),
-		queryFn: () => loadInstanceContentData(instance.value.id, cacheBehaviour, handleError),
-		staleTime,
-	})
+	const [, contentData] = await Promise.all([
+		loadSourceRecords(),
+		queryClient.fetchQuery({
+			...instanceContentQueryOptions(instance.value.id),
+			queryFn: () => loadInstanceContentData(instance.value.id, cacheBehaviour, handleError),
+			staleTime,
+		}),
+	])
 	applyContentData(contentData)
+	void refreshSourceUpdates(forceSourceUpdates).then(() => {
+		applySourceFields()
+	})
+}
+
+/**
+ * Re-derive the fields that come from a source's install records.
+ *
+ * The records load alongside the content list rather than before it, so the
+ * first paint may have mapped rows without an author; this runs once they are
+ * in and once the update answers are back.
+ */
+function applySourceFields() {
+	projects.value = projects.value.map((item) => {
+		const record = recordOf(item)
+		return {
+			...item,
+			owner:
+				item.owner ??
+				(record?.author
+					? { id: record.author, name: record.author, type: 'user' as const }
+					: undefined),
+			has_update: hasSourceUpdate(item),
+		}
+	})
 }
 
 function applyContentData(contentData: InstanceContentData) {
@@ -1657,10 +1945,23 @@ function applyContentData(contentData: InstanceContentData) {
 		return true
 	}
 
-	projects.value = contentData.contentItems.map((item) => ({
-		...item,
-		has_update: canUpdateProject(item),
-	}))
+	projects.value = contentData.contentItems.map((item) => {
+		const record = recordOf(item)
+		return {
+			...item,
+			// A source's project has no Modrinth metadata behind it, so the row's
+			// author comes from the install record instead.
+			owner:
+				item.owner ??
+				(record?.author
+					? { id: record.author, name: record.author, type: 'user' as const }
+					: undefined),
+			has_update: hasSourceUpdate(item),
+		}
+	})
+	// The skeleton query can land before the source records do, in which case the
+	// rows above have no origin yet; re-derive them once both are in.
+	if (!contentData.partial) applySourceFields()
 
 	// Placeholder rows know nothing about the linked modpack, so leave whatever
 	// the real query already established alone rather than clearing it.
@@ -1770,9 +2071,15 @@ provideContentManager({
 		owner: item.owner
 			? {
 					...item.owner,
-					link: contentOwnerLink(item.owner),
+					// A source's author is a plain name with no profile behind it,
+					// so it must not become a link to a Modrinth user of that name.
+					link: recordOf(item)?.author === item.owner.id ? undefined : contentOwnerLink(item.owner),
 				}
 			: undefined,
+		origin: (() => {
+			const record = recordOf(item)
+			return record ? sourceOriginOf(record) : undefined
+		})(),
 		external: item.external ?? !item.project,
 		enabled: canMutateContent(item) ? item.enabled : undefined,
 		synced: !!item.synced_pack,
@@ -1780,8 +2087,10 @@ provideContentManager({
 		locked: item.locked,
 		installing: item.installing,
 		hideDelete: !canDeleteContent(item),
+		// A source's content has no Modrinth versions, and this menu switches
+		// through the Modrinth update path, so it stays hidden for those rows.
 		hideSwitchVersion: !canChangeContentVersion(item) || !item.project?.id || !item.version?.id,
-		hasUpdate: canUpdateProject(item) && !item.locked,
+		hasUpdate: hasSourceUpdate(item) && !item.locked,
 	}),
 	showSharedContentFilter,
 	filterPersistKey: instance.value.id,

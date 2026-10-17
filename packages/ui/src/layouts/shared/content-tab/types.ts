@@ -27,6 +27,18 @@ export interface ContentSource {
 	link?: string | RouteLocationRaw | (() => void)
 }
 
+/**
+ * Where a row's content was installed from, for a content source. Shown before
+ * the author so a list mixing Modrinth and third-party content says which
+ * catalogue each file came from.
+ */
+export interface ContentOrigin {
+	sourceId: string
+	name: string
+	iconUrl?: string | null
+	link?: string | RouteLocationRaw
+}
+
 export type ClientWarningType = 'retained' | 'depends' | 'environment'
 
 export type ContentSourceKind =
@@ -58,6 +70,8 @@ export interface ContentCardTableItem {
 	versionLink?: string | RouteLocationRaw
 	owner?: ContentOwner
 	source?: ContentSource
+	/** Which content source the file was installed from, if any. */
+	origin?: ContentOrigin
 	external?: boolean
 	enabled?: boolean
 	locked?: boolean
