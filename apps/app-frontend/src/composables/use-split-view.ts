@@ -31,6 +31,25 @@ export const PLAIN_ROUTE_NAME_BY_SUBPAGE = {
 	gallery: 'Gallery',
 } as const
 
+/**
+ * The same tab names for a content source's project. A source page is a
+ * separate route tree from a Modrinth project's, so splitting one and closing it
+ * again has to name the source's own records rather than the Modrinth ones.
+ */
+export const SPLIT_SOURCE_ROUTE_NAME_BY_SUBPAGE = {
+	description: 'DiscoverSplitSourceProjectDescription',
+	versions: 'DiscoverSplitSourceProjectVersions',
+	version: 'DiscoverSplitSourceProjectVersion',
+	gallery: 'DiscoverSplitSourceProjectGallery',
+} as const
+
+export const PLAIN_SOURCE_ROUTE_NAME_BY_SUBPAGE = {
+	description: 'SourceProjectDescription',
+	versions: 'SourceProjectVersions',
+	version: 'SourceProjectVersion',
+	gallery: 'SourceProjectGallery',
+} as const
+
 export type ProjectSubpage = keyof typeof SPLIT_ROUTE_NAME_BY_SUBPAGE
 
 /**
@@ -114,6 +133,11 @@ export function isPlainProjectRoute(route: RouteLike): boolean {
 	)
 }
 
+/** True only for a content source's project opened at full width. */
+export function isPlainSourceProjectRoute(route: RouteLike): boolean {
+	return route.matched.some((record) => record.name === PLAIN_SOURCE_PROJECT_ROUTE_NAME)
+}
+
 /** True for both `/project/:id` and the split view's `/browse/:projectType/p/:id`. */
 export function isProjectDetailRoute(route: RouteLike): boolean {
 	return isPlainProjectRoute(route) || isSplitProjectRoute(route)
@@ -121,10 +145,17 @@ export function isProjectDetailRoute(route: RouteLike): boolean {
 
 export function projectSubpageOf(route: RouteLike): ProjectSubpage {
 	const name = typeof route.name === 'string' ? route.name : ''
+	// A source project's tabs are named in their own records, so all four maps
+	// have to be consulted — matching only the Modrinth ones would drop a source
+	// project's versions or gallery tab back to its description on a toggle.
+	const namesBySubpage = [
+		SPLIT_ROUTE_NAME_BY_SUBPAGE,
+		PLAIN_ROUTE_NAME_BY_SUBPAGE,
+		SPLIT_SOURCE_ROUTE_NAME_BY_SUBPAGE,
+		PLAIN_SOURCE_ROUTE_NAME_BY_SUBPAGE,
+	]
 	for (const subpage of Object.keys(SPLIT_ROUTE_NAME_BY_SUBPAGE) as ProjectSubpage[]) {
-		if (name === SPLIT_ROUTE_NAME_BY_SUBPAGE[subpage] || name === PLAIN_ROUTE_NAME_BY_SUBPAGE[subpage]) {
-			return subpage
-		}
+		if (namesBySubpage.some((names) => name === names[subpage])) return subpage
 	}
 	return 'description'
 }
@@ -302,11 +333,40 @@ export function useSplitView() {
 
 	function enterSplitView() {
 		const current = router.currentRoute.value
-		const id = String(current.params.id ?? '')
-		if (!isPlainProjectRoute(current) || !id) return
+		if (!isPlainProjectRoute(current)) return
 
 		const target = resolveBrowseTarget(current)
 		const subpage = projectSubpageOf(current)
+
+		// A content source's project is a different route tree, keyed by the
+		// source and its project id rather than Modrinth's single id. Splitting it
+		// names the source's own records so its page — and its own tabs — survive
+		// the move, instead of the switch silently doing nothing.
+		//
+		// The source page carries its content type in `?type=` at full width and
+		// reads it back from the split route's `:projectType`, which the left list
+		// also uses for its tab — so the type is the project's own, and the list
+		// opens on that type's tab. The list's own filters still ride along.
+		const source = String(current.params.sourceId ?? '')
+		const project = String(current.params.projectId ?? '')
+		if (isPlainSourceProjectRoute(current)) {
+			if (!source || !project) return
+			const sourceParams: Record<string, string> = {
+				projectType: String(current.query.type ?? target.projectType),
+				sourceId: source,
+				projectId: project,
+			}
+			if (subpage === 'version') sourceParams.version = String(current.params.version ?? '')
+			void router.push({
+				name: SPLIT_SOURCE_ROUTE_NAME_BY_SUBPAGE[subpage],
+				params: sourceParams,
+				query: { ...target.query, ...pickContextQuery(current.query) },
+			})
+			return
+		}
+
+		const id = String(current.params.id ?? '')
+		if (!id) return
 		const params: Record<string, string> = { projectType: target.projectType, id }
 		if (subpage === 'version') params.version = String(current.params.version ?? '')
 
@@ -319,10 +379,36 @@ export function useSplitView() {
 
 	function exitSplitView() {
 		const current = router.currentRoute.value
-		const id = String(current.params.id ?? '')
-		if (!isSplitProjectRoute(current) || !id) return
+		if (!isSplitProjectRoute(current)) return
 
 		const subpage = projectSubpageOf(current)
+
+		// The source tree again: its full-width route takes the source and project
+		// id, and its tabs are its own records.
+		const source = String(current.params.sourceId ?? '')
+		const project = String(current.params.projectId ?? '')
+		if (isSourceSplitProjectRoute(current)) {
+			if (!source || !project) return
+			const sourceParams: Record<string, string> = { sourceId: source, projectId: project }
+			if (subpage === 'version') sourceParams.version = String(current.params.version ?? '')
+			// The full-width route has no `:projectType` segment, so the type has
+			// to move back into `?type=` or the page loses which kind of content it
+			// is showing — and with it the install path that depends on the type.
+			const type = String(current.params.projectType ?? '')
+			void router.push({
+				name: PLAIN_SOURCE_ROUTE_NAME_BY_SUBPAGE[subpage],
+				params: sourceParams,
+				query: {
+					...pickContextQuery(current.query),
+					...(type ? { type } : {}),
+					b: browseListFullPath(current),
+				},
+			})
+			return
+		}
+
+		const id = String(current.params.id ?? '')
+		if (!id) return
 		const params: Record<string, string> = { id }
 		if (subpage === 'version') params.version = String(current.params.version ?? '')
 

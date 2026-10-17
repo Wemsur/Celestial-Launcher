@@ -36,7 +36,7 @@ import {
 } from '@modrinth/ui'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { Ref } from 'vue'
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { LocationQuery } from 'vue-router'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 
@@ -92,6 +92,7 @@ import {
     list as listInstances,
 } from '@/helpers/instance'
 import { get_loader_versions as getLoaderManifest } from '@/helpers/metadata'
+import { clearListScroll, rememberListScroll, restoreListScroll } from '@/helpers/list-scroll'
 import { get as getSettings, set as setSettings } from '@/helpers/settings.ts'
 import { get_categories, get_game_versions, get_loaders } from '@/helpers/tags'
 import { get_instance_worlds } from '@/helpers/worlds'
@@ -185,6 +186,67 @@ const splitDetailSuffix = computed(() => {
  */
 const splitPaneTint = computed(() => sourceTintStyle(splitDetailTintColor.value))
 const serverSetupModalRef = ref<InstanceType<typeof CreationFlowModal> | null>(null)
+
+/*
+ * The list's own scroller in split view, and the app viewport that scrolls it at
+ * full width. The two are different elements — in split view the viewport gives
+ * up scrolling so each pane gets its own bar — so a switch between the layouts
+ * moves the list to a fresh, zeroed container. The position is kept as a
+ * fraction of the scrollable height and restored onto whichever container takes
+ * over (see helpers/list-scroll).
+ */
+const listPaneRef = ref<HTMLElement | null>(null)
+
+function currentListScroller(): HTMLElement | null {
+    if (splitViewActive.value) return listPaneRef.value
+    return document.querySelector<HTMLElement>('.app-viewport')
+}
+
+/*
+ * The ratio is remembered on every scroll rather than read at the switch: the
+ * switch re-renders first, so by the time a watcher fires the old container has
+ * already given up scrolling and reset to zero.
+ */
+let scrollTarget: HTMLElement | null = null
+
+function onListScroll() {
+    rememberListScroll(scrollTarget)
+}
+
+function attachScrollListener() {
+    const next = currentListScroller()
+    if (next === scrollTarget) return
+    scrollTarget?.removeEventListener('scroll', onListScroll)
+    scrollTarget = next
+    scrollTarget?.addEventListener('scroll', onListScroll, { passive: true })
+}
+
+/*
+ * Restoring is tied to *entering* split view, the one move that swaps the list's
+ * container while keeping the list: the list is already on screen, so only the
+ * element scrolling it changes. Every other way of reaching the list — a fresh
+ * navigation, or leaving split view — starts it at the top, so a position from
+ * earlier cannot resurface on a list the reader has not touched.
+ */
+watch(splitViewActive, async (active) => {
+    await nextTick()
+    attachScrollListener()
+    if (active) restoreListScroll(listPaneRef.value)
+})
+
+onMounted(async () => {
+    await nextTick()
+    attachScrollListener()
+    // Mounted straight into split view (a project opened beside the list):
+    // restore. Mounted at full width (a plain visit to discover): start fresh.
+    if (splitViewActive.value) restoreListScroll(listPaneRef.value)
+    else clearListScroll()
+})
+
+onBeforeUnmount(() => {
+    scrollTarget?.removeEventListener('scroll', onListScroll)
+    scrollTarget = null
+})
 const serverInstallContent = createServerInstallContent({ serverSetupModalRef })
 provideServerInstallContent(serverInstallContent)
 const {
@@ -2058,7 +2120,7 @@ provideBrowseManager({
 
 <template>
     <div class="browse-shell" :class="{ 'browse-shell--split': splitViewActive }">
-        <div class="browse-list-pane">
+        <div ref="listPaneRef" class="browse-list-pane">
             <div class="browse-list-content flex flex-col gap-3 p-6">
                 <BrowsePageLayout>
                     <template #tabs-actions>
