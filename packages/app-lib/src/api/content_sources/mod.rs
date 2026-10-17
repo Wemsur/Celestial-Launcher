@@ -35,8 +35,8 @@ pub use install::{
     DownloadedSkin, FileHash, InstallDescriptor, InstallMetadata, InstalledContent,
     SKINS_DIR, StagedModpack, download_staging_dir, install_content,
     install_content_from_path, is_safe_staged_file_name, list_downloaded_skins,
-    prepare_staged_download, skins_dir, stage_modpack, staged_download_target,
-    take_staged_download,
+    prepare_staged_download, skins_dir, stage_modpack, staged_download_size,
+    staged_download_target, take_staged_download,
 };
 pub use installed::{
     SourceContentRecord, forget_install, list_installed, record_install,

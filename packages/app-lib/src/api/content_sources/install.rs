@@ -383,6 +383,14 @@ pub async fn take_staged_download(folder: &Path) -> crate::Result<Option<PathBuf
     Ok(None)
 }
 
+/// The size of the file a download has staged so far, or `None` while there is
+/// none. Used to tell a download that has settled from one still arriving: a
+/// size that stops changing across polls means the bytes are in.
+pub async fn staged_download_size(folder: &Path) -> Option<u64> {
+    let path = take_staged_download(folder).await.ok()??;
+    io::metadata(&path).await.ok().map(|metadata| metadata.len())
+}
+
 /// Delete per-download folders left over from earlier, unfinished downloads.
 async fn prune_staged_downloads(staging: &Path) {
     const GRACE: std::time::Duration = std::time::Duration::from_secs(60 * 60);

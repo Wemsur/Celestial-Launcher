@@ -336,8 +336,9 @@ pub async fn content_source_open_download_window<R: tauri::Runtime>(
 /// user's Downloads folder with a save prompt: on `Requested` it moves the
 /// download into that folder — keeping the site's own file name when it is a
 /// safe one, falling back to the suggested name otherwise — and lets the
-/// download proceed. The window is then polled until it closes, at which point
-/// the folder's contents say whether there is a file to install.
+/// download proceed. The page has done its job at that point, so the window is
+/// hidden there and then; the download keeps arriving on the webview behind it,
+/// and the window is destroyed once the file has landed.
 async fn open_download_window<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     url: url::Url,
@@ -363,11 +364,18 @@ async fn open_download_window<R: tauri::Runtime>(
         })
         .unwrap_or_else(|| folder_for_handler.join("download"));
 
-    // Set when a download actually completes. The site's page is a browser, so
-    // the user can also just close the window, and a download cut short by that
-    // must not be handed on as an install.
+    // Set when a download starts, completes, or is reported failed. The handler
+    // runs on the webview's own thread, so atomics are the hand-off back to this
+    // poll loop — which is where the window is actually hidden and closed, so the
+    // handler stays free of side effects.
+    let started = Arc::new(AtomicBool::new(false));
+    let started_for_handler = started.clone();
     let finished = Arc::new(AtomicBool::new(false));
     let finished_for_handler = finished.clone();
+    let failed = Arc::new(AtomicBool::new(false));
+    let failed_for_handler = failed.clone();
+
+    tracing::info!(url = %url, folder = %folder.display(), "opening content-source download window");
 
     let window = tauri::WebviewWindowBuilder::new(
         &app,
@@ -382,7 +390,7 @@ async fn open_download_window<R: tauri::Runtime>(
     .center()
     .on_download(move |_webview, event| {
         match event {
-            DownloadEvent::Requested { destination, .. } => {
+            DownloadEvent::Requested { url, destination } => {
                 // Keep the site's own file name when it is safe, so the installed
                 // mod is named as the site named it; otherwise use the suggested
                 // name. Either way the file lands in the folder we created — the
@@ -395,13 +403,18 @@ async fn open_download_window<R: tauri::Runtime>(
                     Some(name) => folder_for_handler.join(name),
                     None => fallback.clone(),
                 };
+                tracing::info!(url = %url, destination = %destination.display(), "download requested");
+                started_for_handler.store(true, Ordering::SeqCst);
             }
-            DownloadEvent::Finished { success, .. } => {
+            DownloadEvent::Finished { url, path, success } => {
                 // The path is empty on macOS even on success, so the flag — not
                 // the path — is what says the bytes arrived; the folder is read
                 // afterwards for the file itself.
+                tracing::info!(url = %url, path = ?path, success, "download finished");
                 if success {
                     finished_for_handler.store(true, Ordering::SeqCst);
+                } else {
+                    failed_for_handler.store(true, Ordering::SeqCst);
                 }
             }
             _ => {}
@@ -412,30 +425,99 @@ async fn open_download_window<R: tauri::Runtime>(
 
     window.request_user_attention(Some(UserAttentionType::Critical))?;
 
-    // A user can solve a captcha and wait on a slow download, so the window is
-    // given a generous hour; it closes as soon as the user is done either way.
+    // Wait for the download to start, then finish or fail, or the hour to run
+    // out. The window is hidden the moment the download begins — the page has
+    // done its job — and closed once the file has landed. It is *hidden*, not
+    // closed, while the download runs: destroying the webview would cancel it.
+    //
+    // Completion is watched two ways, because the finish event alone is not
+    // dependable: the webview reports it, *and* the staged file is watched for a
+    // size that has stopped growing. The size fallback is used only while the
+    // event has said nothing at all, so a reported failure is never mistaken for
+    // a settled partial file.
     let start = std::time::Instant::now();
-    while start.elapsed() < std::time::Duration::from_secs(60 * 60) {
+    let mut hidden = false;
+    let mut stable_size: Option<u64> = None;
+    let mut stable_polls = 0u32;
+    // Set when the size fallback decides the download is done — a second way to
+    // reach "completed", for when the finish event never arrives.
+    let mut settled = false;
+    loop {
+        if !hidden && started.load(Ordering::SeqCst) {
+            tracing::info!("download started; hiding window");
+            let _ = window.hide();
+            hidden = true;
+        }
+        if finished.load(Ordering::SeqCst) {
+            tracing::info!("download reported finished");
+            break;
+        }
+        if failed.load(Ordering::SeqCst) {
+            tracing::warn!("download reported failed");
+            break;
+        }
         if window.title().is_err() {
+            // Only reachable before the window was hidden — a download that never
+            // started, on a page the user then closed.
+            tracing::info!("download window closed by the user");
+            break;
+        }
+        // The size fallback only applies once the download is under way; before
+        // that the folder is empty and there is nothing to settle.
+        if hidden {
+            match theseus::content_sources::staged_download_size(&folder).await {
+                Some(size) if Some(size) == stable_size && size > 0 => {
+                    stable_polls += 1;
+                    if stable_polls >= 5 {
+                        tracing::info!(size, "staged download settled");
+                        settled = true;
+                        break;
+                    }
+                }
+                other => {
+                    stable_size = other;
+                    stable_polls = 0;
+                }
+            }
+        }
+        if start.elapsed() >= std::time::Duration::from_secs(60 * 60) {
+            tracing::warn!("download window timed out");
             break;
         }
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }
     let _ = window.close();
 
-    // No completed download — the user closed the window without finishing one.
-    // The empty folder is dropped, and this reports no download rather than an
-    // error, so cancelling is a normal outcome rather than a failure.
-    if !finished.load(Ordering::SeqCst) {
+    // No completed download — the user closed the window without finishing one,
+    // or the download failed. The empty folder is dropped, and this reports no
+    // download rather than an error, so cancelling is a normal outcome rather
+    // than a failure.
+    if !finished.load(Ordering::SeqCst) && !settled {
         let _ = tokio::fs::remove_dir_all(&folder).await;
         return Ok(None);
     }
 
-    // The folder was created empty and only this window writes to it, so the one
-    // file in it is the download.
-    match theseus::content_sources::take_staged_download(&folder).await? {
-        Some(path) => Ok(Some(path.to_string_lossy().into_owned())),
+    // The completion event can land a moment before the bytes are flushed to
+    // disk, so the folder is given a short grace period to show the file.
+    let mut captured = None;
+    for _ in 0..30 {
+        if let Some(path) = theseus::content_sources::take_staged_download(&folder).await? {
+            captured = Some(path);
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+
+    match captured {
+        Some(path) => {
+            tracing::info!(path = %path.display(), "captured staged download");
+            Ok(Some(path.to_string_lossy().into_owned()))
+        }
         None => {
+            tracing::warn!(
+                folder = %folder.display(),
+                "download reported finished but no file was staged"
+            );
             let _ = tokio::fs::remove_dir_all(&folder).await;
             Ok(None)
         }
