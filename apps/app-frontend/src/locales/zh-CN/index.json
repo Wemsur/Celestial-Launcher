@@ -578,6 +578,9 @@
   "app.instance.content.managed-content.shared-header": {
     "message": "共享内容"
   },
+  "app.instance.content.open-source-page": {
+    "message": "在内容源中打开"
+  },
   "app.instance.content.source-content": {
     "message": "内容源内容"
   },
@@ -602,6 +605,12 @@
   "app.instance.mods.bulk-update.resolving-versions": {
     "message": "正在解析版本……"
   },
+  "app.instance.mods.bulk-update.source-failed": {
+    "message": "部分内容源内容未能更新"
+  },
+  "app.instance.mods.bulk-update.source-failed-body": {
+    "message": "{count, plural, one {# 个来自内容源的文件} other {# 个来自内容源的文件}}未能更新。请检查它们所属的内容源后重试。"
+  },
   "app.instance.mods.content-type-project": {
     "message": "项目"
   },
@@ -622,6 +631,18 @@
   },
   "app.instance.mods.share-title": {
     "message": "分享整合包内容"
+  },
+  "app.instance.mods.source-cannot-install": {
+    "message": "{source} 无法自动安装此内容。请到该内容源处更新。"
+  },
+  "app.instance.mods.source-not-tracked": {
+    "message": "该文件不属于任何内容源。"
+  },
+  "app.instance.mods.source-updated": {
+    "message": "已更新「{name}」"
+  },
+  "app.instance.mods.source-updated-from": {
+    "message": "来自内容源「{source}」"
   },
   "app.instance.mods.successfully-uploaded": {
     "message": "上传成功"

@@ -331,9 +331,9 @@ const installTooltip = computed(() => {
 							<span class="text-sm leading-5 text-secondary">{{ owner.name }}</span>
 						</AutoLink>
 						<span
-						v-else-if="external && !origin"
-						class="flex items-center gap-1 text-secondary"
-					>
+							v-else-if="external && !origin"
+							class="flex items-center gap-1 text-secondary"
+						>
 							<UploadIcon class="size-4 shrink-0" />
 							<span class="text-sm leading-5">{{ formatMessage(messages.uploaded) }}</span>
 						</span>

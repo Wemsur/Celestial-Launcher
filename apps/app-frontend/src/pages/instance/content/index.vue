@@ -288,6 +288,18 @@ const messages = defineMessages({
 		id: 'app.instance.mods.source-cannot-install',
 		defaultMessage: '{source} cannot install this content automatically. Try updating it from the source itself.',
 	},
+	sourceUpdated: {
+		id: 'app.instance.mods.source-updated',
+		defaultMessage: 'Updated {name}',
+	},
+	sourceUpdatedFrom: {
+		id: 'app.instance.mods.source-updated-from',
+		defaultMessage: 'From {source}',
+	},
+	sourceNotTracked: {
+		id: 'app.instance.mods.source-not-tracked',
+		defaultMessage: 'This file is not tracked by a content source.',
+	},
 })
 
 let savedModalState: ManagedContentModalState | null = null
@@ -1247,7 +1259,7 @@ async function updateAllSourceContent(onProgress?: (status: BulkOperationStatus)
  */
 async function updateSourceContent(item: ContentItem, versionId: string) {
 	const record = recordOf(item)
-	if (!record) throw new Error('This file is not tracked by a content source.')
+	if (!record) throw new Error(formatMessage(messages.sourceNotTracked))
 	const provider = sourceProvider(record.source_id)
 	if (!provider || !canInstall(provider)) {
 		throw new Error(
@@ -1299,8 +1311,10 @@ async function updateProject(mod: ContentItem) {
 		if (record && sourceVersionId) {
 			await updateSourceContent(mod, sourceVersionId)
 			addNotification({
-				title: `已更新「${record.name}」`,
-				text: `来自内容源「${sourceOriginOf(record).name}」`,
+				title: formatMessage(messages.sourceUpdated, { name: record.name }),
+				text: formatMessage(messages.sourceUpdatedFrom, {
+					source: sourceOriginOf(record).name,
+				}),
 				type: 'success',
 			})
 			return
