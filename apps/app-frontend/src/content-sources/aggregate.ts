@@ -85,69 +85,107 @@ export interface ActiveSourceQuery {
 	query(request: FanOutRequest): Promise<{ items: ContentCard[]; total: number }>
 }
 
+export interface SearchOptions {
+	/**
+	 * Called as each source answers, with everything merged so far.
+	 *
+	 * The final result is still returned and is the authoritative one: this is
+	 * only a way to paint the rows that have already arrived instead of showing
+	 * nothing until the slowest source replies. A caller that ignores it behaves
+	 * exactly as before.
+	 *
+	 * `complete` says whether every source has now answered, so the caller can
+	 * tell "some results, more coming" from "this is the final list".
+	 */
+	onPartial?: (partial: MergedResult & { complete: boolean }) => void
+}
+
+/**
+ * How many sources' answers have arrived, for ordering partial results.
+ *
+ * A source that rejected still counts: its absence is part of the answer, and
+ * waiting on it would be wrong.
+ */
+interface SourceAnswer {
+	sourceId: string
+	offers: SourceOffer[]
+	/** `-1` when the source failed, so it is reported rather than counted. */
+	total: number
+	message?: string
+}
+
+function mergeAnswers(answers: SourceAnswer[], request: FanOutRequest, complete: boolean) {
+	const failures: SourceFailure[] = []
+	const perSource: SourceOffer[][] = []
+	let total = 0
+
+	for (const answer of answers) {
+		if (answer.total < 0) {
+			failures.push({ sourceId: answer.sourceId, message: answer.message ?? '' })
+			continue
+		}
+		total = Math.max(total, answer.total)
+		perSource.push(answer.offers)
+	}
+
+	const singleSource = perSource.length <= 1
+	const items = singleSource
+		? (perSource[0] ?? []).map((offer) => ({ card: offer.card, offers: [offer], shared: false }))
+		: merge(
+				perSource,
+				request.sort === 'relevance' && !request.query?.trim() ? 'downloads' : request.sort,
+			)
+
+	return { items, total, failures, complete }
+}
+
 export async function searchAcrossSources(
 	sources: ActiveSourceQuery[],
 	request: FanOutRequest,
+	options: SearchOptions = {},
 ): Promise<MergedResult> {
 	if (sources.length === 0) {
 		return { items: [], total: 0, failures: [] }
 	}
 
-	const settled = await Promise.allSettled(
-		sources.map((source) => source.query(request)),
+	const answers: SourceAnswer[] = []
+	let settledCount = 0
+
+	// Answered one at a time, in the order the sources reply: a partial result is
+	// only useful if it grows, so each arrival is merged and handed over as it
+	// happens. `Promise.allSettled` would have waited for the slowest source and
+	// thrown the arrivals away.
+	await Promise.all(
+		sources.map(async (source) => {
+			try {
+				const result = await source.query(request)
+				const multiplier = sourceMultiplier(source.sourceId)
+				answers.push({
+					sourceId: source.sourceId,
+					total: result.total ?? result.items.length,
+					offers: result.items.map((card) => ({
+						sourceId: source.sourceId,
+						card,
+						adjustedDownloads:
+							typeof card.downloads === 'number' ? card.downloads * multiplier : undefined,
+					})),
+				})
+			} catch (error) {
+				answers.push({
+					sourceId: source.sourceId,
+					total: -1,
+					offers: [],
+					message: error instanceof Error ? error.message : String(error),
+				})
+			}
+
+			settledCount += 1
+			options.onPartial?.(mergeAnswers(answers, request, settledCount === sources.length))
+		}),
 	)
 
-	const failures: SourceFailure[] = []
-	const perSource: SourceOffer[][] = []
-	// The page control is driven by the deepest source, not the summed catalogue
-	// size: page N asks every source for its page N, so no source can serve past
-	// its own last page. See `MergedResult.total`.
-	let total = 0
-
-	settled.forEach((result, index) => {
-		const sourceId = sources[index].sourceId
-		if (result.status === 'rejected') {
-			failures.push({
-				sourceId,
-				message:
-					result.reason instanceof Error
-						? result.reason.message
-						: String(result.reason),
-			})
-			return
-		}
-		total = Math.max(total, result.value.total ?? result.value.items.length)
-		const multiplier = sourceMultiplier(sourceId)
-		perSource.push(
-			result.value.items.map((card) => ({
-				sourceId,
-				card,
-				adjustedDownloads:
-					typeof card.downloads === 'number'
-						? card.downloads * multiplier
-						: undefined,
-			})),
-		)
-	})
-
-	const singleSource = sources.length - failures.length <= 1
-
-	if (singleSource) {
-		// One source answered: keep its order exactly. Merging is a no-op and a
-		// re-sort would only perturb a list the source already ordered well.
-		const offers = perSource[0] ?? []
-		return {
-			items: offers.map((offer) => ({ card: offer.card, offers: [offer], shared: false })),
-			total,
-			failures,
-		}
-	}
-
-	return {
-		items: merge(perSource, request.sort === 'relevance' && !request.query?.trim() ? 'downloads' : request.sort),
-		total,
-		failures,
-	}
+	const final = mergeAnswers(answers, request, true)
+	return { items: final.items, total: final.total, failures: final.failures }
 }
 
 /** Group same-name same-type items together, then order the result. */

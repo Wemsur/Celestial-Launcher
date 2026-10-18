@@ -80,6 +80,9 @@ pub async fn fetch(
         .into());
     }
 
+    // Built before the lookup: a background refresh re-sends the same request,
+    // the connection-level headers are dropped exactly as they are below, and a
+    // request carrying credentials must not be cached at all.
     let mut headers = HashMap::new();
     if let Some(requested) = request.headers {
         for (name, value) in requested {
@@ -88,6 +91,49 @@ pub async fn fetch(
             }
             headers.insert(name, value);
         }
+    }
+
+    // A cacheable request is answered from disk when the launcher has it, so a
+    // source gets Modrinth's behaviour — a revisit costs nothing — without
+    // implementing a cache of its own. The lookup happens after the host check,
+    // so a cached entry can never be read for a host the source did not declare.
+    let cache_key = super::http_cache::cache_key(
+        method.as_str(),
+        request.url.as_str(),
+        request.body.as_deref(),
+        &headers,
+    );
+    let state = if cache_key.is_some() {
+        crate::State::get().await.ok()
+    } else {
+        None
+    };
+
+    if let (Some(key), Some(state)) = (cache_key.as_deref(), state.as_ref())
+        && let Ok(Some(cached)) =
+            super::http_cache::get(source_id, key, state).await
+    {
+        if !cached.fresh {
+            // Stale: answer now, refresh behind the caller's back. The refresh
+            // has to re-run the whole request, so it is spawned rather than
+            // awaited — a slow site must not make the cached answer slow too.
+            let source_id = source_id.to_string();
+            let key = key.to_string();
+            let headers = headers.clone();
+            let body = request.body.clone();
+            tokio::spawn(async move {
+                if let Err(error) =
+                    refresh(&source_id, &key, headers, body).await
+                {
+                    tracing::debug!(
+                        source = %source_id,
+                        url = %key,
+                        "Content source background cache refresh failed: {error}"
+                    );
+                }
+            });
+        }
+        return Ok(cached.response);
     }
 
     // Redirects are followed by hand so every hop's host is checked, not just
@@ -116,7 +162,7 @@ pub async fn fetch(
                 .ok()
                 .map(|value| (name.as_str().to_string(), value.to_string()))
         })
-        .collect();
+        .collect::<HashMap<_, _>>();
 
     let bytes = response.bytes().await?;
     if bytes.len() > MAX_RESPONSE_BYTES {
@@ -127,13 +173,89 @@ pub async fn fetch(
         .into());
     }
 
-    Ok(SourceFetchResponse {
+    let result = SourceFetchResponse {
         status: status.as_u16(),
         ok: status.is_success(),
         headers,
         body: String::from_utf8_lossy(&bytes).into_owned(),
         final_url,
-    })
+    };
+
+    if let (Some(key), Some(state)) = (cache_key, state.as_ref())
+        && result.ok
+        && let Some(ttl) = super::http_cache::cacheable_for(&result.headers)
+        && let Err(error) =
+            super::http_cache::put(source_id, &key, ttl, &result, state).await
+    {
+        // A cache that cannot be written is a slow launcher, not a broken one.
+        tracing::debug!(
+            source = %source_id,
+            url = %key,
+            "Could not store a content source response: {error}"
+        );
+    }
+
+    Ok(result)
+}
+
+/// Re-fetch a URL and store the answer, for a stale cache entry.
+async fn refresh(
+    source_id: &str,
+    url: &str,
+    headers: HashMap<String, String>,
+    body: Option<String>,
+) -> crate::Result<()> {
+    let parsed = url::Url::parse(url).map_err(|error| {
+        crate::ErrorKind::InputError(format!("Invalid URL: {error}"))
+    })?;
+    let host = parsed.host_str().ok_or_else(|| {
+        crate::ErrorKind::InputError("URL has no host".to_string())
+    })?;
+    ensure_host_allowed(source_id, host).await?;
+
+    let response = crate::util::fetch::send_checked(
+        &crate::util::fetch::NO_REDIRECT_REQWEST_CLIENT,
+        reqwest::Method::GET,
+        parsed,
+        &headers,
+        body.as_deref(),
+        |host| async move { ensure_host_allowed(source_id, &host).await },
+    )
+    .await?;
+
+    let status = response.status();
+    let final_url = Some(response.url().to_string());
+    let response_headers = response
+        .headers()
+        .iter()
+        .filter_map(|(name, value)| {
+            value
+                .to_str()
+                .ok()
+                .map(|value| (name.as_str().to_string(), value.to_string()))
+        })
+        .collect::<HashMap<_, _>>();
+    let bytes = response.bytes().await?;
+    if bytes.len() > MAX_RESPONSE_BYTES {
+        return Ok(());
+    }
+
+    let result = SourceFetchResponse {
+        status: status.as_u16(),
+        ok: status.is_success(),
+        headers: response_headers,
+        body: String::from_utf8_lossy(&bytes).into_owned(),
+        final_url,
+    };
+
+    if !result.ok {
+        return Ok(());
+    }
+    let Some(ttl) = super::http_cache::cacheable_for(&result.headers) else {
+        return Ok(());
+    };
+    let state = crate::State::get().await?;
+    super::http_cache::put(source_id, url, ttl, &result, &state).await
 }
 
 /// Whether `host` is covered by the hosts the source declared in its manifest.

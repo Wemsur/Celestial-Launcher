@@ -459,6 +459,14 @@ pub async fn uninstall(
         if data.is_dir() {
             io::remove_dir_all(&data).await?;
         }
+    } else if let Err(error) = super::http_cache::clear(source_id, &state).await {
+        // The cached responses are derived data, not the user's: they are
+        // dropped even when the source's own data is kept, because they would
+        // otherwise be served to whatever source takes this id next.
+        tracing::warn!(
+            source = %source_id,
+            "Could not clear a content source's response cache: {error}"
+        );
     }
 
     let mut registry = read_state(&state).await?;

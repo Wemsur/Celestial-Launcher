@@ -21,6 +21,7 @@
 //! only ever acts on a [`SourceSummary`] this module produced.
 
 pub mod data;
+pub mod http_cache;
 pub mod install;
 pub mod installed;
 pub mod manifest;
@@ -41,6 +42,7 @@ pub use install::{
 pub use installed::{
     SourceContentRecord, forget_install, list_installed, record_install,
 };
+pub use http_cache::{cacheable_for, cache_key, clear as clear_http_cache};
 pub use manifest::{
     CURRENT_API_VERSION, ContentSort, ContentSourceManifest, ContentType,
     MANIFEST_FILE, ManualEntryField, SourceAuth, SourceCapabilities,

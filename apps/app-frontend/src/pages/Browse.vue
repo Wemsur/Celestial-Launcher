@@ -9,7 +9,14 @@ import {
     ServerStackIcon,
     SpinnerIcon,
 } from '@modrinth/assets'
-import type { BrowseInstallContentType, CardAction, FilterType, ProjectType, Tags } from '@modrinth/ui'
+import type {
+    BrowseInstallContentType,
+    BrowseSearchResponse,
+    CardAction,
+    FilterType,
+    ProjectType,
+    Tags,
+} from '@modrinth/ui'
 import {
     BrowsePageLayout,
     BrowseSidebar,
@@ -18,10 +25,10 @@ import {
     CreationFlowModal,
     defineMessages,
     formatProjectTypeSentence,
+    getCategoryHeaderMessage,
     getLatestMatchingInstallVersion,
     getSelectedInstallPreferences,
     getTargetInstallPreferences,
-    getCategoryHeaderMessage,
     injectNotificationManager,
     LoadingIndicator,
     preferencesDiffer,
@@ -40,7 +47,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import type { LocationQuery } from 'vue-router'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 
-import i18n from '@/i18n.config'
 import { useAppServerBrowse } from '@/composables/browse/use-app-server-browse'
 import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
@@ -58,13 +64,11 @@ import {
     type SourcedSearchResult,
     toSearchResult,
 } from '@/content-sources/adapter'
-import { type ActiveSourceQuery, searchAcrossSources } from '@/content-sources/aggregate'
 import {
-    flattenSourceGroups,
-    type SidebarGroup,
-    sourceFiltersFromSelection,
-    useSourceFilters,
-} from '@/content-sources/filters'
+    type ActiveSourceQuery,
+    type MergedResult,
+    searchAcrossSources,
+} from '@/content-sources/aggregate'
 import {
     MODRINTH_CONTENT_TYPES,
     type SelectableSource,
@@ -73,6 +77,12 @@ import {
     sourceSupportsType,
     sourceTintStyle,
 } from '@/content-sources/catalog'
+import {
+    flattenSourceGroups,
+    type SidebarGroup,
+    sourceFiltersFromSelection,
+    useSourceFilters,
+} from '@/content-sources/filters'
 import { installSourceContent, listInstalledSourceContent } from '@/content-sources/ipc'
 import { canInstall, installViaOpenDownload } from '@/content-sources/open-download'
 import {
@@ -91,11 +101,12 @@ import {
     getInstanceIconUrl,
     list as listInstances,
 } from '@/helpers/instance'
-import { get_loader_versions as getLoaderManifest } from '@/helpers/metadata'
 import { clearListScroll, rememberListScroll, restoreListScroll } from '@/helpers/list-scroll'
+import { get_loader_versions as getLoaderManifest } from '@/helpers/metadata'
 import { get as getSettings, set as setSettings } from '@/helpers/settings.ts'
 import { get_categories, get_game_versions, get_loaders } from '@/helpers/tags'
 import { get_instance_worlds } from '@/helpers/worlds'
+import i18n from '@/i18n.config'
 import {
     instanceDetailQueryOptions,
     instanceKeys,
@@ -1434,14 +1445,15 @@ async function runForeignInstall(
     try {
         // The record's `currentVersionId` is what a later update check compares
         // against, so the version actually resolved here has to be recorded —
-        // otherwise every check would report the item as outdated.
-        const versionId =
-            (await provider.versions?.(source.id, {
-                contentType: installType,
-                sort: 'newest',
-                page: 1,
-                limit: 1,
-            }))?.[0]?.id ?? undefined
+        // otherwise every check would report the item as outdated. A source
+        // that cannot list versions still installs; the record just has no
+        // current version to compare against.
+        const versionId = provider.versions
+            ? await provider
+                    .versions(source.id, { contentType: installType, sort: 'newest', page: 1, limit: 1 })
+                    .then((versions) => versions[0]?.id)
+                    .catch(() => undefined)
+            : undefined
         const metadata = {
             sourceId: source.sourceId,
             projectId: source.id,
@@ -1657,6 +1669,15 @@ function reportSourceFailures(failures: { sourceId: string; message: string }[])
     }
 }
 
+/**
+ * Which search the partial results on screen belong to.
+ *
+ * Bumped by every new search and by a tab switch. A partial result carries the
+ * generation it was started under, so one that arrives after the user has moved
+ * on is dropped instead of repainting the list with rows from the old request.
+ */
+let searchGeneration = 0
+
 async function search(requestParams: string) {
     debugLog('searching v3', requestParams)
     const isServer = projectType.value === 'server'
@@ -1665,6 +1686,8 @@ async function search(requestParams: string) {
     if (isServer) {
         return searchServers(requestParams)
     }
+
+    const generation = ++searchGeneration
 
     const request = parseRequestParams(requestParams)
     const context = queryContext()
@@ -1683,6 +1706,46 @@ async function search(requestParams: string) {
         flattenSourceGroups(sourceFilterGroups.value),
         searchState.currentFilters.value,
     )
+
+    const sourceNames = new Map(
+        selectableSources().map((source: SelectableSource) => [source.id, source.name]),
+    )
+
+    /**
+     * A merged result as the list renders it. Shared by the final answer and by
+     * the partial ones, so a row cannot look different depending on how early it
+     * arrived.
+     */
+    function toSearchResponse(merged: MergedResult) {
+        const hits = merged.items.map((item) => {
+            // A Modrinth row is rendered from its original hit, which rides along on
+            // the card so it survives the result cache; the neutral round trip drops
+            // fields the card, the detail pane and the installer need.
+            const raw = modrinthHitOf(item.card)
+            if (raw) {
+                // Re-seed the summary cache: on a cache hit the fetch that filled it
+                // did not run, but the project page still reads from it.
+                for (const identifier of [raw.project_id, raw.slug]) {
+                    if (identifier) queryClient.setQueryData(['projects', 'summary', identifier], raw)
+                }
+                return withInstalledFlag(raw)
+            }
+
+            const shared = item.offers.length > 1
+            const others = item.offers
+                .map((offer) => sourceNames.get(offer.sourceId) ?? offer.sourceId)
+                .filter((name) => name !== sourceNames.get(item.card.sourceId))
+
+            return toSearchResult(item.card, { shared, otherSources: others })
+        })
+
+        return {
+            projectHits: hits,
+            serverHits: [],
+            total_hits: merged.total,
+            per_page: request.limit,
+        }
+    }
 
     const merged = await queryClient.fetchQuery({
         queryKey: [
@@ -1704,52 +1767,32 @@ async function search(requestParams: string) {
         // tab switch and another round trip.
         staleTime: 120_000,
         queryFn: () =>
-            searchAcrossSources(activeSourceQueries(requestParams, sourceFilters), {
-                query: request.query,
-                contentType: projectType.value as ContentQuery['contentType'],
-                sort: request.sort,
-                page: request.page,
-                limit: request.limit,
-                gameVersion: context.gameVersion,
-                loader: context.loader,
-                filters: sourceFilters,
-            }),
+            searchAcrossSources(
+                activeSourceQueries(requestParams, sourceFilters),
+                {
+                    query: request.query,
+                    contentType: projectType.value as ContentQuery['contentType'],
+                    sort: request.sort,
+                    page: request.page,
+                    limit: request.limit,
+                    gameVersion: context.gameVersion,
+                    loader: context.loader,
+                    filters: sourceFilters,
+                },
+                {
+                    // Paint each source's rows as it answers, so a slow source does
+                    // not hold the others off the screen. The final answer below
+                    // replaces this with the authoritative list.
+                    onPartial: (partial) => {
+                        publishPartialResults(generation, toSearchResponse(partial))
+                    },
+                },
+            ),
     })
 
     reportSourceFailures(merged.failures)
 
-    const sourceNames = new Map(
-        selectableSources().map((source: SelectableSource) => [source.id, source.name]),
-    )
-
-    const hits = merged.items.map((item) => {
-        // A Modrinth row is rendered from its original hit, which rides along on
-        // the card so it survives the result cache; the neutral round trip drops
-        // fields the card, the detail pane and the installer need.
-        const raw = modrinthHitOf(item.card)
-        if (raw) {
-            // Re-seed the summary cache: on a cache hit the fetch that filled it
-            // did not run, but the project page still reads from it.
-            for (const identifier of [raw.project_id, raw.slug]) {
-                if (identifier) queryClient.setQueryData(['projects', 'summary', identifier], raw)
-            }
-            return withInstalledFlag(raw)
-        }
-
-        const shared = item.offers.length > 1
-        const others = item.offers
-            .map((offer) => sourceNames.get(offer.sourceId) ?? offer.sourceId)
-            .filter((name) => name !== sourceNames.get(item.card.sourceId))
-
-        return toSearchResult(item.card, { shared, otherSources: others })
-    })
-
-    return {
-        projectHits: hits,
-        serverHits: [],
-        total_hits: merged.total,
-        per_page: request.limit,
-    }
+    return toSearchResponse(merged)
 }
 
 /** Stamp the installed badge onto a Modrinth hit, as the single-source path did. */
@@ -1851,6 +1894,36 @@ const searchState = useBrowseSearch({
         ai: instanceHideInstalled.value ? 'true' : undefined,
         shi: serverHideInstalled.value ? 'true' : undefined,
     }),
+})
+
+/**
+ * Show a partial merged result while the rest of the sources are still answering.
+ *
+ * Only the latest request may publish: a partial answer that arrives after the
+ * user has switched tab or typed a new query would paint rows from a request
+ * that is no longer the one on screen.
+ */
+function publishPartialResults(
+    generation: number,
+    response: BrowseSearchResponse,
+) {
+    if (generation !== searchGeneration) return
+    searchState.projectHits.value = response.projectHits
+    searchState.totalHits.value = response.total_hits
+    searchState.loading.value = false
+}
+
+// The tab changed: the previous list describes a different kind of content, so
+// it is cleared and the loading shell shown. Waiting for the new results with
+// the old rows still on screen reads as "the click did nothing" — and it is
+// wrong, since those rows cannot be installed as the new type.
+watch(projectType, (type, previous) => {
+    if (!previous || type === previous) return
+    searchGeneration += 1
+    searchState.projectHits.value = []
+    searchState.serverHits.value = []
+    searchState.totalHits.value = 0
+    searchState.loading.value = true
 })
 
 // Turning a source on or off (or changing a multiplier, which reorders the
