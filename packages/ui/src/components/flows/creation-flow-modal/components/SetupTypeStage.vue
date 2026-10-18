@@ -69,6 +69,12 @@
 					@click="triggerFileInput"
 				/>
 				<BigOptionButton
+					:icon="LibraryIcon"
+					:title="formatMessage(messages.addLibraryTitle)"
+					:description="formatMessage(messages.addLibraryDescription)"
+					@click="openLibraryModal"
+				/>
+				<BigOptionButton
 					:icon="BoxImportIcon"
 					:title="formatMessage(messages.importInstanceTitle)"
 					:description="formatMessage(messages.importInstanceDescription)"
@@ -105,6 +111,10 @@
 				/>
 			</div>
 		</template>
+
+		<!-- The same dialog the home page's add-library button opens, mounted here
+		     so the option above needs no navigation out of the flow. -->
+		<AddLibraryModal ref="addLibraryModal" @added="onLibraryAdded" />
 	</div>
 </template>
 
@@ -115,27 +125,32 @@ import {
 	BoxImportIcon,
 	CompassIcon,
 	DownloadIcon,
+	LibraryIcon,
 	RightArrowIcon,
 	UploadIcon,
 } from '@modrinth/assets'
 import { commonMessages, defineMessages, useVIntl } from '@modrinth/ui'
-import { computed, defineAsyncComponent, h, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, h, onMounted, ref, useTemplateRef, watch } from 'vue'
+import type { ComponentExposed } from 'vue-component-type-helpers'
 
 import { useDebugLogger } from '#ui/composables/debug-logger'
 
-import { injectFilePicker } from '../../../../providers'
+import { injectFilePicker, injectLibraryManagement } from '../../../../providers'
 import BigOptionButton from '../../../base/BigOptionButton.vue'
 import Combobox from '../../../base/Combobox.vue'
+import AddLibraryModal from '../../library-modal/index.vue'
 import { injectCreationFlowContext } from '../creation-flow-context'
 
 const debug = useDebugLogger('SetupTypeStage')
 const ctx = injectCreationFlowContext()
 const filePicker = injectFilePicker()
+const libraryManagement = injectLibraryManagement()
 const { setSetupType: _setSetupType } = ctx
 const { formatMessage } = useVIntl()
 
 const searchLoading = ref(false)
 const projectSearchCombobox = ref<{ $el: HTMLElement }>()
+const addLibraryModal = useTemplateRef<ComponentExposed<typeof AddLibraryModal>>('addLibraryModal')
 
 const messages = defineMessages({
 	knownProjectPrompt: {
@@ -202,6 +217,15 @@ const messages = defineMessages({
 		id: 'creation-flow.modal.setup-type.option.import-instance.description',
 		defaultMessage: 'Import an instance from Prism, CurseForge, or similar.',
 	},
+	addLibraryTitle: {
+		id: 'creation-flow.modal.setup-type.option.add-library.title',
+		defaultMessage: 'Create or import a library',
+	},
+	addLibraryDescription: {
+		id: 'creation-flow.modal.setup-type.option.add-library.description',
+		defaultMessage:
+			'Add a folder of existing versions, or make a new one, for PCL, HMCL, Modrinth and others.',
+	},
 	vanillaMinecraftTitle: {
 		id: 'creation-flow.modal.setup-type.option.vanilla-minecraft.title',
 		defaultMessage: 'Vanilla Minecraft',
@@ -251,6 +275,36 @@ function browseModpacks() {
 
 	selectModpack()
 	ctx.browseModpacks()
+}
+
+/**
+ * Open the shared add-library dialog over this one.
+ *
+ * The creation flow's option only says "a library", not which layout, so the
+ * dialog opens on its own format question — the same two choices, with the same
+ * wording, that the home page's add-library button leads to.
+ */
+function openLibraryModal() {
+	if (ctx.finishDisabled.value) return
+	addLibraryModal.value?.show()
+}
+
+/**
+ * A library was registered. The creation flow stays where it is and offers the
+ * same choices again: adding a library is not creating an instance, so the flow
+ * must not act as though one had been asked for.
+ */
+async function onLibraryAdded() {
+	// The instance picker in a later stage reads the library list from the
+	// flow's context, so refresh it here rather than waiting for a reopen. The
+	// format is dropped: that picker only offers a library to install into.
+	ctx.availableLibraries.value = await libraryManagement
+		.libraries()
+		.catch((error) => {
+			debug('could not reload the library list:', error)
+			return []
+		})
+		.then((libraries) => libraries.map(({ path, name }) => ({ path, name })))
 }
 
 async function triggerFileInput() {

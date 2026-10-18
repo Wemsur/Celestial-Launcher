@@ -94,11 +94,16 @@ pub fn resolve_version_dir(
     }
 
     let vanilla_name = vanilla_name(&merged, dir, folder_name);
+    // PCL2 classifies the loader from `If(JsonObject, JsonText).ToString` — the
+    // *merged* object, which already holds the whole inheritance chain. Reading
+    // the child's own file instead would call `1.21.1-forge-optifine` vanilla,
+    // because the Forge marker lives in the parent it inherits from.
+    let loader = loader_from_text(&merged.to_string());
 
     Some(ResolvedVersion {
         json: merged,
         vanilla_name,
-        loader: loader_from_text(&text),
+        loader,
     })
 }
 
@@ -216,9 +221,11 @@ fn flatten_patches(json: Value, folder_name: &str) -> Value {
 
 /// Merge a child version into its parent.
 ///
-/// Mirrors PCL2: the child's keys win, except `libraries`, which is concatenated
-/// child-first — when two jars carry the same class, the JVM picks the first one
-/// `-cp` lists, so the child's own libraries must precede the parent's.
+/// Mirrors PCL2's order exactly: `libraries` is concatenated child-first — when
+/// two jars carry the same class, the JVM picks the first one `-cp` lists, so
+/// the child's own libraries must precede the parent's — while every other key
+/// is merged onto the parent with the child's values winning, and arrays
+/// concatenating parent-first.
 ///
 /// `inheritsFrom` is left as the merge produced it: the child's value overwrites
 /// the parent's, which is what PCL2 leaves behind too, and the cascade's
@@ -250,17 +257,25 @@ fn inherit_merge(parent: Value, child: Value) -> Value {
     Value::Object(merged)
 }
 
-/// Overwrite `target`'s keys with `source`'s, leaving keys `source` omits alone.
+/// Merge `source`'s keys into `target`, leaving keys `source` omits alone.
 ///
-/// This is what PCL2 gets from Newtonsoft's `Merge` without array handling, and
-/// what a version override wants: a Forge layer naming only its own `mainClass`
-/// and `libraries` keeps the vanilla `assetIndex` and `downloads` it was built
-/// against.
+/// This is Newtonsoft's `Merge` as PCL2 calls it: objects merge key by key, and
+/// **arrays concatenate** (`MergeArrayHandling.Concat` is the default). The array
+/// rule is load-bearing rather than incidental — a Forge or OptiFine layer that
+/// carries its own `arguments.game` would otherwise replace the vanilla
+/// `--username`, `--assetIndex` and `--gameDir` entries wholesale, and the game
+/// would fail to start with an argument list that looks complete.
+///
+/// `libraries` is the one key the caller overrides afterwards, because its order
+/// matters and the merge cannot express it.
 fn merge_into(target: &mut Map<String, Value>, source: &Map<String, Value>) {
     for (key, value) in source {
         match (target.get_mut(key), value) {
             (Some(Value::Object(existing)), Value::Object(incoming)) => {
                 merge_into(existing, incoming);
+            }
+            (Some(Value::Array(existing)), Value::Array(incoming)) => {
+                existing.extend(incoming.iter().cloned());
             }
             _ => {
                 target.insert(key.clone(), value.clone());
@@ -391,13 +406,12 @@ fn vanilla_name(json: &Value, dir: &Path, folder_name: &str) -> Option<String> {
     }
 
     // 12. Any version number anywhere in the rest of the manifest. PCL2 drops
-    //     `libraries` before searching: 162 library entries each carry a version
+    //     `libraries` before searching — 162 library entries each carry a version
     //     of their own, and the first version-shaped string in them is the
-    //     artifact's, not the game's.
+    //     artifact's, not the game's. Nothing else is removed.
     if let Some(object) = json.as_object() {
         let mut without_libraries = object.clone();
         without_libraries.remove("libraries");
-        without_libraries.remove("patches");
         if let Some(hit) =
             seek(&Value::Object(without_libraries).to_string(), MC_VERSION_PATTERN)
         {
@@ -744,6 +758,9 @@ mod tests {
                 "mainClass": "net.minecraft.client.main.Main",
                 "type": "release",
                 "assetIndex": { "id": "29" },
+                "arguments": {
+                    "game": ["--username", "${auth_player_name}", "--assetIndex", "29"],
+                },
                 "libraries": [{ "name": "com.mojang:authlib:7.0.63" }],
             }),
         );
@@ -756,6 +773,9 @@ mod tests {
                 "jar": "1.21.1",
                 "mainClass": "net.minecraft.launchwrapper.Launch",
                 "type": "release",
+                "arguments": {
+                    "game": ["--tweakClass", "com.mumfrey.liteloader.launch.LiteLoaderTweaker"],
+                },
                 "libraries": [{ "name": "com.mumfrey:liteloader:1.21.1" }],
             }),
         );
@@ -773,6 +793,27 @@ mod tests {
             Some("net.minecraft.launchwrapper.Launch")
         );
         assert_eq!(resolved.json["assetIndex"]["id"], "29");
+        // Arrays concatenate rather than replace: the vanilla arguments that log
+        // the player in and pick the asset index are kept, and the child's own
+        // are appended after them — the parent's object is the base the child is
+        // merged into, exactly as PCL2's `InheritInstance.JsonObject.Merge` does.
+        let game_arguments: Vec<&str> = resolved.json["arguments"]["game"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|argument| argument.as_str())
+            .collect();
+        assert_eq!(
+            game_arguments,
+            [
+                "--username",
+                "${auth_player_name}",
+                "--assetIndex",
+                "29",
+                "--tweakClass",
+                "com.mumfrey.liteloader.launch.LiteLoaderTweaker",
+            ]
+        );
         let libraries = resolved.json["libraries"].as_array().unwrap();
         assert_eq!(libraries.len(), 2);
         assert_eq!(libraries[0]["name"], "com.mumfrey:liteloader:1.21.1");
@@ -871,6 +912,9 @@ mod tests {
         );
         // The farthest ancestor's assetIndex survives.
         assert_eq!(resolved.json["assetIndex"]["id"], "29");
+        // The loader is read from the merged chain, so a leaf that names no
+        // loader of its own still reports the Forge its parent brought in.
+        assert_eq!(resolved.loader, crate::state::ModLoader::Forge);
     }
 
     /// A sidecar JSON must never be mistaken for the manifest.

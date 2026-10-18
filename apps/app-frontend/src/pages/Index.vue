@@ -1,29 +1,27 @@
 <script setup lang="ts">
-import { BoxIcon, CogIcon, FolderSearchIcon, PlayIcon, PlusIcon } from '@modrinth/assets'
+import { CogIcon, PlayIcon, PlusIcon } from '@modrinth/assets'
 import {
+	AddLibraryModal,
 	Button, ContextMenu, defineMessages, injectNotificationManager,
+	Input,
 	NavTabs, NewModal as Modal,
-	Input, DropdownSelect,
 	useVIntl,
 } from '@modrinth/ui'
-import { invoke } from '@tauri-apps/api/core'
-import { open } from '@tauri-apps/plugin-dialog'
-import { computed, inject, onActivated, onUnmounted, provide, type Ref, ref, shallowRef, watch, watchEffect } from 'vue'
+import { computed, inject, onActivated, provide, type Ref, ref, shallowRef, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 
 import LibrarySection from '@/components/ui/library/index.vue'
 import { libraryScrollTop } from '@/components/ui/library/view-state'
-import WelcomeScreen from '@/components/ui/WelcomeScreen.vue'
+import NavButton from "@/components/ui/NavButton.vue";
 import RecentWorldsList from '@/components/ui/world/RecentWorldsList.vue'
 import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
-import type { InstanceFormat, LibraryInfo } from '@/helpers/library'
-import { library_add, library_list, library_default_path, library_reorder, library_set_active, library_update_name, library_remove } from '@/helpers/library'
 import { list } from '@/helpers/instance'
+import type { LibraryInfo } from '@/helpers/library'
+import { library_default_path, library_list, library_remove, library_reorder, library_set_active, library_update_name } from '@/helpers/library'
 import type { GameInstance } from '@/helpers/types'
 import { useRootBreadcrumb } from '@/providers/breadcrumbs'
 import { injectOnboardingChecklist } from '@/providers/onboarding-checklist'
-import NavButton from "@/components/ui/NavButton.vue";
 
 defineOptions({
 	name: 'LibraryPage',
@@ -232,35 +230,13 @@ watch(
 
 // ── Add library modal ───────────────────────────────────────────────────────
 
-const addLibraryPath = ref('')
-const addLibraryFormat = ref<InstanceFormat>('modrinth')
-const addLibraryName = ref('')
-const addLibraryModalRef = ref<InstanceType<typeof Modal> | null>(null)
+// The dialog itself is shared with the library page and the creation flow, so
+// the home toolbar only has to open it and reload the list it produces.
+const addLibraryModalRef = ref<InstanceType<typeof AddLibraryModal> | null>(null)
 
-async function pickFolder() {
-	const result = await open({ directory: true, multiple: false })
-	if (result && typeof result === 'string') {
-		addLibraryPath.value = result
-	}
-}
-
-async function addLibrary() {
-	if (!addLibraryPath.value.trim()) return
-	try {
-		await library_add(addLibraryPath.value.trim(), addLibraryFormat.value,
-			addLibraryName.value.trim() || undefined)
-		closeAddLibraryModal()
-		addLibraryPath.value = ''
-		addLibraryName.value = ''
-		await loadLibraries()
-		fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value)
-	} catch (e) {
-		handleError(e instanceof Error ? e : new Error(String(e)))
-	}
-}
-
-function closeAddLibraryModal() {
-	addLibraryModalRef.value?.hide()
+async function onLibraryAdded() {
+	await loadLibraries()
+	await fetchInstances(activeTab.value === 'all' ? undefined : activeTab.value)
 }
 
 // ── Library settings modal ─────────────────────────────────────────────────
@@ -345,61 +321,7 @@ function openPageContextMenu(event: MouseEvent) {
 		@contextmenu="openPageContextMenu"
 	>
 		<!-- Add Library Modal -->
-		<Modal
-			ref="addLibraryModalRef"
-			header="添加库"
-			:closable="false"
-			noblur
-		>
-			<div class="flex flex-col gap-4 w-[500px]">
-				<div class="flex flex-col gap-1">
-					<h2 class="m-0 text-lg font-semibold text-contrast">
-						库名称（可选）
-					</h2>
-					<Input
-						v-model="addLibraryName"
-						placeholder="留空则使用文件夹名"
-						type="text"
-						wrapper-class="w-full"
-					/>
-				</div>
-				<h2 class="m-0 text-lg font-semibold text-contrast">
-					库位置
-				</h2>
-				<Input
-					v-model="addLibraryPath"
-					placeholder="选择文件夹或输入路径"
-					:icon="BoxIcon"
-					type="text"
-					wrapper-class="w-full"
-				>
-					<template #right>
-						<Button type="quiet" @click="pickFolder" v-tooltip="'浏览文件夹'" :aria-label="'浏览文件夹'" class="ml-1.5">
-							<FolderSearchIcon aria-hidden="true" />
-						</Button>
-					</template>
-				</Input>
-				<div class="flex flex-col gap-1">
-					<span class="text-sm font-medium text-primary">格式</span>
-					<DropdownSelect
-						v-model="addLibraryFormat"
-						name="Library Format"
-						:options="['modrinth', 'minecraft']"
-						:display-name="(opt) => opt === 'modrinth' ? 'Modrinth (默认)' : 'Minecraft (.minecraft)'"
-					>
-						<span class="text-secondary">{{ addLibraryFormat === 'modrinth' ? 'Modrinth (默认)' : 'Minecraft (.minecraft)' }}</span>
-					</DropdownSelect>
-				</div>
-				<div class="flex justify-end gap-2 pt-2">
-					<Button type="outlined" @click="closeAddLibraryModal">取消</Button>
-					<Button
-						type="colored" color="brand"
-						:disabled="!addLibraryPath.trim()"
-						@click="addLibrary"
-					>添加</Button>
-				</div>
-			</div>
-		</Modal>
+		<AddLibraryModal ref="addLibraryModalRef" @added="onLibraryAdded" />
 
 		<!-- Library settings modal -->
 		<Modal
@@ -466,9 +388,9 @@ function openPageContextMenu(event: MouseEvent) {
                 :active-index="activeTabIndex"
                 reorderable
                 :pinned-count="1"
+                class="light-sense"
                 @tab-click="handleTabClick"
                 @reorder="handleTabReorder"
-                class="light-sense"
             />
             <NavButton
                 class="bg-brand"

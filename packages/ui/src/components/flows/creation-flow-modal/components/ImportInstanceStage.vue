@@ -1,5 +1,12 @@
 <template>
 	<div class="flex flex-col gap-2">
+		<!-- Which launchers this page can read, and where a .minecraft-format
+		     launcher belongs instead: it is added as a library, not imported. -->
+		<div class="flex flex-col gap-1 rounded-2xl bg-surface-3 p-3 text-sm text-secondary">
+			<span>{{ formatMessage(messages.supportedLaunchersBody) }}</span>
+			<span>{{ formatMessage(messages.minecraftFormatNote) }}</span>
+		</div>
+
 		<!-- Header -->
 		<div class="flex items-center justify-between">
 			<span class="font-semibold text-contrast">{{
@@ -124,6 +131,16 @@ const showAddPath = ref(false)
 const newLauncherPath = ref('')
 
 const messages = defineMessages({
+	supportedLaunchersBody: {
+		id: 'creation-flow.modal.import-instance.supported-launchers',
+		defaultMessage:
+			'Supported launchers: Prism Launcher, MultiMC, CurseForge, ATLauncher and GDLauncher.',
+	},
+	minecraftFormatNote: {
+		id: 'creation-flow.modal.import-instance.minecraft-format-note',
+		defaultMessage:
+			'Using a .minecraft-format launcher such as PCL, HMCL or Baka XL? Go back and choose “Create or import a library” instead.',
+	},
 	launcherInstancesTitle: {
 		id: 'creation-flow.modal.import-instance.launcher-instances.title',
 		defaultMessage: 'Launcher instances',

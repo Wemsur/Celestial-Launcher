@@ -1007,6 +1007,9 @@
   "creation-flow.modal.import-instance.launcher-path.placeholder": {
     "defaultMessage": "启动器路径…"
   },
+  "creation-flow.modal.import-instance.minecraft-format-note": {
+    "defaultMessage": "使用 PCL、HMCL、Baka XL 等 .minecraft 格式的启动器？请返回并选择「创建或导入版本库」。"
+  },
   "creation-flow.modal.import-instance.notification.no-instances-found.text": {
     "defaultMessage": "在指定路径未找到可导入的实例。"
   },
@@ -1018,6 +1021,9 @@
   },
   "creation-flow.modal.import-instance.selection.clear-all": {
     "defaultMessage": "清除所有"
+  },
+  "creation-flow.modal.import-instance.supported-launchers": {
+    "defaultMessage": "支持的启动器：Prism Launcher、MultiMC、CurseForge、ATLauncher、GDLauncher。"
   },
   "creation-flow.modal.modpack.action.browse": {
     "defaultMessage": "浏览整合包"
@@ -1048,6 +1054,12 @@
   },
   "creation-flow.modal.project.search.placeholder": {
     "defaultMessage": "搜索模组、整合包等……"
+  },
+  "creation-flow.modal.setup-type.option.add-library.description": {
+    "defaultMessage": "添加一个已有版本的文件夹，或新建一个，支持 PCL、HMCL、Modrinth 等启动器。"
+  },
+  "creation-flow.modal.setup-type.option.add-library.title": {
+    "defaultMessage": "创建或导入版本库"
   },
   "creation-flow.modal.setup-type.option.custom-setup.description": {
     "defaultMessage": "从头开始，选择一个加载器和游戏版本。"
@@ -2770,6 +2782,48 @@
   },
   "layout.account-switcher.switching": {
     "defaultMessage": "切换账户……"
+  },
+  "library-modal.action.add": {
+    "defaultMessage": "添加/创建"
+  },
+  "library-modal.action.back": {
+    "defaultMessage": "返回"
+  },
+  "library-modal.details.browse": {
+    "defaultMessage": "浏览文件夹"
+  },
+  "library-modal.details.format": {
+    "defaultMessage": "格式"
+  },
+  "library-modal.details.name.label": {
+    "defaultMessage": "库名称（可选）"
+  },
+  "library-modal.details.name.placeholder": {
+    "defaultMessage": "留空则使用文件夹名"
+  },
+  "library-modal.details.path.label": {
+    "defaultMessage": "库位置"
+  },
+  "library-modal.details.path.placeholder": {
+    "defaultMessage": "选择文件夹或输入路径"
+  },
+  "library-modal.details.title": {
+    "defaultMessage": "添加库"
+  },
+  "library-modal.format.minecraft.description": {
+    "defaultMessage": "版本放在 versions 文件夹里，与 .minecraft 目录一致。适用于 PCL、HMCL、Baka XL 等绝大多数启动器。"
+  },
+  "library-modal.format.minecraft.title": {
+    "defaultMessage": ".minecraft 格式"
+  },
+  "library-modal.format.modrinth.description": {
+    "defaultMessage": "每个实例是一个独立文件夹。适用于 Modrinth App、美西螈启动器、Celestial Launcher 等。"
+  },
+  "library-modal.format.modrinth.title": {
+    "defaultMessage": "Modrinth 格式"
+  },
+  "library-modal.format.title": {
+    "defaultMessage": "这是什么类型的库？"
   },
   "locale.cs-CZ": {
     "defaultMessage": "捷克语"

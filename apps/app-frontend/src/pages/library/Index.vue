@@ -1,15 +1,11 @@
 <script setup lang="ts">
-import {BoxIcon, FolderSearchIcon, LibraryIcon, PlusIcon, SettingsIcon} from '@modrinth/assets'
+import {LibraryIcon, PlusIcon} from '@modrinth/assets'
 import {
-    Button, commonMessages,
-    DropdownSelect,
+    AddLibraryModal,
+    Button,
     injectNotificationManager,
     NavTabs,
-    NewModal as Modal,
-    Input,
 } from '@modrinth/ui'
-import { invoke } from '@tauri-apps/api/core'
-import { open } from '@tauri-apps/plugin-dialog'
 import { inject, onUnmounted, ref, shallowRef, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 
@@ -17,13 +13,19 @@ import { NewInstanceImage } from '@/assets/icons'
 import NavButton from "@/components/ui/NavButton.vue";
 import { instance_listener } from '@/helpers/events.js'
 import { list } from '@/helpers/instance'
-import type { InstanceFormat } from '@/helpers/library'
 import { library_default_path, library_list } from '@/helpers/library'
 import { useRootBreadcrumb } from '@/providers/breadcrumbs'
 
 const { handleError } = injectNotificationManager()
 const showCreationModal = inject('showCreationModal')
 const route = useRoute()
+
+const addLibraryModalRef = ref<InstanceType<typeof AddLibraryModal> | null>(null)
+
+defineExpose({
+	show: () => addLibraryModalRef.value?.show(),
+	hide: () => addLibraryModalRef.value?.hide(),
+})
 
 useRootBreadcrumb({
 	slot: 'root',
@@ -144,43 +146,9 @@ watch(activeTab, async (tab) => {
 	instances.value = await list(tab === 'all' ? undefined : tab).catch(handleError)
 })
 
-const addLibraryPath = ref('')
-const addLibraryFormat = ref<InstanceFormat>('modrinth')
-const addLibraryName = ref('')
-const addLibraryModalRef = ref<InstanceType<typeof Modal> | null>(null)
-
-defineExpose({
-	show: () => addLibraryModalRef.value?.show(),
-	hide: () => addLibraryModalRef.value?.hide(),
-})
-
-async function pickFolder() {
-	const result = await open({ directory: true, multiple: false })
-	if (result && typeof result === 'string') {
-		addLibraryPath.value = result
-	}
-}
-
-async function addLibrary() {
-	if (!addLibraryPath.value.trim()) return
-	try {
-		await invoke('plugin:instance|library_add', {
-			path: addLibraryPath.value.trim(),
-			format: addLibraryFormat.value,
-			name: addLibraryName.value.trim() || undefined,
-		})
-		closeAddLibraryModal()
-		addLibraryPath.value = ''
-		addLibraryName.value = ''
-		await loadLibraries()
-		instances.value = await list(activeTab.value === 'all' ? undefined : activeTab.value).catch(handleError)
-	} catch (e) {
-		handleError(e as Error)
-	}
-}
-
-function closeAddLibraryModal() {
-	addLibraryModalRef.value?.hide()
+async function onLibraryAdded() {
+	await loadLibraries()
+	instances.value = await list(activeTab.value === 'all' ? undefined : activeTab.value).catch(handleError)
 }
 </script>
 
@@ -213,70 +181,8 @@ function closeAddLibraryModal() {
 
 		</div>
 
-		<!-- Add Library Modal -->
-		<Modal
-			ref="addLibraryModalRef"
-			header="添加库"
-			:closable="false"
-			noblur
-		>
-			<div class="flex flex-col gap-4 w-[500px]">
-				<div class="flex flex-col gap-1">
-                    <h2 class="m-0 text-lg font-semibold text-contrast">
-                        库名称（可选）
-                    </h2>
-                    <Input
-                        id="appDir"
-                        v-model="addLibraryName"
-                        placeholder="留空则使用文件夹名"
-                        type="text"
-                        wrapper-class="w-full"
-                    >
-                    </Input>
-				</div>
-                <h2 class="m-0 text-lg font-semibold text-contrast">
-                    库位置
-                </h2>
-                <Input
-                    id="appDir"
-                    v-model="addLibraryPath"
-                    placeholder="选择文件夹或输入路径"
-                    :icon="BoxIcon"
-                    type="text"
-                    wrapper-class="w-full"
-                >
-                    <template #right>
-                        <Button type="quiet" @click="pickFolder" v-tooltip="'浏览文件夹'" :aria-label="'浏览文件夹'" class="ml-1.5">
-                            <FolderSearchIcon aria-hidden="true" />
-                        </Button>
-                    </template>
-                </Input>
-				<div class="flex flex-col gap-1">
-					<span class="text-sm font-medium text-primary">格式</span>
-					<DropdownSelect
-						v-model="addLibraryFormat"
-						name="Library Format"
-						:options="['modrinth', 'minecraft']"
-						:display-name="(opt) => opt === 'modrinth' ? 'Modrinth (默认)' : 'Minecraft (.minecraft)'"
-					>
-						<span class="text-secondary">{{ addLibraryFormat === 'modrinth' ? 'Modrinth (默认)' : 'Minecraft (.minecraft)' }}</span>
-					</DropdownSelect>
-				</div>
-				<div class="flex justify-end gap-2 pt-2">
-					<Button type="outlined" @click="closeAddLibraryModal">
-						取消
-					</Button>
-					<Button
-						type="colored"
-						color="brand"
-						:disabled="!addLibraryPath.trim()"
-						@click="addLibrary"
-					>
-						添加
-					</Button>
-				</div>
-			</div>
-		</Modal>
+		<!-- Add Library Modal: the same dialog the home page opens. -->
+		<AddLibraryModal ref="addLibraryModalRef" @added="onLibraryAdded" />
 
 		<template v-if="instances && instances.length > 0">
 			<RouterView

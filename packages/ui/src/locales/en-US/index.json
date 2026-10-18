@@ -1025,6 +1025,9 @@
   "creation-flow.modal.import-instance.launcher-path.placeholder": {
     "defaultMessage": "Path to launcher..."
   },
+  "creation-flow.modal.import-instance.minecraft-format-note": {
+    "defaultMessage": "Using a .minecraft-format launcher such as PCL, HMCL or Baka XL? Go back and choose “Create or import a library” instead."
+  },
   "creation-flow.modal.import-instance.notification.no-instances-found.text": {
     "defaultMessage": "No importable instances were found at the specified path."
   },
@@ -1036,6 +1039,9 @@
   },
   "creation-flow.modal.import-instance.selection.clear-all": {
     "defaultMessage": "Clear all"
+  },
+  "creation-flow.modal.import-instance.supported-launchers": {
+    "defaultMessage": "Supported launchers: Prism Launcher, MultiMC, CurseForge, ATLauncher and GDLauncher."
   },
   "creation-flow.modal.modpack.action.browse": {
     "defaultMessage": "Browse modpacks"
@@ -1066,6 +1072,12 @@
   },
   "creation-flow.modal.project.search.placeholder": {
     "defaultMessage": "Search mods, modpacks, and more..."
+  },
+  "creation-flow.modal.setup-type.option.add-library.description": {
+    "defaultMessage": "Add a folder of existing versions, or make a new one, for PCL, HMCL, Modrinth and others."
+  },
+  "creation-flow.modal.setup-type.option.add-library.title": {
+    "defaultMessage": "Create or import a library"
   },
   "creation-flow.modal.setup-type.option.custom-setup.description": {
     "defaultMessage": "Start from scratch by picking a loader and game version."
@@ -2797,6 +2809,48 @@
   },
   "layout.account-switcher.switching": {
     "defaultMessage": "Switching accounts..."
+  },
+  "library-modal.action.add": {
+    "defaultMessage": "Add / Create"
+  },
+  "library-modal.action.back": {
+    "defaultMessage": "Back"
+  },
+  "library-modal.details.browse": {
+    "defaultMessage": "Browse for a folder"
+  },
+  "library-modal.details.format": {
+    "defaultMessage": "Format"
+  },
+  "library-modal.details.name.label": {
+    "defaultMessage": "Library name (optional)"
+  },
+  "library-modal.details.name.placeholder": {
+    "defaultMessage": "Uses the folder name when left empty"
+  },
+  "library-modal.details.path.label": {
+    "defaultMessage": "Library folder"
+  },
+  "library-modal.details.path.placeholder": {
+    "defaultMessage": "Choose a folder or type a path"
+  },
+  "library-modal.details.title": {
+    "defaultMessage": "Add a library"
+  },
+  "library-modal.format.minecraft.description": {
+    "defaultMessage": "Versions live in a versions folder, as in a .minecraft directory. Works with PCL, HMCL, Baka XL and most other launchers."
+  },
+  "library-modal.format.minecraft.title": {
+    "defaultMessage": ".minecraft format"
+  },
+  "library-modal.format.modrinth.description": {
+    "defaultMessage": "Each instance is its own folder. Works with the Modrinth app, the Axolotl launcher, Celestial Launcher and others."
+  },
+  "library-modal.format.modrinth.title": {
+    "defaultMessage": "Modrinth format"
+  },
+  "library-modal.format.title": {
+    "defaultMessage": "What kind of library is this?"
   },
   "locale.cs-CZ": {
     "defaultMessage": "Czech"
