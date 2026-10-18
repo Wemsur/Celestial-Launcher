@@ -3,8 +3,8 @@ import type { ComponentExposed } from 'vue-component-type-helpers'
 
 import { defineMessages, useVIntl } from '#ui/composables/i18n'
 
+import { createContext } from '../../../providers'
 import {
-	createContext,
 	injectLibraryManagement,
 	type LibraryFormat,
 } from '../../../providers/library-management'

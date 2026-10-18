@@ -14,7 +14,7 @@ import type { ComponentExposed } from 'vue-component-type-helpers'
 
 import { injectNotificationManager } from '../../../providers'
 import type { LibraryFormat } from '../../../providers/library-management'
-import type { StageConfigInput } from '../../base/MultiStageModal.vue'
+import type { StageConfigInput } from '../../base'
 import MultiStageModal from '../../base/MultiStageModal.vue'
 import AddLibraryDetailsStage from './AddLibraryDetailsStage.vue'
 import AddLibraryFormatStage from './AddLibraryFormatStage.vue'

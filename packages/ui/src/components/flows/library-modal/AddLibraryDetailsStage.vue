@@ -57,9 +57,9 @@ import { BoxIcon, FolderSearchIcon } from '@modrinth/assets'
 
 import { useVIntl } from '#ui/composables/i18n'
 
-import { Button } from '../../../base/buttons'
-import Input from '../../../base/inputs/Input.vue'
-import { addLibraryMessages, injectAddLibraryContext } from '../add-library-context'
+import { Button } from '../../base/buttons'
+import Input from '../../base/inputs/Input.vue'
+import { addLibraryMessages, injectAddLibraryContext } from './add-library-context'
 
 const ctx = injectAddLibraryContext()
 const { formatMessage } = useVIntl()

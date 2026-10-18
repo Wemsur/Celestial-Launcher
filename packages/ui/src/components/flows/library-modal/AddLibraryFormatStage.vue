@@ -22,9 +22,9 @@ import { BoxesIcon, BoxIcon } from '@modrinth/assets'
 
 import { useVIntl } from '#ui/composables/i18n'
 
-import type { LibraryFormat } from '../../../../providers/library-management'
-import BigOptionButton from '../../../base/BigOptionButton.vue'
-import { addLibraryMessages, injectAddLibraryContext } from '../add-library-context'
+import type { LibraryFormat } from '../../../providers/library-management'
+import BigOptionButton from '../../base/BigOptionButton.vue'
+import { addLibraryMessages, injectAddLibraryContext } from './add-library-context'
 
 const ctx = injectAddLibraryContext()
 const { formatMessage } = useVIntl()
