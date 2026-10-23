@@ -558,17 +558,7 @@ html {
 	--brand-gradient-fade-out-color: linear-gradient(to bottom, rgba(24, 30, 31, 0), #1e1c17 80%);
 
 	--color-gradient-button-bg: linear-gradient(180deg, #1b1b20 0%, #7e7757 100%);
-	[class*='outline-none'] {
-		//输入框外框
-		border: 1px solid rgb(166 162 126 / 0.39);
-	}
-	[class*='router-link-exact-active'] {
-		background: #3e3e36;
-		border-radius: 100px;
-	}
-	[class*='custom-focus-indicator text-inherit outline-none'] {
-		border: none;
-	}
+
 	--color-brand-highlight: rgb(140 129 82 / 0.25);
 }
 
