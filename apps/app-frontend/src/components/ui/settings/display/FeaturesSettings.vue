@@ -45,19 +45,6 @@ const queryClient = useQueryClient()
 const showJumpInFlag: FeatureFlag = 'worlds_in_home'
 
 const messages = defineMessages({
-	syncAcrossDevicesTitle: {
-		id: 'app.features-settings.sync-across-devices.title',
-		defaultMessage: 'Sync features across devices',
-	},
-	syncAcrossDevicesDescription: {
-		id: 'app.features-settings.sync-across-devices.description',
-		defaultMessage:
-			"Use these feature settings everywhere you're signed in. Turn this off to keep separate settings on this device.",
-	},
-	syncAcrossDevicesSignedOutTooltip: {
-		id: 'app.features-settings.sync-across-devices.signed-out-tooltip',
-		defaultMessage: 'Sign into a Modrinth account to sync settings.',
-	},
 	instancePagesTitle: {
 		id: 'app.features-settings.instance-pages.title',
 		defaultMessage: 'Instances',
@@ -258,33 +245,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-	<section class="border-0 border-b border-solid border-surface-4 pb-6">
-		<div class="flex items-center justify-between gap-4">
-			<div>
-				<h2 id="sync-features-across-devices-label" class="m-0 text-lg font-semibold text-contrast">
-					{{ formatMessage(messages.syncAcrossDevicesTitle) }}
-				</h2>
-				<p class="m-0 mt-1 text-secondary">
-					{{ formatMessage(messages.syncAcrossDevicesDescription) }}
-				</p>
-			</div>
-			<span
-				v-tooltip="
-					!auth.user.value ? formatMessage(messages.syncAcrossDevicesSignedOutTooltip) : undefined
-				"
-				class="inline-flex shrink-0"
-			>
-				<Toggle
-					id="sync-features-across-devices"
-					:model-value="Boolean(auth.user.value) && current.syncFeaturesAcrossDevices"
-					:disabled="!auth.user.value"
-					aria-labelledby="sync-features-across-devices-label"
-					@update:model-value="current.syncFeaturesAcrossDevices = $event"
-				/>
-			</span>
-		</div>
-	</section>
-
+	<!--
+		No sync toggle here, deliberately. This build keeps its settings on this
+		device: it changes settings Modrinth's server does not know about, so a
+		sync would be rejected. The upload is dropped in
+		`helpers/user-preferences.ts`; this is only so the page does not offer a
+		switch that cannot do what it says.
+	-->
 	<section class="mt-6">
 		<h2 class="m-0 text-xl font-semibold text-contrast">
 			{{ formatMessage(messages.instancePagesTitle) }}

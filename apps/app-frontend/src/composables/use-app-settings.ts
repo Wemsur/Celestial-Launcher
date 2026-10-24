@@ -31,9 +31,11 @@ type FeatureFlags = Record<FeatureFlag, boolean>
 
 const syncFeaturesAcrossDevices = ref(false)
 
-// Written by App.vue from the startup settings and from cross-device behavior
-// sync. The fork has no UI toggle for it, but the fields are part of the
-// upstream sync contract, so they stay as plain data holders.
+// Written by App.vue from the startup settings. Neither of these has a UI
+// toggle in the fork — settings stay on this device, and the upload those
+// toggles would drive is dropped in `helpers/user-preferences.ts` — but the
+// fields are part of the upstream sync contract, so they stay as plain data
+// holders rather than being deleted from the settings table.
 const syncBehaviorAcrossDevices = ref(false)
 const featureFlags = reactive<FeatureFlags>({ ...DEFAULT_FEATURE_FLAGS })
 
