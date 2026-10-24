@@ -5,7 +5,7 @@
 //!
 //! ```text
 //! settings_dir/
-//!   content-sources.json     ← registry: enabled flag per source
+//!   celestial.db             ← registry: enabled flag per source
 //!   content-sources/<id>/    ← the source itself, folder name == manifest id
 //!   content-source-data/<id>/ ← writable scratch space handed to the source
 //! ```
@@ -18,13 +18,13 @@ use super::manifest::{
     ContentSourceManifest, MANIFEST_FILE, is_valid_source_id,
 };
 use crate::State;
+use crate::state::celestial_db;
 use crate::util::io;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 const SOURCES_DIR: &str = "content-sources";
 const SOURCE_DATA_DIR: &str = "content-source-data";
-const STATE_FILE: &str = "content-sources.json";
 
 /// An entry bundle is a compiled source, so it is small by nature. The cap only
 /// exists so a hostile folder cannot make the loader read a huge file into
@@ -50,10 +50,6 @@ pub fn source_data_dir(
         .settings_dir
         .join(SOURCE_DATA_DIR)
         .join(checked_id(source_id)?))
-}
-
-fn state_file(state: &State) -> PathBuf {
-    state.directories.settings_dir.join(STATE_FILE)
 }
 
 /// Reject an id that could name anything other than a direct child of the
@@ -664,36 +660,17 @@ fn record_mut<'a>(
 }
 
 async fn read_state(state: &State) -> crate::Result<SourceStateFile> {
-    let path = state_file(state);
-    let bytes = match io::read(&path).await {
-        Ok(bytes) => bytes,
-        Err(_) => return Ok(SourceStateFile::default()),
-    };
-    match serde_json::from_slice(&bytes) {
-        Ok(registry) => Ok(registry),
-        Err(error) => {
-            // Losing the registry only means sources start enabled again, a far
-            // better outcome than refusing to start.
-            tracing::warn!(
-                path = %path.display(),
-                "Content source registry is unreadable, starting from an \
-                 empty one: {error}"
-            );
-            Ok(SourceStateFile::default())
-        }
-    }
+    let sources = celestial_db::content_sources::load(&state.celestial).await?;
+    Ok(SourceStateFile { sources })
 }
 
 async fn write_state(
     state: &State,
     registry: &SourceStateFile,
 ) -> crate::Result<()> {
-    let path = state_file(state);
-    if let Some(parent) = path.parent() {
-        io::create_dir_all(parent).await?;
-    }
-    io::write(&path, serde_json::to_vec_pretty(registry)?).await?;
-    Ok(())
+    // Whole-table transactional rewrite in celestial.db; atomic by
+    // construction, unlike the file write this replaces.
+    celestial_db::content_sources::save(&state.celestial, &registry.sources).await
 }
 
 async fn copy_dir(from: &Path, to: &Path) -> crate::Result<()> {

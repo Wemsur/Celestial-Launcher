@@ -1,19 +1,21 @@
-//! Instance grouping backed by a standalone JSON file in the app's settings
-//! directory, next to `libraries.json`.
+//! Instance grouping backed by the `instance_groups` / `group_memberships`
+//! tables in celestial.db.
 //!
 //! Groups used to live in SQLite (`instance_groups` /
-//! `instance_group_memberships`). That layout could not express membership for
-//! JSON-backed instances (`local:` ids, i.e. every `.minecraft` and
-//! multi-library instance) because they have no row in the `instances` table,
-//! and it duplicated membership into the per-instance sidecars. This module is
-//! the single source of truth instead; the SQL tables are left untouched but
-//! are no longer read or written (they are only read once, at import time).
+//! `instance_group_memberships` in app.db). That layout could not express
+//! membership for JSON-backed instances (`local:` ids, i.e. every
+//! `.minecraft` and multi-library instance) because they have no row in the
+//! `instances` table, so they moved to `instance_groups.json`, and now to
+//! celestial.db. The old app.db tables are left untouched but are never read
+//! or written again (they are only read once, at import time).
+//!
+//! The public API stays synchronous: an in-memory cache is the runtime source
+//! of truth and every mutation writes through to celestial.db.
 
 use crate::state::State;
+use crate::state::celestial_db;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::path::PathBuf;
 use std::sync::{OnceLock, RwLock};
 use tracing::{info, warn};
 
@@ -100,60 +102,45 @@ impl InstanceGroupsFile {
 
 static STORE: OnceLock<RwLock<InstanceGroupsFile>> = OnceLock::new();
 
-fn file_path() -> Option<PathBuf> {
-    let state = State::get_if_initialized()?;
-    Some(
-        state
-            .directories
-            .settings_dir
-            .join(INSTANCE_GROUPS_FILE_NAME),
-    )
+/// Seeds the in-memory store from celestial.db. Called once per startup from
+/// `ensure_imported`, before any read can observe an empty store (the lazy
+/// default in `store()` only covers calls that race ahead of that).
+async fn seed_store_from_db(state: &State) -> crate::Result<()> {
+	let file = match celestial_db::groups::load(&state.celestial).await {
+		Ok(file) => file,
+		Err(error) => {
+			warn!("Failed to load instance groups from celestial.db: {error}");
+			InstanceGroupsFile::default()
+		}
+	};
+	let lock = store();
+	let mut guard = lock.write().unwrap_or_else(|e| e.into_inner());
+	*guard = file;
+	Ok(())
 }
 
-/// Reads the store from disk, or `None` when it has never been written.
-fn read_from_disk() -> Option<InstanceGroupsFile> {
-    let path = file_path()?;
-    if !path.exists() {
-        return None;
-    }
-    match fs::read_to_string(&path)
-        .map_err(|e| e.to_string())
-        .and_then(|content| {
-            serde_json::from_str::<InstanceGroupsFile>(&content)
-                .map_err(|e| e.to_string())
-        })
-    {
-        Ok(mut file) => {
-            file.normalize();
-            Some(file)
-        }
-        Err(error) => {
-            // A corrupt file must not wipe the user's groups silently on the
-            // next write, so bail out to an empty store without touching disk.
-            warn!("Failed to read {INSTANCE_GROUPS_FILE_NAME}: {error}");
-            None
-        }
-    }
-}
-
+/// Persists the store to celestial.db. Runs synchronously via
+/// `block_in_place` so a mutation is durable before its caller returns — a
+/// spawned task would risk persisting two rapid mutations out of order.
 fn write_to_disk(file: &InstanceGroupsFile) {
-    let Some(path) = file_path() else {
-        return;
-    };
-    let write = serde_json::to_string_pretty(file)
-        .map_err(|e| e.to_string())
-        .and_then(|content| {
-            fs::write(&path, content).map_err(|e| e.to_string())
-        });
-    if let Err(error) = write {
-        warn!("Failed to save {INSTANCE_GROUPS_FILE_NAME}: {error}");
-    }
+	let Some(state) = State::get_if_initialized() else {
+		return;
+	};
+	let file = file.clone();
+	let result = tokio::runtime::Handle::try_current().ok().and_then(|handle| {
+		tokio::task::block_in_place(|| {
+			handle
+				.block_on(celestial_db::groups::save(&state.celestial, &file))
+				.ok()
+		})
+	});
+	if result.is_none() {
+		warn!("Failed to save instance groups to celestial.db");
+	}
 }
 
 fn store() -> &'static RwLock<InstanceGroupsFile> {
-    STORE.get_or_init(|| {
-        RwLock::new(read_from_disk().unwrap_or_else(InstanceGroupsFile::default))
-    })
+    STORE.get_or_init(|| RwLock::new(InstanceGroupsFile::default()))
 }
 
 fn with_read<T>(f: impl FnOnce(&InstanceGroupsFile) -> T) -> T {
@@ -332,15 +319,19 @@ pub fn rename_instance(old_id: &str, new_id: &str) {
 /// The SQL access here is read-only and happens exactly once; afterwards the
 /// tables are never touched again (they are kept as-is so no DB migration is
 /// needed).
+///
+/// Groups now live in celestial.db. When its import marker is already set
+/// (groups were carried over from the JSON sidecar, or imported here before),
+/// the in-memory store is just seeded from there; the legacy SQLite path below
+/// only runs for installs that never had `instance_groups.json` at all.
 pub async fn ensure_imported(state: &State) -> crate::Result<()> {
-    let Some(path) = file_path() else {
-        return Ok(());
-    };
-    if path.exists() {
-        // Populate the in-memory cache eagerly so the first synchronous read
-        // does not race with a write.
-        let _ = list();
-        return Ok(());
+    let already_in_db = state
+        .celestial
+        .get_meta(celestial_db::groups::IMPORT_FLAG)
+        .await?
+        .is_some();
+    if already_in_db {
+        return seed_store_from_db(state).await;
     }
 
     let mut file = InstanceGroupsFile {
@@ -403,17 +394,21 @@ pub async fn ensure_imported(state: &State) -> crate::Result<()> {
     let group_count = file.groups.len();
     let instance_count = file.memberships.len();
 
-    // Seed the cache with the imported data instead of letting `store()` read
-    // the file we are about to write.
+    // Seed the cache with the imported data, then persist to celestial.db and
+    // mark the import done so this path never runs again.
     {
         let lock = store();
         let mut guard = lock.write().unwrap_or_else(|e| e.into_inner());
-        *guard = file;
-        write_to_disk(&guard);
+        *guard = file.clone();
     }
+    celestial_db::groups::save(&state.celestial, &file).await?;
+    state
+        .celestial
+        .set_meta(celestial_db::groups::IMPORT_FLAG, "done")
+        .await?;
 
     info!(
-        "Imported {group_count} instance groups covering {instance_count} instances into {INSTANCE_GROUPS_FILE_NAME}"
+        "Imported {group_count} instance groups covering {instance_count} instances into celestial.db"
     );
 
     Ok(())

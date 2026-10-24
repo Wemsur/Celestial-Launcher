@@ -1,3 +1,4 @@
+use crate::state::celestial_db;
 use crate::state::instances::{InstanceLaunchOverridesData, adapters::sqlite::instance_rows};
 use crate::state::{ContentSet, Instance, InstanceLink, ReleaseChannel, State};
 use chrono::{DateTime, Utc};
@@ -437,18 +438,7 @@ fn default_libraries_config() -> LibrariesConfig {
 }
 
 pub async fn get_libraries_config(state: &State) -> crate::Result<LibrariesConfig> {
-    let path = state.directories.settings_dir.join(LIBRARIES_FILE_NAME);
-    if !path.exists() {
-        return Ok(LibrariesConfig {
-            libraries: vec![],
-            migrated: false,
-            schema_version: 0,
-            active_library_path: None,
-        });
-    }
-    let content = fs::read_to_string(&path)?;
-    let config: LibrariesConfig = serde_json::from_str(&content)?;
-    Ok(config)
+    celestial_db::libraries::load(&state.celestial).await
 }
 
 /// The library a new instance should be created in when the caller did not name
@@ -485,11 +475,9 @@ pub async fn save_libraries_config(
     state: &State,
     config: &LibrariesConfig,
 ) -> crate::Result<()> {
-    let path = state.directories.settings_dir.join(LIBRARIES_FILE_NAME);
-    let content = serde_json::to_string_pretty(config)?;
-    // Atomic: the registry is read on every scan, and a truncated write would
-    // be read as "no libraries", making every instance in them disappear.
-    crate::util::io::write(&path, content.as_bytes()).await?;
+    // The registry is read on every scan; save is a transactional whole-table
+    // rewrite in celestial.db, so it is atomic by construction.
+    celestial_db::libraries::save(&state.celestial, config).await?;
     invalidate_instance_list_cache();
     Ok(())
 }

@@ -66,6 +66,8 @@ pub mod libraries;
 pub mod attached_world_data;
 pub mod server_join_log;
 
+pub mod celestial_db;
+
 // Global state
 // RwLock on state only has concurrent reads, except for config dir change which takes control of the State
 static LAUNCHER_STATE: OnceCell<Arc<State>> = OnceCell::const_new();
@@ -112,6 +114,9 @@ pub struct State {
     pub restart_after_pending_update: AtomicBool,
 
     pub(crate) pool: SqlitePool,
+
+    /// The Celestial fork's own storage (celestial.db), separate from app.db.
+    pub celestial: Arc<celestial_db::CelestialDb>,
 
     pub(crate) file_watcher: FileWatcher,
 }
@@ -206,12 +211,21 @@ impl State {
                 tracing::error!("Error migrating legacy instance icons: {e}");
             }
 
+            // One-time import of legacy JSON sidecars into celestial.db. Must
+            // run before the libraries SQLite migration: that migration reads
+            // the registry through get_libraries_config, which now serves from
+            // celestial.db, so the JSON sidecars (the newer source) have to be
+            // carried over first.
+            if let Err(e) = celestial_db::ensure_imported(state).await {
+                tracing::error!("Error importing legacy storage into celestial.db: {e}");
+            }
+
             if let Err(e) = libraries::ensure_migration_done(state).await {
                 tracing::error!("Error ensuring migration done: {e}");
             }
 
-            // Must run after the library migration so JSON-backed instances
-            // exist and their sidecar groups can be imported.
+            // Seeds the in-memory group cache from celestial.db, or imports
+            // straight from the old app.db tables when no sidecar existed.
             if let Err(e) = instance_groups::ensure_imported(state).await {
                 tracing::error!("Error importing instance groups: {e}");
             }
@@ -296,6 +310,12 @@ impl State {
         let directories =
             DirectoryInfo::init(settings.custom_dir, &app_identifier).await?;
 
+        tracing::info!("Connecting to celestial database");
+        let celestial = Arc::new(
+            celestial_db::CelestialDb::connect(&directories.settings_dir)
+                .await?,
+        );
+
         let discord_rpc = DiscordGuard::init()?;
 
         tracing::info!("Initializing file watcher");
@@ -324,6 +344,7 @@ impl State {
             friends_socket,
             restart_after_pending_update: AtomicBool::new(false),
             pool,
+            celestial,
             file_watcher,
             // app_identifier,
         }))

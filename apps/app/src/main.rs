@@ -70,6 +70,54 @@ fn is_dev() -> bool {
     cfg!(debug_assertions)
 }
 
+// ── celestial.db 上的界面偏好存取 ──────────────────────────────────────────
+// 原先散落在 custom_backgrounds/celestial_settings.json、interface/*.json、
+// translation/*.json 里的 fork 自有偏好，统一迁到 celestial.db 的 ui_settings
+// 表（KV）。前端命令与 schema 完全不变，Rust 只是从"整文件读写"换成"按键读写"。
+async fn ui_settings_get(key: &str) -> Result<Option<String>, String> {
+    let state = State::get()
+        .await
+        .map_err(|e| format!("获取应用状态失败: {}", e))?;
+    theseus::celestial_db::ui_settings::get_json(state.celestial.pool(), key)
+        .await
+        .map_err(|e| format!("读取界面设置失败: {}", e))
+}
+
+async fn ui_settings_set(key: &str, value: String) -> Result<(), String> {
+    let state = State::get()
+        .await
+        .map_err(|e| format!("获取应用状态失败: {}", e))?;
+    theseus::celestial_db::ui_settings::set_json(
+        state.celestial.pool(),
+        key,
+        &value,
+    )
+    .await
+    .map_err(|e| format!("写入界面设置失败: {}", e))
+}
+
+/// celestial_settings.json 里共享文档的按键，迁库后各自成为独立 KV 键。
+async fn get_bool_setting(key: &str, default: bool) -> Result<bool, String> {
+    Ok(ui_settings_get(key)
+        .await?
+        .map(|v| v == "true")
+        .unwrap_or(default))
+}
+
+async fn set_bool_setting(key: &str, value: bool) -> Result<(), String> {
+    ui_settings_set(key, value.to_string()).await
+}
+
+/// State 里的 settings_dir。生产环境下与 Tauri 的 app_data_dir 相同；dev 下
+/// THESEUS_CONFIG_DIR 会把数据目录整体隔离出去，所以涉及数据目录的文件类命令
+/// 必须走这里，而不是 app_data_dir。State 未就绪时等待初始化完成。
+async fn settings_dir() -> Result<std::path::PathBuf, String> {
+    let state = State::get()
+        .await
+        .map_err(|e| format!("获取应用状态失败: {}", e))?;
+    Ok(state.directories.settings_dir.clone())
+}
+
 // Toggles decorations
 #[tauri::command]
 async fn toggle_decorations(b: bool, window: tauri::Window) -> api::Result<()> {
@@ -98,10 +146,7 @@ async fn check_for_import(
     app_handle: tauri::AppHandle,
 ) -> Result<CheckImportResponse, String> {
     // 获取 Celestial Launcher 的路径
-    let new_data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 AppData 目录: {}", e))?;
+    let new_data_dir = settings_dir().await?;
 
     // 检查数据库是否存在实例（直接查实例文件夹）
     let mut instances_dir = new_data_dir.clone();
@@ -117,10 +162,7 @@ async fn check_for_import(
     }
 
     // 没有实例，检查 ModrinthApp 的旧路径是否存在
-    let old_base = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 AppData 目录: {}", e))?;
+    let old_base = new_data_dir.clone();
 
     // old_base 已经是 CelestialLauncher 所在目录
     // 需要到上一级去找 "ModrinthApp"
@@ -140,12 +182,8 @@ async fn check_for_import(
 
 #[tauri::command]
 async fn import_old_data(
-    app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
-    let data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 AppData 目录: {}", e))?;
+    let data_dir = settings_dir().await?;
 
     let mut modrinth_app_dir = data_dir.parent()
         .ok_or_else(|| "无法获取父目录".to_string())?
@@ -180,78 +218,23 @@ fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> io::Result<()> 
 
 #[tauri::command]
 async fn set_dont_show_import_modal(
-    app_handle: tauri::AppHandle,
     value: bool,
 ) -> Result<(), String> {
-    let mut config_path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 AppData 目录: {}", e))?;
-
-    config_path.push("custom_backgrounds");
-    if !config_path.exists() {
-        fs::create_dir_all(&config_path)
-            .map_err(|e| format!("创建配置文件夹失败: {}", e))?;
-    }
-
-    config_path.push("celestial_settings.json");
-
-    // 读取现有 JSON
-    let existing = if config_path.exists() {
-        let content = fs::read_to_string(&config_path).unwrap_or_else(|_| "{}".to_string());
-        serde_json::from_str::<serde_json::Value>(&content).unwrap_or_else(|_| serde_json::json!({}))
-    } else {
-        serde_json::json!({})
-    };
-
-    // 写入 new_import_banner
-    let mut updated = existing.clone();
-    updated["new_import_banner"] = serde_json::json!(value); // true = 不再显示
-
-    fs::write(&config_path, serde_json::to_string_pretty(&updated).map_err(|e| format!("序列化失败: {}", e))?)
-        .map_err(|e| format!("写入配置文件失败: {}", e))?;
-
-    println!("[Rust Backend] 已保存不再显示标记: {}", value);
-    Ok(())
+    set_bool_setting("new_import_banner", value).await
 }
 
 
 #[tauri::command]
 async fn get_import_banner_setting(
-    app_handle: tauri::AppHandle,
 ) -> Result<bool, String> {
-    let mut config_path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 AppData 目录: {}", e))?;
-
-    config_path.push("custom_backgrounds");
-    config_path.push("celestial_settings.json");
-
-    if !config_path.exists() {
-        return Ok(false); // 没有设置文件，说明是首次启动或无记录
-    }
-
-    let content = fs::read_to_string(&config_path)
-        .map_err(|e| format!("读取配置文件失败: {}", e))?;
-
-    let json: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("JSON解析失败: {}", e))?;
-
     // new_import_banner 为 true 表示"不再显示"
-    Ok(json.get("new_import_banner")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false))
+    get_bool_setting("new_import_banner", false).await
 }
 
 #[tauri::command]
 async fn do_import_and_restart(
-    app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
-    let data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 AppData 目录: {}", e))?;
+    let data_dir = settings_dir().await?;
 
     let mut modrinth_app_dir = data_dir.parent()
         .ok_or_else(|| "无法获取父目录".to_string())?
@@ -317,15 +300,11 @@ Write-Host "Import completed successfully"
 
 #[tauri::command]
 async fn save_background_image(
-    app_handle: tauri::AppHandle,
     background_blob: Vec<u8>,
     file_name: String,
 ) -> Result<String, String> {
     // 1. 获取应用专属的本地数据存储目录
-    let mut target_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
+    let mut target_dir = settings_dir().await?;
 
     // 2. 创建一个名为 custom_backgrounds 的专用子文件夹
     target_dir.push("custom_backgrounds");
@@ -372,458 +351,186 @@ async fn save_background_image(
 
 // 1. 保存开关状态到文件
 #[tauri::command(rename_all = "camelCase")]
-async fn save_bg_blur_status(app_handle: tauri::AppHandle, is_active: bool) -> Result<(), String> {
-    // 1. 获取应用专属的本地数据存储目录
-    let mut config_path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
-
-    config_path.push("custom_backgrounds");
-    if !config_path.exists() {
-        fs::create_dir_all(&config_path)
-            .map_err(|e| format!("创建配置文件夹失败: {}", e))?;
-    }
-
-    // 2. 读取现有配置文件（如果存在）
-    config_path.push("celestial_settings.json");
-
-    let existing = if config_path.exists() {
-        let content = fs::read_to_string(&config_path).unwrap_or_else(|_| "{}".to_string());
-        serde_json::from_str::<serde_json::Value>(&content).unwrap_or_else(|_| serde_json::json!({}))
-    } else {
-        serde_json::json!({})
-    };
-
-    // 3. 更新 blur_enabled 字段后写回
-    let mut updated = existing.clone();
-    updated["blur_enabled"] = serde_json::json!(is_active);
-
-    fs::write(&config_path, serde_json::to_string_pretty(&updated).map_err(|e| format!("序列化失败: {}", e))?)
-        .map_err(|e| format!("写入配置文件失败: {}", e))?;
-
-    println!("[Rust Backend] 模糊状态已保存到 celestial_settings.json: {}", is_active);
-    Ok(())
+async fn save_bg_blur_status(_app_handle: tauri::AppHandle, is_active: bool) -> Result<(), String> {
+    set_bool_setting("blur_enabled", is_active).await
 }
 
 // 2. 读取开关状态
 #[tauri::command]
-async fn load_bg_blur_status(app_handle: tauri::AppHandle) -> Result<bool, String> {
-    // 1. 获取配置路径
-    let mut config_path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
-
-    config_path.push("custom_backgrounds");
-    config_path.push("celestial_settings.json");
-
-    // 2. 文件不存在时返回默认值 true
-    if !config_path.exists() {
-        return Ok(true);
-    }
-
-    // 3. 读取并解析 JSON
-    let content = fs::read_to_string(&config_path)
-        .map_err(|e| format!("读取配置文件失败: {}", e))?;
-
-    let json: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("JSON解析失败: {}", e))?;
-
-    Ok(json.get("blur_enabled").and_then(|v| v.as_bool()).unwrap_or(true))
+async fn load_bg_blur_status(_app_handle: tauri::AppHandle) -> Result<bool, String> {
+    // 缺省为 true —— 模糊是默认外观
+    get_bool_setting("blur_enabled", true).await
 }
 
-// 实例卡片背景：把图标做成卡片底纹。和 blur_enabled 一样存在
-// custom_backgrounds/celestial_settings.json 里，键名 instance_card_icon_bg。
-// 读写整个文件再改一个键，沿用本文件里其它设置项的做法。
+// 实例卡片背景：把图标做成卡片底纹。和 blur_enabled 一样是独立 KV 键。
 #[tauri::command(rename_all = "camelCase")]
 async fn save_instance_card_icon_bg(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     is_active: bool,
 ) -> Result<(), String> {
-    let mut config_path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
-
-    config_path.push("custom_backgrounds");
-    if !config_path.exists() {
-        fs::create_dir_all(&config_path)
-            .map_err(|e| format!("创建配置文件夹失败: {}", e))?;
-    }
-
-    config_path.push("celestial_settings.json");
-
-    let existing = if config_path.exists() {
-        let content = fs::read_to_string(&config_path).unwrap_or_else(|_| "{}".to_string());
-        serde_json::from_str::<serde_json::Value>(&content)
-            .unwrap_or_else(|_| serde_json::json!({}))
-    } else {
-        serde_json::json!({})
-    };
-
-    let mut updated = existing.clone();
-    updated["instance_card_icon_bg"] = serde_json::json!(is_active);
-
-    fs::write(
-        &config_path,
-        serde_json::to_string_pretty(&updated)
-            .map_err(|e| format!("序列化失败: {}", e))?,
-    )
-    .map_err(|e| format!("写入配置文件失败: {}", e))?;
-
-    Ok(())
+    set_bool_setting("instance_card_icon_bg", is_active).await
 }
 
-/// 文件或键缺失时返回 true —— 这个底纹是默认外观，没写过配置的用户也该看到。
+/// 键缺失时返回 true —— 这个底纹是默认外观，没写过配置的用户也该看到。
 #[tauri::command]
 async fn load_instance_card_icon_bg(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
 ) -> Result<bool, String> {
-    let mut config_path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
-
-    config_path.push("custom_backgrounds");
-    config_path.push("celestial_settings.json");
-
-    if !config_path.exists() {
-        return Ok(true);
-    }
-
-    let content = fs::read_to_string(&config_path)
-        .map_err(|e| format!("读取配置文件失败: {}", e))?;
-
-    let json: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("JSON解析失败: {}", e))?;
-
-    Ok(json
-        .get("instance_card_icon_bg")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true))
+    get_bool_setting("instance_card_icon_bg", true).await
 }
 
 // 3. 保存色相值
 #[tauri::command]
-async fn save_hue_value(app_handle: tauri::AppHandle, hue_value: u32) -> Result<(), String> {
+async fn save_hue_value(_app_handle: tauri::AppHandle, hue_value: u32) -> Result<(), String> {
     // 确保 hue 范围在 0-360
     if hue_value > 360 {
         return Err("Hue value must be between 0 and 360".to_string());
     }
 
-    let mut config_path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
-
-    config_path.push("custom_backgrounds");
-    if !config_path.exists() {
-        fs::create_dir_all(&config_path)
-            .map_err(|e| format!("创建配置文件夹失败: {}", e))?;
-    }
-
-    config_path.push("celestial_settings.json");
-
-    // 读取现有配置
-    let existing = if config_path.exists() {
-        let content = fs::read_to_string(&config_path).unwrap_or_else(|_| "{}".to_string());
-        serde_json::from_str::<serde_json::Value>(&content).unwrap_or_else(|_| serde_json::json!({}))
-    } else {
-        serde_json::json!({})
-    };
-
-    // 更新 hue_value 字段后写回
-    let mut updated = existing.clone();
-    updated["hue_value"] = serde_json::json!(hue_value);
-
-    fs::write(&config_path, serde_json::to_string_pretty(&updated).map_err(|e| format!("序列化失败: {}", e))?)
-        .map_err(|e| format!("写入配置文件失败: {}", e))?;
-
-/*    println!("[Rust Backend] 色相值已保存到 celestial_settings.json: {}", hue_value);*/
-    Ok(())
+    ui_settings_set("hue_value", hue_value.to_string()).await
 }
 
 // 4. 加载色相值
 #[tauri::command]
-async fn load_hue_value(app_handle: tauri::AppHandle) -> Result<u32, String> {
-    let mut config_path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
-
-    config_path.push("custom_backgrounds");
-    config_path.push("celestial_settings.json");
-
-    if !config_path.exists() {
-        return Ok(38); // 默认值
-    }
-
-    let content = fs::read_to_string(&config_path)
-        .map_err(|e| format!("读取配置文件失败: {}", e))?;
-
-    let json: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("JSON解析失败: {}", e))?;
-
-    Ok(json.get("hue_value").and_then(|v| v.as_u64()).unwrap_or(0) as u32)
+async fn load_hue_value(_app_handle: tauri::AppHandle) -> Result<u32, String> {
+    // 无记录时返回默认值 38
+    let raw = ui_settings_get("hue_value").await?.unwrap_or_else(|| "38".to_string());
+    Ok(raw.parse::<u32>().unwrap_or(38))
 }
 
 // 5. 保存 Library 每种排序方式的正序/倒序状态
 #[tauri::command]
 async fn save_library_sort_directions(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     directions: std::collections::HashMap<String, String>,
 ) -> Result<(), String> {
-    let mut config_path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
-
-    config_path.push("custom_backgrounds");
-    if !config_path.exists() {
-        fs::create_dir_all(&config_path)
-            .map_err(|e| format!("创建配置文件夹失败: {}", e))?;
-    }
-
-    config_path.push("celestial_settings.json");
-
-    // 读取现有配置，仅覆盖 library_sort_directions 字段，保留其他设置
-    let existing = if config_path.exists() {
-        let content = fs::read_to_string(&config_path).unwrap_or_else(|_| "{}".to_string());
-        serde_json::from_str::<serde_json::Value>(&content).unwrap_or_else(|_| serde_json::json!({}))
-    } else {
-        serde_json::json!({})
-    };
-
-    let mut updated = existing.clone();
-    updated["library_sort_directions"] = serde_json::json!(directions);
-
-    fs::write(&config_path, serde_json::to_string_pretty(&updated).map_err(|e| format!("序列化失败: {}", e))?)
-        .map_err(|e| format!("写入配置文件失败: {}", e))?;
-
-    Ok(())
+    let json = serde_json::to_string(&directions)
+        .map_err(|e| format!("序列化失败: {}", e))?;
+    ui_settings_set("library_sort_directions", json).await
 }
 
 // 6. 读取 Library 每种排序方式的正序/倒序状态
 #[tauri::command]
 async fn load_library_sort_directions(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
 ) -> Result<std::collections::HashMap<String, String>, String> {
-    let mut config_path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
-
-    config_path.push("custom_backgrounds");
-    config_path.push("celestial_settings.json");
-
-    // 无配置文件时返回空表，前端会退回到每种排序方式的默认方向
-    if !config_path.exists() {
+    // 无记录时返回空表，前端会退回到每种排序方式的默认方向
+    let Some(raw) = ui_settings_get("library_sort_directions").await? else {
         return Ok(std::collections::HashMap::new());
-    }
+    };
 
-    let content = fs::read_to_string(&config_path)
-        .map_err(|e| format!("读取配置文件失败: {}", e))?;
-
-    let json: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("JSON解析失败: {}", e))?;
-
-    let mut directions = std::collections::HashMap::new();
-    if let Some(map) = json.get("library_sort_directions").and_then(|v| v.as_object()) {
-        for (key, value) in map {
-            if let Some(direction) = value.as_str() {
-                directions.insert(key.clone(), direction.to_string());
-            }
-        }
-    }
-
-    Ok(directions)
+    serde_json::from_str(&raw).map_err(|e| format!("JSON解析失败: {}", e))
 }
 
-// 7. 翻译功能的独立存储目录：<appdata>/translation/
-//    settings.json 存翻译服务选择，cache.json 存译文缓存。
-//    这里只负责读写整个文件，schema 和 7 天过期清理都由前端负责，
+// 7. 翻译功能的存储：译文服务设置进 ui_settings 表，译文缓存进
+//    celestial.db 的 translation_cache 表（取代 translation/*.json）。
+//    只负责存取整个文档，schema 和 7 天过期清理都由前端负责，
 //    这样以后加字段不用改 Rust。
-fn translation_dir(
-    app_handle: &tauri::AppHandle,
-) -> Result<std::path::PathBuf, String> {
-    let mut dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
-
-    dir.push("translation");
-    if !dir.exists() {
-        fs::create_dir_all(&dir)
-            .map_err(|e| format!("创建翻译目录失败: {}", e))?;
-    }
-
-    Ok(dir)
-}
-
-/// 文件不存在时返回空串，前端据此回退到默认值。
-fn read_translation_file(
-    app_handle: &tauri::AppHandle,
-    name: &str,
-) -> Result<String, String> {
-    let path = translation_dir(app_handle)?.join(name);
-    if !path.exists() {
-        return Ok(String::new());
-    }
-
-    fs::read_to_string(&path)
-        .map_err(|e| format!("读取 {} 失败: {}", name, e))
-}
-
-/// 先写 .tmp 再改名：写入中途退出也不会留下被截断的坏 JSON。
-fn write_translation_file(
-    app_handle: &tauri::AppHandle,
-    name: &str,
-    contents: &str,
-) -> Result<(), String> {
-    let dir = translation_dir(app_handle)?;
-    let tmp = dir.join(format!("{}.tmp", name));
-
-    fs::write(&tmp, contents)
-        .map_err(|e| format!("写入 {} 失败: {}", name, e))?;
-    fs::rename(&tmp, dir.join(name))
-        .map_err(|e| format!("替换 {} 失败: {}", name, e))
-}
 
 #[tauri::command]
 async fn load_translation_settings(
-    app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
-    read_translation_file(&app_handle, "settings.json")
+    // 无记录时返回空串，前端据此回退到默认值。
+    Ok(ui_settings_get(theseus::celestial_db::translation_cache::KEY_TRANSLATION_SETTINGS)
+        .await?
+        .unwrap_or_default())
 }
 
 #[tauri::command]
 async fn save_translation_settings(
-    app_handle: tauri::AppHandle,
     contents: String,
 ) -> Result<(), String> {
-    write_translation_file(&app_handle, "settings.json", &contents)
+    ui_settings_set(
+        theseus::celestial_db::translation_cache::KEY_TRANSLATION_SETTINGS,
+        contents,
+    )
+    .await
 }
 
 #[tauri::command]
 async fn load_translation_cache(
-    app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
-    read_translation_file(&app_handle, "cache.json")
+    let state = State::get()
+        .await
+        .map_err(|e| format!("获取应用状态失败: {}", e))?;
+    theseus::celestial_db::translation_cache::load_json(state.celestial.pool())
+        .await
+        .map_err(|e| format!("读取译文缓存失败: {}", e))
 }
 
 #[tauri::command]
 async fn save_translation_cache(
-    app_handle: tauri::AppHandle,
     contents: String,
 ) -> Result<(), String> {
-    write_translation_file(&app_handle, "cache.json", &contents)
+    let state = State::get()
+        .await
+        .map_err(|e| format!("获取应用状态失败: {}", e))?;
+    theseus::celestial_db::translation_cache::replace_json(
+        state.celestial.pool(),
+        &contents,
+    )
+    .await
+    .map_err(|e| format!("写入译文缓存失败: {}", e))
 }
 
 #[tauri::command]
 async fn clear_translation_cache(
-    app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
-    let path = translation_dir(&app_handle)?.join("cache.json");
-    if path.exists() {
-        fs::remove_file(&path)
-            .map_err(|e| format!("删除翻译缓存失败: {}", e))?;
-    }
-
-    Ok(())
+    let state = State::get()
+        .await
+        .map_err(|e| format!("获取应用状态失败: {}", e))?;
+    theseus::celestial_db::translation_cache::clear(state.celestial.pool())
+        .await
+        .map_err(|e| format!("清空译文缓存失败: {}", e))
 }
 
-// 8. 界面布局状态的独立存储目录：<appdata>/interface/
-//    split-view.json 存 discover 分屏开关。和翻译一样只读写整个文件，
+// 8. 界面布局状态：分屏开关与界面偏好存 ui_settings 表的两个键
+//    （取代 interface/*.json）。和翻译一样只读写整个文档，
 //    schema 由前端拥有，所以以后加别的布局状态不用改 Rust。
-fn interface_dir(
-    app_handle: &tauri::AppHandle,
-) -> Result<std::path::PathBuf, String> {
-    let mut dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法获取 App Data 目录: {}", e))?;
 
-    dir.push("interface");
-    if !dir.exists() {
-        fs::create_dir_all(&dir)
-            .map_err(|e| format!("创建界面配置目录失败: {}", e))?;
-    }
-
-    Ok(dir)
-}
-
-/// 文件不存在时返回空串，前端据此回退到默认值（关闭）。
+/// 无记录时返回空串，前端据此回退到默认值（关闭）。
 #[tauri::command]
 async fn load_split_view_settings(
-    app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
-    let path = interface_dir(&app_handle)?.join("split-view.json");
-    if !path.exists() {
-        return Ok(String::new());
-    }
-
-    fs::read_to_string(&path)
-        .map_err(|e| format!("读取分屏配置失败: {}", e))
+    Ok(ui_settings_get(theseus::celestial_db::ui_settings::KEY_SPLIT_VIEW)
+        .await?
+        .unwrap_or_default())
 }
 
-/// 先写 .tmp 再改名：写入中途退出也不会留下被截断的坏 JSON。
 #[tauri::command]
 async fn save_split_view_settings(
-    app_handle: tauri::AppHandle,
     contents: String,
 ) -> Result<(), String> {
-    let dir = interface_dir(&app_handle)?;
-    let tmp = dir.join("split-view.json.tmp");
-
-    fs::write(&tmp, contents)
-        .map_err(|e| format!("写入分屏配置失败: {}", e))?;
-    fs::rename(&tmp, dir.join("split-view.json"))
-        .map_err(|e| format!("替换分屏配置失败: {}", e))
+    ui_settings_set(theseus::celestial_db::ui_settings::KEY_SPLIT_VIEW, contents)
+        .await
 }
 
-// 界面偏好：<appdata>/interface/ui-preferences.json
+// 界面偏好（原先 interface/ui-preferences.json）
 //
 // 刻意不放进 app.db 的 settings.feature_flags：那个字段在 Rust 侧是
 // HashMap<FeatureFlag, bool>，FeatureFlag 是个严格枚举，出现未知 key 会让整个 map
 // 反序列化失败并被 unwrap_or_default() 静默清空——等于把用户所有开关一起丢掉。
-// 和 split-view.json 一样只读写整个文件、schema 由前端拥有，所以以后再加界面偏好
-// 不需要动 Rust，也永远不会牵动数据库。
-/// 文件不存在时返回空串，前端据此回退到默认值。
+// ui_settings 表是纯 KV，没有这个问题；同样只读写整个文档、schema 由前端拥有。
+/// 无记录时返回空串，前端据此回退到默认值。
 #[tauri::command]
 async fn load_ui_preferences(
-    app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
-    let path = interface_dir(&app_handle)?.join("ui-preferences.json");
-    if !path.exists() {
-        return Ok(String::new());
-    }
-
-    fs::read_to_string(&path)
-        .map_err(|e| format!("读取界面偏好失败: {}", e))
+    Ok(ui_settings_get(theseus::celestial_db::ui_settings::KEY_UI_PREFERENCES)
+        .await?
+        .unwrap_or_default())
 }
 
-/// 先写 .tmp 再改名，理由同上。
 #[tauri::command]
 async fn save_ui_preferences(
-    app_handle: tauri::AppHandle,
     contents: String,
 ) -> Result<(), String> {
-    let dir = interface_dir(&app_handle)?;
-    let tmp = dir.join("ui-preferences.json.tmp");
-
-    fs::write(&tmp, contents)
-        .map_err(|e| format!("写入界面偏好失败: {}", e))?;
-    fs::rename(&tmp, dir.join("ui-preferences.json"))
-        .map_err(|e| format!("替换界面偏好失败: {}", e))
+    ui_settings_set(theseus::celestial_db::ui_settings::KEY_UI_PREFERENCES, contents)
+        .await
 }
 
 #[tauri::command]
-async fn get_background_as_base64(app_handle: tauri::AppHandle) -> Result<String, String> {
-    let mut path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
+async fn get_background_as_base64() -> Result<String, String> {
+    let mut path = settings_dir().await?;
 
     path.push("custom_backgrounds");
 
@@ -998,8 +705,8 @@ async fn install_cached_msi(
 }
 
 #[tauri::command]
-fn delete_background(app_handle: tauri::AppHandle) -> Result<(), String> {
-    let mut path = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
+async fn delete_background() -> Result<(), String> {
+    let mut path = settings_dir().await?;
     path.push("custom_backgrounds");
 
     if path.exists() {
