@@ -42,6 +42,15 @@ export interface PluginManifest {
 	sidecar?: unknown
 }
 
+/**
+ * How a plugin's folder stands against the user's agreement to run it.
+ *
+ * `match` means the files are the ones that were agreed to — not that they are
+ * trustworthy. Nothing here is a safety judgement; a plugin always runs with
+ * the launcher's own privileges.
+ */
+export type ContentConsent = 'unknown' | 'match' | 'changed' | 'unavailable'
+
 export interface PluginSummary {
 	id: string
 	dir_name: string
@@ -56,4 +65,7 @@ export interface PluginSummary {
 	error: string | null
 	/** Route paths of this plugin's sidebar pages pinned to the nav rail. */
 	pinned_pages: string[]
+	/** The folder's digest, shown as its content fingerprint. */
+	content_digest: string | null
+	consent: ContentConsent
 }

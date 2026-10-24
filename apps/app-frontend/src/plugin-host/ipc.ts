@@ -160,6 +160,16 @@ export function pluginSetHotReload(enabled: boolean): Promise<void> {
 	return invoke('plugin:plugins|plugin_set_hot_reload', { enabled })
 }
 
+/** Whether the launcher loads plugin code at all. */
+export function pluginGetPluginsEnabled(): Promise<boolean> {
+	return invoke<boolean>('plugin:plugins|plugin_get_plugins_enabled')
+}
+
+/** Turn loading of plugin code on or off for the whole launcher. */
+export function pluginSetPluginsEnabled(enabled: boolean): Promise<void> {
+	return invoke('plugin:plugins|plugin_set_plugins_enabled', { enabled })
+}
+
 export interface SidecarStarted {
 	handle: number
 	port: number | null

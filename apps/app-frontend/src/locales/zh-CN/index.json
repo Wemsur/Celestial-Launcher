@@ -239,15 +239,6 @@
   "app.behavior-settings.startup-and-navigation.title": {
     "message": "页面与导航"
   },
-  "app.behavior-settings.sync-across-devices.description": {
-    "message": "在你登录的所有设备上使用这些行为设置。关闭它后可以在设备上单独设置。"
-  },
-  "app.behavior-settings.sync-across-devices.signed-out-tooltip": {
-    "message": "登录 Modrinth 账户以同步设置。"
-  },
-  "app.behavior-settings.sync-across-devices.title": {
-    "message": "跨设备同步行为"
-  },
   "app.browse.add-servers-to-instance": {
     "message": "添加服务器到实例"
   },
@@ -1838,17 +1829,29 @@
   "app.settings.plugins.broken": {
     "message": "无法加载"
   },
+  "app.settings.plugins.consent.changed": {
+    "message": "你确认后文件已发生变化"
+  },
+  "app.settings.plugins.consent.fingerprint": {
+    "message": "内容指纹"
+  },
+  "app.settings.plugins.consent.unknown": {
+    "message": "尚未确认"
+  },
+  "app.settings.plugins.consent.unavailable": {
+    "message": "无法校验此插件目录"
+  },
   "app.settings.plugins.crash-log": {
     "message": "查看崩溃日志"
   },
   "app.settings.plugins.description": {
-    "message": "插件用于扩展启动器。每个插件都会声明它所需的权限，未经你允许的部分将不会生效。"
+    "message": "插件用于扩展启动器。插件在启动器进程内运行，拥有启动器的完整权限，请只启用你信任来源的插件。"
   },
   "app.settings.plugins.empty": {
     "message": "尚未安装任何插件。"
   },
   "app.settings.plugins.high-risk": {
-    "message": "点击以授权"
+    "message": "尚未授权"
   },
   "app.settings.plugins.hot-reload": {
     "message": "热重载"
@@ -1901,6 +1904,15 @@
   "app.settings.plugins.store-refresh": {
     "message": "刷新"
   },
+  "app.settings.plugins.system-disabled-notice": {
+    "message": "插件系统已关闭。无论下面每个插件自己的开关是什么，它们都没有在运行。"
+  },
+  "app.settings.plugins.system-enabled": {
+    "message": "插件系统"
+  },
+  "app.settings.plugins.system-enabled.description": {
+    "message": "关闭后完全不加载任何插件代码，连已启用的插件也不例外。在重新打开之前，插件提供的一切都不会工作。"
+  },
   "app.settings.plugins.tab-installed": {
     "message": "已安装"
   },
@@ -1909,6 +1921,9 @@
   },
   "app.settings.plugins.title": {
     "message": "插件"
+  },
+  "app.settings.plugins.trust-notice": {
+    "message": "下面的权限列表是每个插件自己声明的意图，并非强制限制：插件运行在启动器自己的窗口里，能够触达启动器能触达的一切，包括你的文件、网络和账号。请只启用你信任来源的插件。"
   },
   "app.settings.plugins.uninstall": {
     "message": "卸载"

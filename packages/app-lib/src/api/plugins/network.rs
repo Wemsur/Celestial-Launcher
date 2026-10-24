@@ -130,19 +130,15 @@ pub async fn fetch(
 }
 
 /// Whether any of the plugin's granted `network:` permissions covers `host`.
+///
+/// Goes through the same gate as every other capability first, so a plugin that
+/// is switched off, unconfirmed for its current contents, or running while the
+/// plugin system is off cannot make requests either.
 pub(super) async fn ensure_host_granted(
     plugin_id: &str,
     host: &str,
 ) -> crate::Result<()> {
-    let summary = super::store::get(plugin_id).await?.ok_or_else(|| {
-        crate::ErrorKind::InputError(format!("Unknown plugin '{plugin_id}'"))
-    })?;
-    if !summary.enabled {
-        return Err(crate::ErrorKind::InputError(format!(
-            "Plugin '{plugin_id}' is disabled"
-        ))
-        .into());
-    }
+    let summary = super::store::ensure_runnable(plugin_id).await?;
 
     let matches = summary.granted.iter().any(|entry| {
         PluginPermission::parse(entry).is_ok_and(|permission| {

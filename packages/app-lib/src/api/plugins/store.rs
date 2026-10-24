@@ -14,16 +14,36 @@
 //! state is launcher-local bookkeeping, and adding a table would mean a schema
 //! migration for something that has no referential integrity to enforce.
 
+use super::digest::content_digest;
 use super::manifest::{PluginManifest, PluginType, is_valid_plugin_id};
 use super::permissions::{PermissionRisk, PluginPermission};
 use crate::State;
 use crate::util::io;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock};
+use tokio::sync::{Mutex, OwnedMutexGuard};
 
 const PLUGINS_DIR: &str = "plugins";
 const PLUGIN_DATA_DIR: &str = "plugin-data";
 const STATE_FILE: &str = "plugins.json";
+
+/// The registry is one file that every plugin operation reads, changes and
+/// writes back.
+///
+/// The write is atomic on its own (temp file plus rename), but each operation
+/// reads the whole registry, changes its own entries and writes it back, so two
+/// of them running at once would each write a list based on the same starting
+/// point and one change would be silently lost. A single lock covers the whole
+/// registry because there is only one file; it is held for each read-modify-write
+/// and never across anything slow, so a dialog the user leaves open cannot block
+/// another operation.
+static REGISTRY_LOCK: LazyLock<Arc<Mutex<()>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(())));
+
+async fn lock_registry() -> OwnedMutexGuard<()> {
+    REGISTRY_LOCK.clone().lock_owned().await
+}
 
 /// An entry bundle is a compiled plugin, so it is small by nature. The cap only
 /// exists so a hostile folder cannot make the loader read a huge file into
@@ -84,6 +104,14 @@ pub struct PluginRecord {
     /// nav rail. Empty means every page is collapsed into the apps drawer.
     #[serde(default)]
     pub pinned_pages: Vec<String>,
+    /// The folder digest at the moment the user agreed to run this plugin.
+    ///
+    /// [`crate::api::plugins::digest`] computes it; a mismatch means the files
+    /// changed after the agreement, and the plugin stops loading until the user
+    /// confirms the new contents. Kept when the plugin is switched off, so
+    /// turning it back on with unchanged files does not ask again.
+    #[serde(default)]
+    pub approved_digest: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -95,6 +123,14 @@ struct PluginStateFile {
     /// behaviour they had before the toggle existed.
     #[serde(default = "default_hot_reload")]
     hot_reload: bool,
+    /// Whether the launcher loads plugin code at all.
+    ///
+    /// On by default: plugins are a shipped feature, and switching the default
+    /// off would stop every installed plugin on upgrade. This is the switch a
+    /// user reaches for when they want to be certain no third-party code runs —
+    /// a deliberate opt-out, not a rollout gate.
+    #[serde(default = "default_true")]
+    plugins_enabled: bool,
 }
 
 impl Default for PluginStateFile {
@@ -102,12 +138,40 @@ impl Default for PluginStateFile {
         Self {
             plugins: Vec::new(),
             hot_reload: default_hot_reload(),
+            plugins_enabled: default_true(),
         }
     }
 }
 
 fn default_hot_reload() -> bool {
     true
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// How a plugin's folder contents stand against the user's agreement to run it.
+///
+/// This is what the plugin page shows and what decides whether a plugin loads.
+/// It is a change detector, not a safety judgement: `Match` means the bytes are
+/// the ones the user agreed to, not that those bytes are trustworthy.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContentConsent {
+    /// Never agreed to, or the plugin is not the launcher's to agree to.
+    #[default]
+    Unknown,
+    /// The folder is the one that was agreed to.
+    Match,
+    /// The folder changed after it was agreed to.
+    Changed,
+    /// The folder cannot be summarised, so there is nothing to compare.
+    ///
+    /// Its own value rather than `Unknown`, because a plugin the user can never
+    /// approve is a different thing to explain than one they simply have not
+    /// approved yet.
+    Unavailable,
 }
 
 /// A plugin as the plugin page sees it: the manifest, plus what the launcher
@@ -140,21 +204,20 @@ pub struct PluginSummary {
     /// rail. Everything else declared as a sidebar page lives in the drawer.
     #[serde(default)]
     pub pinned_pages: Vec<String>,
+    /// The digest of the plugin folder as it stands now, when it can be
+    /// summarised. Shown as the plugin's content fingerprint, and the value the
+    /// user is agreeing to when they enable it.
+    #[serde(default)]
+    pub content_digest: Option<String>,
+    /// How those contents stand against the agreement to run this plugin.
+    #[serde(default)]
+    pub consent: ContentConsent,
 }
 
 impl PluginSummary {
     /// The declared plugin type, when the manifest is readable.
     pub fn plugin_type(&self) -> Option<PluginType> {
         self.manifest.as_ref().map(|manifest| manifest.r#type)
-    }
-
-    /// Whether this plugin may be loaded at all.
-    ///
-    /// A plugin with unapproved high-risk permissions still loads: the ones the
-    /// user has not approved simply do not work, which is easier to explain
-    /// than a plugin that refuses to start.
-    pub fn loadable(&self) -> bool {
-        self.manifest.is_some() && self.enabled
     }
 }
 
@@ -177,13 +240,14 @@ pub async fn list() -> crate::Result<Vec<PluginSummary>> {
         if dir_name.starts_with('.') {
             continue;
         }
-        plugins.push(summarize(
-            &entry.path(),
-            dir_name,
-            registry.plugins.as_slice(),
-        ));
+        plugins.push(
+            summarize(&entry.path(), dir_name, registry.plugins.as_slice())
+                .await,
+        );
     }
     plugins.sort_by(|left, right| left.id.cmp(&right.id));
+
+    grandfather_approvals(&state, &mut plugins).await?;
     Ok(plugins)
 }
 
@@ -194,11 +258,73 @@ pub async fn get(plugin_id: &str) -> crate::Result<Option<PluginSummary>> {
         return Ok(None);
     }
     let registry = read_state(&state).await?;
-    Ok(Some(summarize(
-        &dir,
-        plugin_id.to_string(),
-        registry.plugins.as_slice(),
-    )))
+    let mut plugins = vec![
+        summarize(&dir, plugin_id.to_string(), registry.plugins.as_slice())
+            .await,
+    ];
+    grandfather_approvals(&state, &mut plugins).await?;
+    Ok(plugins.pop())
+}
+
+/// Carry a pre-existing install over to content-bound consent, once.
+///
+/// A record that is switched on and holds no digest can only be one written
+/// before the launcher started recording digests. Everything that enables a
+/// plugin now stores the digest it agreed to with it, and a plugin the user
+/// declined is left switched off, so the two cannot be confused.
+///
+/// A folder dropped into the plugins directory by hand is *not* carried over:
+/// it has no record at all, and staying unconfirmed is the point — otherwise
+/// copying a folder in would be enough to run code without anyone agreeing to
+/// it.
+///
+/// The condition clears itself: once the digest is stored the plugin reports
+/// `Match` and this skips it, so no version marker or run-once flag is needed.
+async fn grandfather_approvals(
+    state: &State,
+    plugins: &mut [PluginSummary],
+) -> crate::Result<()> {
+    let needs_pass = plugins.iter().any(|plugin| {
+        plugin.consent == ContentConsent::Unknown
+            && plugin.enabled
+            && plugin.content_digest.is_some()
+    });
+    if !needs_pass {
+        return Ok(());
+    }
+
+    let _guard = lock_registry().await;
+    let mut registry = read_state(state).await?;
+    let mut changed = false;
+
+    for plugin in plugins.iter_mut() {
+        if plugin.consent != ContentConsent::Unknown || !plugin.enabled {
+            continue;
+        }
+        let Some(digest) = plugin.content_digest.clone() else {
+            continue;
+        };
+        let Some(record) = registry
+            .plugins
+            .iter_mut()
+            .find(|record| record.id == plugin.id)
+        else {
+            continue;
+        };
+        if !record.enabled || record.approved_digest.is_some() {
+            continue;
+        }
+
+        record.approved_digest = Some(digest);
+        plugin.consent = ContentConsent::Match;
+        changed = true;
+    }
+
+    if changed {
+        write_state(state, &registry).await?;
+        tracing::info!("Carried existing plugin installs over to content consent");
+    }
+    Ok(())
 }
 
 /// Copy a plugin folder into the plugins directory.
@@ -230,15 +356,22 @@ pub async fn install(
         return Err(error);
     }
 
+    // Installing does not switch a plugin on. Running third-party code needs the
+    // user to agree to these exact bytes, and that is a separate step in the
+    // plugin page — so the record is written with the plugin off and no digest,
+    // which is also what makes "installed but never agreed to" distinguishable
+    // from "agreed to, then changed".
+    let _guard = lock_registry().await;
     let mut registry = read_state(&state).await?;
     registry.plugins.retain(|record| record.id != manifest.id);
     registry.plugins.push(PluginRecord {
         id: manifest.id.clone(),
-        enabled: true,
+        enabled: false,
         granted: Vec::new(),
         installed_at: Some(chrono::Utc::now().timestamp()),
         source: origin,
         pinned_pages: Vec::new(),
+        approved_digest: None,
     });
     write_state(&state, &registry).await?;
 
@@ -248,7 +381,8 @@ pub async fn install(
         &destination,
         manifest.id.clone(),
         registry.plugins.as_slice(),
-    ))
+    )
+    .await)
 }
 
 /// Cap on a downloaded plugin archive. A plugin bundle is small; an unbounded
@@ -388,6 +522,11 @@ pub async fn update(
     }
     let _ = io::remove_dir_all(&backup).await;
 
+    // The stored digest is deliberately left alone. The files have just been
+    // replaced, so it no longer matches them and the plugin stops loading until
+    // the user confirms the new contents. Keeping the old digest is what lets
+    // the plugin page say "these files changed" instead of "never agreed to".
+    let _guard = lock_registry().await;
     let mut registry = read_state(&state).await?;
     if let Some(record) =
         registry.plugins.iter_mut().find(|record| record.id == manifest.id)
@@ -397,11 +536,12 @@ pub async fn update(
     } else {
         registry.plugins.push(PluginRecord {
             id: manifest.id.clone(),
-            enabled: true,
+            enabled: false,
             granted: Vec::new(),
             installed_at: Some(chrono::Utc::now().timestamp()),
             source: origin,
             pinned_pages: Vec::new(),
+            approved_digest: None,
         });
     }
     write_state(&state, &registry).await?;
@@ -412,7 +552,8 @@ pub async fn update(
         &destination,
         manifest.id.clone(),
         registry.plugins.as_slice(),
-    ))
+    )
+    .await)
 }
 
 /// Download a zipped plugin from a store entry and update the installed copy.
@@ -584,6 +725,9 @@ pub async fn uninstall(
         }
     }
 
+    // The record goes with the folder, so the digest the user agreed to goes too
+    // — reinstalling the same plugin is a fresh decision.
+    let _guard = lock_registry().await;
     let mut registry = read_state(&state).await?;
     registry.plugins.retain(|record| record.id != plugin_id);
     write_state(&state, &registry).await?;
@@ -592,11 +736,22 @@ pub async fn uninstall(
     Ok(())
 }
 
+/// Switch a plugin on or off.
+///
+/// Switching on takes the digest the user was shown when they agreed to run
+/// this plugin, and recomputes it here to compare. A folder that changed while
+/// the dialog was open is refused rather than quietly agreed to, and a plugin
+/// whose folder cannot be summarised cannot be switched on at all.
+///
+/// Switching off needs no digest and keeps the stored one, so turning a plugin
+/// back on with unchanged files does not ask the user again.
 pub async fn set_enabled(
     plugin_id: &str,
     enabled: bool,
+    approved_digest: Option<String>,
 ) -> crate::Result<PluginSummary> {
     let state = State::get().await?;
+
     // Resolve the effective state *before* touching the registry. A plugin with
     // no entry yet is running on its low-risk defaults, and writing the entry
     // has to carry those over — otherwise merely disabling and re-enabling a
@@ -604,17 +759,48 @@ pub async fn set_enabled(
     // the next launch with permission errors instead of working again.
     let current = require_plugin(plugin_id).await?;
 
-    let mut registry = read_state(&state).await?;
-    let had_entry =
-        registry.plugins.iter().any(|record| record.id == plugin_id);
-    let record = record_mut(&mut registry, plugin_id);
-    record.enabled = enabled;
-    if !had_entry {
-        record.granted = current.granted.clone();
+    if enabled {
+        // Borrowed rather than taken: the same value is stored below once the
+        // check has passed.
+        let Some(agreed) = approved_digest.as_deref() else {
+            return Err(crate::ErrorKind::InputError(format!(
+                "Enabling plugin '{plugin_id}' needs the digest the user agreed to"
+            ))
+            .into());
+        };
+        let now = content_digest(Path::new(&current.path))
+            .await?
+            .ok_or_else(|| {
+                crate::ErrorKind::InputError(format!(
+                    "Plugin '{plugin_id}' cannot be checked, so it cannot be enabled"
+                ))
+            })?;
+        if now != agreed {
+            return Err(crate::ErrorKind::InputError(format!(
+                "Plugin '{plugin_id}' changed while it was being confirmed, so it \
+                 has been left off; look at its contents again"
+            ))
+            .into());
+        }
     }
-    write_state(&state, &registry).await?;
 
-    require_summary(&state, plugin_id, &registry).await
+    {
+        let _guard = lock_registry().await;
+        let mut registry = read_state(&state).await?;
+        let had_entry =
+            registry.plugins.iter().any(|record| record.id == plugin_id);
+        let record = record_mut(&mut registry, plugin_id);
+        record.enabled = enabled;
+        if !had_entry {
+            record.granted = current.granted.clone();
+        }
+        if enabled {
+            record.approved_digest = approved_digest;
+        }
+        write_state(&state, &registry).await?;
+    }
+
+    require_plugin(plugin_id).await
 }
 
 /// Whether live application of enable/disable and permission changes is on.
@@ -626,10 +812,43 @@ pub async fn get_hot_reload() -> crate::Result<bool> {
 /// Turn live application of plugin state changes on or off.
 pub async fn set_hot_reload(enabled: bool) -> crate::Result<()> {
     let state = State::get().await?;
+    let _guard = lock_registry().await;
     let mut registry = read_state(&state).await?;
     registry.hot_reload = enabled;
     write_state(&state, &registry).await?;
     Ok(())
+}
+
+/// Whether the launcher loads plugin code at all.
+pub async fn get_plugins_enabled() -> crate::Result<bool> {
+    let state = State::get().await?;
+    Ok(read_state(&state).await?.plugins_enabled)
+}
+
+/// Turn loading of plugin code on or off for the whole launcher.
+pub async fn set_plugins_enabled(enabled: bool) -> crate::Result<()> {
+    let state = State::get().await?;
+    let _guard = lock_registry().await;
+    let mut registry = read_state(&state).await?;
+    registry.plugins_enabled = enabled;
+    write_state(&state, &registry).await?;
+    tracing::info!(enabled, "Plugin system switched");
+    Ok(())
+}
+
+/// Refuse when the plugin system is switched off.
+///
+/// [`list`] deliberately does not go through this: the plugin page has to be
+/// able to show the plugins and switch the system back on.
+pub async fn ensure_plugin_system_enabled() -> crate::Result<()> {
+    if get_plugins_enabled().await? {
+        return Ok(());
+    }
+    Err(crate::ErrorKind::InputError(
+        "The plugin system is switched off, so plugins cannot do anything"
+            .to_string(),
+    )
+    .into())
 }
 ///
 /// Every entry is parsed and checked against what the manifest actually
@@ -640,6 +859,7 @@ pub async fn set_granted(
     granted: Vec<String>,
 ) -> crate::Result<PluginSummary> {
     let state = State::get().await?;
+    let _guard = lock_registry().await;
     let mut registry = read_state(&state).await?;
 
     let plugin = require_summary(&state, plugin_id, &registry).await?;
@@ -710,6 +930,7 @@ pub async fn set_pinned_pages(
     pages: Vec<String>,
 ) -> crate::Result<PluginSummary> {
     let state = State::get().await?;
+    let _guard = lock_registry().await;
     let mut registry = read_state(&state).await?;
 
     let mut canonical: Vec<String> = Vec::with_capacity(pages.len());
@@ -726,23 +947,48 @@ pub async fn set_pinned_pages(
     require_summary(&state, plugin_id, &registry).await
 }
 
-/// Check that `plugin_id` is enabled and has been granted `permission`.
+/// Check that a plugin may run at all, and return what is known about it.
 ///
-/// This is the gate every capability behind an IPC boundary goes through. The
-/// frontend side of the host API checks the same list before handing a plugin a
-/// capability at all, but that check is a convenience: this one is the one that
-/// decides, because nothing on the webview side can reach around it.
-pub async fn ensure_granted(
+/// Three things have to hold: the plugin system is switched on for the whole
+/// launcher, the plugin is switched on, and its folder is the one the user
+/// agreed to run. The last is what makes this more than a formality — a plugin
+/// whose files changed after it was agreed to is refused here even though its
+/// `enabled` flag is still set.
+pub async fn ensure_runnable(
     plugin_id: &str,
-    permission: &str,
-) -> crate::Result<()> {
+) -> crate::Result<PluginSummary> {
+    ensure_plugin_system_enabled().await?;
     let summary = require_plugin(plugin_id).await?;
+
     if !summary.enabled {
         return Err(crate::ErrorKind::InputError(format!(
             "Plugin '{plugin_id}' is disabled"
         ))
         .into());
     }
+    if summary.consent != ContentConsent::Match {
+        return Err(crate::ErrorKind::InputError(format!(
+            "Plugin '{plugin_id}' has not been confirmed for its current \
+             contents"
+        ))
+        .into());
+    }
+    Ok(summary)
+}
+
+/// Check that `plugin_id` may run and has been granted `permission`.
+///
+/// This is the gate every capability behind an IPC boundary goes through, and
+/// the only one that can be relied on. The frontend side of the host API checks
+/// the same list before handing a plugin a capability, but a plugin runs in the
+/// launcher's own page: it can call these commands directly and walk past that
+/// check. It cannot walk past this one, because this one runs on the Rust side
+/// of the boundary against state the frontend cannot write.
+pub async fn ensure_granted(
+    plugin_id: &str,
+    permission: &str,
+) -> crate::Result<()> {
+    let summary = ensure_runnable(plugin_id).await?;
 
     let wanted = PluginPermission::parse(permission).map_err(|reason| {
         crate::ErrorKind::InputError(format!(
@@ -770,12 +1016,26 @@ pub async fn ensure_granted(
 }
 
 /// The file a UI plugin's `entry` points at, if there is one.
+///
+/// Gated like every other capability, through the same [`ensure_runnable`] the
+/// rest of them use: this is the path the loader reads plugin code from, so a
+/// plugin that is switched off, unconfirmed for its current contents, or running
+/// while the plugin system is off is not handed one — otherwise the consent
+/// check could be stepped around by asking for the code directly.
+///
+/// A plugin that is not installed, or declares no entry, is still `Ok(None)`:
+/// that is a question with the answer "nothing", not a refusal.
 pub async fn resolve_entry(
     plugin_id: &str,
 ) -> crate::Result<Option<PathBuf>> {
-    let Some(summary) = get(plugin_id).await? else {
+    let state = State::get().await?;
+    let dir = plugin_dir(&state, plugin_id)?;
+    if !dir.is_dir() {
         return Ok(None);
-    };
+    }
+
+    let summary = ensure_runnable(plugin_id).await?;
+
     let Some(manifest) = summary.manifest else {
         return Ok(None);
     };
@@ -794,6 +1054,11 @@ async fn require_plugin(plugin_id: &str) -> crate::Result<PluginSummary> {
 
 /// A plugin row for a folder we could not make sense of. It is still listed so
 /// the plugin page can show the problem and offer to remove it.
+///
+/// Its consent stays `Unknown` rather than `Unavailable`: the folder may be
+/// perfectly summarisable, and it is the manifest that is unusable — the error
+/// below is what explains it. Either way it never runs: it reports itself as
+/// switched off, so the gate that hands out capabilities refuses it.
 fn broken_summary(dir: &Path, dir_name: &str, reason: String) -> PluginSummary {
     PluginSummary {
         id: dir_name.to_string(),
@@ -807,10 +1072,12 @@ fn broken_summary(dir: &Path, dir_name: &str, reason: String) -> PluginSummary {
         manifest: None,
         error: Some(reason),
         pinned_pages: Vec::new(),
+        content_digest: None,
+        consent: ContentConsent::Unknown,
     }
 }
 
-fn summarize(
+async fn summarize(
     dir: &Path,
     dir_name: String,
     records: &[PluginRecord],
@@ -847,7 +1114,10 @@ fn summarize(
     };
 
     let record = records.iter().find(|record| record.id == manifest.id);
-    let enabled = record.map(|record| record.enabled).unwrap_or(true);
+    // A folder with no record is not a plugin the user switched on; it is a
+    // folder sitting in the plugins directory. Reporting it as enabled would
+    // claim it runs, which it does not — an unconfirmed folder never loads.
+    let enabled = record.map(|record| record.enabled).unwrap_or(false);
     let pinned_pages =
         record.map(|record| record.pinned_pages.clone()).unwrap_or_default();
     let mut granted = record
@@ -887,6 +1157,18 @@ fn summarize(
         .cloned()
         .collect();
 
+    let digest = match content_digest(dir).await {
+        Ok(digest) => digest,
+        Err(error) => {
+            tracing::warn!(
+                path = %dir.display(),
+                "Digesting plugin folder failed: {error}"
+            );
+            None
+        }
+    };
+    let consent = consent_of(digest.as_deref(), record);
+
     PluginSummary {
         id: manifest.id.clone(),
         dir_name,
@@ -899,6 +1181,26 @@ fn summarize(
         manifest: Some(manifest),
         error: None,
         pinned_pages,
+        content_digest: digest,
+        consent,
+    }
+}
+
+/// How a plugin's folder stands against the agreement to run it.
+fn consent_of(
+    current: Option<&str>,
+    record: Option<&PluginRecord>,
+) -> ContentConsent {
+    let Some(current) = current else {
+        return ContentConsent::Unavailable;
+    };
+    let Some(record) = record else {
+        return ContentConsent::Unknown;
+    };
+    match record.approved_digest.as_deref() {
+        None => ContentConsent::Unknown,
+        Some(approved) if approved == current => ContentConsent::Match,
+        Some(_) => ContentConsent::Changed,
     }
 }
 
@@ -914,10 +1216,15 @@ async fn require_summary(
         ))
         .into());
     }
-    Ok(summarize(&dir, plugin_id.to_string(), &registry.plugins))
+    Ok(summarize(&dir, plugin_id.to_string(), &registry.plugins).await)
 }
 
 /// The registry entry for `plugin_id`, created on first use.
+///
+/// A plugin with no entry is one nothing has ever been decided about — a folder
+/// dropped into the plugins directory by hand. It starts switched off: it was
+/// not installed through the launcher, and nothing has been agreed to, so
+/// creating the entry must not be a way to start running it.
 fn record_mut<'a>(
     registry: &'a mut PluginStateFile,
     plugin_id: &str,
@@ -931,11 +1238,12 @@ fn record_mut<'a>(
     }
     registry.plugins.push(PluginRecord {
         id: plugin_id.to_string(),
-        enabled: true,
+        enabled: false,
         granted: Vec::new(),
         installed_at: Some(chrono::Utc::now().timestamp()),
         source: None,
         pinned_pages: Vec::new(),
+        approved_digest: None,
     });
     let index = registry.plugins.len() - 1;
     &mut registry.plugins[index]

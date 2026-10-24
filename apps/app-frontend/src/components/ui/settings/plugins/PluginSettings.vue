@@ -18,9 +18,11 @@ import {
 	openPluginFolder,
 	pluginCrashLog,
 	pluginGetHotReload,
+	pluginGetPluginsEnabled,
 	pluginIconUrl,
 	pluginLatestRelease,
 	pluginSetHotReload,
+	pluginSetPluginsEnabled,
 	setPluginEnabled,
 	setPluginGranted,
 	uninstallPlugin,
@@ -72,6 +74,31 @@ function permissionLabel(permission: string): string {
 	return scope ? `${label}：${scope}` : label
 }
 
+/**
+ * Why a plugin is not running, when the reason is its contents rather than its
+ * own switch. `null` when the folder is the one that was confirmed, so the card
+ * shows the fingerprint instead.
+ */
+function consentLabel(plugin: PluginSummary): string | null {
+	switch (plugin.consent) {
+		case 'changed':
+			return formatMessage(messages.consentChanged)
+		case 'unknown':
+			return formatMessage(messages.consentUnknown)
+		case 'unavailable':
+			return formatMessage(messages.consentUnavailable)
+		default:
+			return null
+	}
+}
+
+/** The first characters of the folder digest, for comparing against what was agreed to. */
+function shortFingerprint(plugin: PluginSummary): string | null {
+	const digest = plugin.content_digest
+	if (!digest) return null
+	return digest.replace(/^sha256:/, '').slice(0, 12)
+}
+
 const messages = defineMessages({
 	title: {
 		id: 'app.settings.plugins.title',
@@ -80,7 +107,49 @@ const messages = defineMessages({
 	description: {
 		id: 'app.settings.plugins.description',
 		defaultMessage:
-			'Plugins extend the launcher. Each one declares what it needs, and anything you have not allowed simply will not work.',
+			'Plugins extend the launcher. A plugin runs inside the launcher and holds its full privileges, so only enable ones you trust the source of.',
+	},
+	/**
+	 * The part of the plugin story the permission list cannot express, said
+	 * plainly. The list below reads like a set of limits, and it is not one: a
+	 * plugin shares the launcher's page, so it can call the launcher directly
+	 * and walk past every entry in it. Saying so is the point — a promise the
+	 * launcher cannot keep is worse than no promise.
+	 */
+	trustNotice: {
+		id: 'app.settings.plugins.trust-notice',
+		defaultMessage:
+			'The permission list below is what each plugin declares it intends to do. It is not enforced: a plugin runs in the launcher’s own window and can reach everything the launcher can, including your files, your network, and your accounts. Only enable plugins whose source you trust.',
+	},
+	systemEnabled: {
+		id: 'app.settings.plugins.system-enabled',
+		defaultMessage: 'Plugin system',
+	},
+	systemEnabledDescription: {
+		id: 'app.settings.plugins.system-enabled.description',
+		defaultMessage:
+			'When off, no plugin code is loaded at all — not even plugins that are switched on. Nothing a plugin provides will work until it is turned back on.',
+	},
+	systemDisabledNotice: {
+		id: 'app.settings.plugins.system-disabled-notice',
+		defaultMessage:
+			'The plugin system is off. Nothing below is running, whatever its own switch says.',
+	},
+	consentUnknown: {
+		id: 'app.settings.plugins.consent.unknown',
+		defaultMessage: 'Not confirmed yet',
+	},
+	consentChanged: {
+		id: 'app.settings.plugins.consent.changed',
+		defaultMessage: 'Files changed since you confirmed them',
+	},
+	consentUnavailable: {
+		id: 'app.settings.plugins.consent.unavailable',
+		defaultMessage: 'This plugin folder cannot be checked',
+	},
+	consentFingerprint: {
+		id: 'app.settings.plugins.consent.fingerprint',
+		defaultMessage: 'Content fingerprint',
 	},
 	install: {
 		id: 'app.settings.plugins.install',
@@ -104,7 +173,7 @@ const messages = defineMessages({
 	},
 	highRisk: {
 		id: 'app.settings.plugins.high-risk',
-		defaultMessage: 'click to approve',
+		defaultMessage: 'not granted yet',
 	},
 	uninstall: {
 		id: 'app.settings.plugins.uninstall',
@@ -195,6 +264,8 @@ const storeError = ref<string | null>(null)
 const storeLoaded = ref(false)
 
 const hotReload = ref(true)
+/** Whether the launcher loads plugin code at all. */
+const pluginsEnabled = ref(true)
 
 const installedIds = computed(() => new Set(plugins.value.map((plugin) => plugin.id)))
 
@@ -282,6 +353,7 @@ onMounted(() => {
 onMounted(async () => {
 	try {
 		hotReload.value = await pluginGetHotReload()
+		pluginsEnabled.value = await pluginGetPluginsEnabled()
 	} catch (error) {
 		handleError(error)
 	}
@@ -291,6 +363,30 @@ async function setHotReload(enabled: boolean) {
 	hotReload.value = enabled
 	try {
 		await pluginSetHotReload(enabled)
+	} catch (error) {
+		handleError(error)
+	}
+}
+
+/**
+ * Turn the whole plugin system on or off.
+ *
+ * Switching it off has to actually take the running plugins down, not just stop
+ * the next launch from loading them — the point of the switch is that no plugin
+ * code is running. Switching it back on reloads what is switched on and
+ * confirmed.
+ */
+async function setPluginsEnabled(enabled: boolean) {
+	pluginsEnabled.value = enabled
+	try {
+		await pluginSetPluginsEnabled(enabled)
+		if (enabled) {
+			await loadPlugins()
+			return
+		}
+		for (const plugin of plugins.value) {
+			unloadPlugin(plugin.id)
+		}
 	} catch (error) {
 		handleError(error)
 	}
@@ -431,6 +527,38 @@ function updateFromStore(plugin: PluginSummary, entry: StorePlugin) {
 			{{ formatMessage(messages.description) }}
 		</p>
 
+		<div
+			class="mt-4 flex items-center justify-between gap-4 border-0 border-t border-solid border-surface-5 pt-4"
+		>
+			<div class="flex min-w-0 flex-col gap-1">
+				<span class="text-sm font-semibold text-contrast">
+					{{ formatMessage(messages.systemEnabled) }}
+				</span>
+				<span class="text-xs text-secondary">
+					{{ formatMessage(messages.systemEnabledDescription) }}
+				</span>
+			</div>
+			<span class="inline-flex shrink-0">
+				<Toggle
+					id="plugin-system-enabled"
+					:model-value="pluginsEnabled"
+					@update:model-value="setPluginsEnabled"
+				/>
+			</span>
+		</div>
+
+		<p
+			v-if="!pluginsEnabled"
+			class="mt-4 mb-0 flex items-start gap-2 rounded-lg bg-surface-3 p-3 text-xs text-secondary"
+		>
+			<TriangleAlertIcon class="mt-[2px] size-4 shrink-0" />
+			<span>{{ formatMessage(messages.systemDisabledNotice) }}</span>
+		</p>
+
+		<p class="mt-4 mb-0 text-xs leading-relaxed text-secondary">
+			{{ formatMessage(messages.trustNotice) }}
+		</p>
+
 		<div class="mt-4 flex gap-2 border-0 border-b border-solid border-surface-5">
 			<button
 				class="border-0 bg-transparent cursor-pointer px-3 py-2 text-sm font-semibold"
@@ -517,6 +645,34 @@ function updateFromStore(plugin: PluginSummary, entry: StorePlugin) {
 				<p v-if="plugin.manifest?.description" class="m-0 text-sm text-secondary">
 					{{ plugin.manifest.description }}
 				</p>
+
+				<!--
+					Only shown for a plugin that claims to be on: telling the user
+					that a plugin they switched off has not been confirmed is noise.
+					A plugin whose files changed after it was confirmed still says
+					it is enabled, which is exactly the case worth showing.
+				-->
+				<div
+					v-if="plugin.enabled && !plugin.error"
+					class="flex items-start gap-2 text-xs"
+					:class="
+						plugin.consent === 'match' ? 'text-secondary' : 'text-orange'
+					"
+				>
+					<TriangleAlertIcon
+						v-if="plugin.consent !== 'match'"
+						class="mt-[2px] size-4 shrink-0"
+					/>
+					<span class="break-all">
+						<template v-if="consentLabel(plugin)">
+							{{ consentLabel(plugin) }}
+						</template>
+						<template v-else-if="shortFingerprint(plugin)">
+							{{ formatMessage(messages.consentFingerprint) }}:
+							{{ shortFingerprint(plugin) }}
+						</template>
+					</span>
+				</div>
 
 				<div
 					v-if="plugin.error"

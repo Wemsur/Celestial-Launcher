@@ -143,7 +143,9 @@ pub async fn record_crash(
         "Plugin crashed and has been disabled: {message}"
     );
 
-    super::store::set_enabled(plugin_id, false).await?;
+    // Switching off needs no approval, and the digest the user agreed to is
+    // kept, so fixing the plugin and switching it back on is not a new decision.
+    super::store::set_enabled(plugin_id, false, None).await?;
     Ok(())
 }
 

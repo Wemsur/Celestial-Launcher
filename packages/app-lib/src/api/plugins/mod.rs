@@ -9,6 +9,8 @@
 //! - [`store`] owns the on-disk layout, the registry, and the operations the
 //!   plugin page drives. [`store::ensure_granted`] is the gate every capability
 //!   goes through.
+//! - [`digest`] summarises a plugin folder, so the user's agreement to run a
+//!   plugin can be bound to the bytes they agreed to.
 //! - [`data`] is what a plugin may do for itself: its own key/value storage,
 //!   and the crash log that switches it off when it throws.
 //!
@@ -16,6 +18,7 @@
 //! only ever acts on a [`PluginSummary`] this module produced.
 
 pub mod data;
+pub mod digest;
 pub mod lan;
 pub mod manifest;
 pub mod network;
@@ -27,6 +30,7 @@ pub use data::{
     crash_log, record_crash, settings_get_all, settings_set, storage_get,
     storage_keys, storage_remove, storage_set,
 };
+pub use digest::content_digest;
 pub use lan::LanAnnounce;
 pub use manifest::{
     CURRENT_API_VERSION, MANIFEST_FILE, PluginManifest, PluginSettingField,
@@ -36,9 +40,10 @@ pub use network::{PluginFetchRequest, PluginFetchResponse, fetch};
 pub use permissions::{PermissionKind, PermissionRisk, PluginPermission};
 pub use sidecar::{SidecarRequest, SidecarResponse, SidecarStarted, SidecarStatus};
 pub use store::{
-    PluginSummary, ensure_granted, get, get_hot_reload, grant_permission,
+    ContentConsent, PluginSummary, ensure_granted, ensure_plugin_system_enabled,
+    ensure_runnable, get, get_hot_reload, get_plugins_enabled, grant_permission,
     install, install_from_url, latest_release_tag, list, plugin_data_dir,
     plugins_dir, read_entry, resolve_entry, revoke_permission, set_enabled,
-    set_granted, set_hot_reload, set_pinned_pages, uninstall, update,
-    update_from_url,
+    set_granted, set_hot_reload, set_pinned_pages, set_plugins_enabled,
+    uninstall, update, update_from_url,
 };

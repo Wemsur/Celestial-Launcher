@@ -60,6 +60,7 @@ import {
 import {
 	listPlugins,
 	pluginAssetUrl,
+	pluginGetPluginsEnabled,
 	pluginLanAnnounce,
 	pluginLanCleanup,
 	pluginLanStop,
@@ -322,6 +323,14 @@ let observer: MutationObserver | null = null
 let eventBus: PluginEventBus | null = null
 
 export async function loadPlugins(options: LoadPluginsOptions = {}): Promise<void> {
+	// The system-wide switch, checked before anything else: with it off, no
+	// plugin code is imported at all. Deliberately ahead of
+	// `exposeVueForPlugins` and of `listPlugins`, so a switched-off launcher
+	// never reaches the point of having a bundle in hand.
+	if (!(await pluginGetPluginsEnabled())) {
+		return
+	}
+
 	exposeVueForPlugins()
 	// Only overwrite when one was provided: this is called again to apply a
 	// plugin being enabled or disabled, and clearing the bus would silently stop
@@ -388,7 +397,14 @@ async function loadPlugin(
 	summary: PluginSummary,
 	options: LoadPluginsOptions,
 ): Promise<void> {
-	if (instances.has(summary.id) || !summary.enabled) {
+	// `consent` is the one that matters: a plugin whose files changed after the
+	// user agreed to them is still `enabled`, and running it anyway would run
+	// bytes nobody agreed to.
+	if (
+		instances.has(summary.id) ||
+		!summary.enabled ||
+		summary.consent !== 'match'
+	) {
 		return
 	}
 	const manifest = summary.manifest

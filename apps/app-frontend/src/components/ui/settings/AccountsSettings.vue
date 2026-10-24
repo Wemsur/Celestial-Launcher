@@ -61,7 +61,7 @@
                     <div class="flex items-center grid-when-huge w-96 gap-2 flex-1 overflow-y-auto">
                         <!-- 头像：离线账户用 CSS 首字母，正版账户用皮肤渲染头像 -->
                         <div
-                            v-if="user.access_token === 'OFFLINE'"
+                            v-if="user.offline"
                             class="w-14 h-14 rounded flex items-center justify-center text-white font-bold text-primary mr-3 shrink-0"
                             style="font-size: 1.6pc"
                             :style="{ backgroundColor: getOfflineAvatarColor(user.profile.name) }"
@@ -81,8 +81,8 @@
                             <div class="flex items-center gap-2 text-sm text-secondary">
                                 {{ user.profile.id }}
                             </div>
-                            <div class="flex items-center gap-2 text-sm" :class="user.access_token === 'OFFLINE' ? 'text-primary' : 'text-orange'">
-                                {{ user.access_token === 'OFFLINE' ? '离线账号' : '正版账号' }}
+                            <div class="flex items-center gap-2 text-sm" :class="user.offline ? 'text-primary' : 'text-orange'">
+                                {{ user.offline ? '离线账号' : '正版账号' }}
                             </div>
                         </div>
                     </div>
@@ -197,7 +197,7 @@ async function ensureHeadUrl(user: any): Promise<string> {
     if (cached) return cached
 
     // 离线账户不需要渲染头像
-    if (user.access_token === 'OFFLINE') return ''
+    if (user.offline) return ''
 
     // 从 profile.skins 中获取当前装备的皮肤纹理 URL
     const skinUrl = user.profile?.skins?.[0]?.url
@@ -224,19 +224,19 @@ function getUserHeadUrl(user: any): string {
 async function loadUsers() {
     type MinecraftUser = {
         profile: { id: string; name: string }
-        access_token: string
+        offline: boolean
         active: boolean
     }
     try {
         const rawUsers = await users()
-        minecraftUsers.value = ([...rawUsers] as any).sort((a: { active: any; access_token: string; profile: { name: any } }, b: { active: any; access_token: string; profile: { name: any } }) => {
+        minecraftUsers.value = ([...rawUsers] as any).sort((a: { active: any; offline: boolean; profile: { name: any } }, b: { active: any; offline: boolean; profile: { name: any } }) => {
             // 1. 活跃账户排最前
             if (a.active && !b.active) return -1
             if (!a.active && b.active) return 1
 
             // 2. 正版账户在前，离线账户在后
-            const aIsOnline = a.access_token !== 'OFFLINE'
-            const bIsOnline = b.access_token !== 'OFFLINE'
+            const aIsOnline = !a.offline
+            const bIsOnline = !b.offline
             if (aIsOnline && !bIsOnline) return -1
             if (!aIsOnline && bIsOnline) return 1
 
@@ -246,7 +246,7 @@ async function loadUsers() {
 
         // 为每个正版账户预加载渲染头像
         const onlineUsers = minecraftUsers.value.filter(
-            (u: any) => u.access_token !== 'OFFLINE'
+            (u: any) => !u.offline
         )
         await Promise.all(onlineUsers.map(u => ensureHeadUrl(u)))
     } catch (err) {

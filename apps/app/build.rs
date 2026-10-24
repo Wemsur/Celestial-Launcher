@@ -491,6 +491,8 @@ fn main() {
                         "plugin_settings_set",
                         "plugin_get_hot_reload",
                         "plugin_set_hot_reload",
+                        "plugin_get_plugins_enabled",
+                        "plugin_set_plugins_enabled",
                         "plugin_sidecar_ensure",
                         "plugin_sidecar_start",
                         "plugin_sidecar_request",

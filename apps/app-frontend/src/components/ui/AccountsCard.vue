@@ -62,7 +62,7 @@
 						/>
 						<RadioButtonIcon v-else class="w-5 h-5 text-secondary shrink-0" />
                         <span
-                            v-if="account.access_token === 'OFFLINE'"
+                            v-if="account.offline"
                             class="inline-flex w-6 h-6 rounded items-center justify-center text-white font-bold text-xs shrink-0"
                             :style="{ backgroundColor: getOfflineAvatarColor(account.profile.name) }"
                         >
@@ -208,7 +208,8 @@ type MinecraftCredential = {
 		id: string
 		name: string
 	}
-    access_token: string
+    /** Whether this is an offline account. Tokens never reach the frontend. */
+    offline: boolean
     active: boolean
 }
 
@@ -253,8 +254,8 @@ async function refreshValues() {
         if (!a.active && b.active) return 1
 
         // 2. 正版账户在前，离线账户在后
-        const aIsOnline = a.access_token !== 'OFFLINE'
-        const bIsOnline = b.access_token !== 'OFFLINE'
+        const aIsOnline = !a.offline
+        const bIsOnline = !b.offline
         if (aIsOnline && !bIsOnline) return -1
         if (!aIsOnline && bIsOnline) return 1
 
@@ -306,7 +307,7 @@ const avatarUrl = computed(() => {
     }
 
     // 离线账户：不返回 mc-heads URL，模板里用 CSS 头像替代
-    if (selectedAccount.value.access_token === 'OFFLINE') {
+    if (selectedAccount.value.offline) {
         return null
     }
 
@@ -337,7 +338,7 @@ const avatarUrl = computed(() => {
 
 function getAccountAvatarUrl(account: MinecraftCredential) {
     // 离线账户：返回 null，模板用 CSS 头像
-    if (account.access_token === 'OFFLINE') {
+    if (account.offline) {
         return null
     }
 
@@ -371,7 +372,7 @@ function getAccountTypeLabel() {
     if (!selectedAccount.value) {
         return formatMessage(messages.minecraftAccount)
     }
-    return selectedAccount.value.access_token === 'OFFLINE'
+    return selectedAccount.value.offline
         ? '离线账户'
         : '正版账户'
 }

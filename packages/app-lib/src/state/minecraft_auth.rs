@@ -212,6 +212,24 @@ pub struct Credentials {
     pub active: bool,
 }
 
+/// The `access_token` an offline account carries.
+///
+/// An offline account has no real credential to hold, and this marker in its
+/// place is how the rest of the launcher tells the two apart without a second
+/// field to keep in step.
+const OFFLINE_TOKEN: &str = "OFFLINE";
+
+impl Credentials {
+    /// Whether this is an account with no Mojang session behind it.
+    ///
+    /// This is the only thing about a credential the frontend is told (see the
+    /// `Serialize` impl below). The tokens themselves stay in this process: they
+    /// are the valuable part of an account, and nothing in the UI reads them.
+    pub fn is_offline(&self) -> bool {
+        self.access_token == OFFLINE_TOKEN
+    }
+}
+
 /// An entry in the player profile cache, keyed by player UUID.
 pub(super) enum ProfileCacheEntry {
     /// A cached profile that is valid, even though it may be stale.
@@ -340,7 +358,7 @@ impl Credentials {
                 capes: vec![],                   // 离线用户没有披风
                 fetch_time: None,
             },
-            access_token: "OFFLINE".to_string(), // 标记为离线
+            access_token: OFFLINE_TOKEN.to_string(),
             refresh_token: String::new(),        // 无需刷新
             expires: Utc::now() + Duration::days(365 * 20), // 20年后过期
             active: true,                         // 自动设为活跃账户
@@ -714,10 +732,16 @@ impl Serialize for Credentials {
                 ),
         };
 
-        let mut ser = serializer.serialize_struct("Credentials", 5)?;
+        // The tokens are deliberately not serialised. This type crosses the IPC
+        // boundary to the launcher's own page, and a UI plugin runs in that
+        // same page — so anything here is readable by any installed plugin.
+        // Nothing in the frontend wants a token: the one thing the account list
+        // asks of a credential is whether the account is offline, and that is a
+        // boolean. Everything else that needs a token reads it from the struct
+        // directly, inside this process.
+        let mut ser = serializer.serialize_struct("Credentials", 4)?;
         ser.serialize_field("profile", &*profile)?;
-        ser.serialize_field("access_token", &self.access_token)?;
-        ser.serialize_field("refresh_token", &self.refresh_token)?;
+        ser.serialize_field("offline", &self.is_offline())?;
         ser.serialize_field("expires", &self.expires)?;
         ser.serialize_field("active", &self.active)?;
         ser.end()
