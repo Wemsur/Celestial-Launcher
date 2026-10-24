@@ -46,6 +46,15 @@ const scrollableProjectTypeTabs = computed(
 		ctx.selectableProjectTypes.value.filter((link) => link.shown ?? true).length > 1,
 )
 
+/**
+ * Whether the tab row's trailing controls drop to a line of their own.
+ *
+ * This is the narrow layout's rule rather than the scroll rule: with a single
+ * tab there is nothing to scroll, but the row is still too tight to hold the
+ * tabs and the controls side by side.
+ */
+const stackedTabActions = computed(() => !!ctx.scrollableProjectTypeTabs?.value)
+
 const maxResultsOptions = computed<ComboboxOption<number>[]>(() =>
 	(ctx.maxResultsOptions?.value ?? [5, 10, 15, 20, 50, 100]).map((n) => ({
 		value: n,
@@ -155,27 +164,46 @@ function getProjectCardTags(result: Labrinth.Search.v3.ResultSearchProject, disp
 		page padding so the tabs still line up, -my-2/py-2 cancel out so the wrapper
 		takes up exactly as much room as the tabs do on their own, and the scrollbar
 		is hidden because a 15px bar under a 40px tab row is all noise.
+
+		The actions slot follows the same rule: beside the tabs while they fit,
+		and on a line of its own once the row is the narrow one, since a second
+		row is the only way both can stay reachable at half width. Its own
+		horizontal padding comes from the parent, so the second line starts at
+		the same left edge as the tabs.
 	-->
 	<div
 		v-if="ctx.showProjectTypeTabs.value"
 		:class="
-			scrollableProjectTypeTabs
-				? '-mx-6 -my-2 flex items-center gap-2 overflow-x-auto px-6 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+			stackedTabActions
+				? '-mx-6 -my-2 flex flex-col gap-2 px-6 py-2'
 				: 'flex items-center justify-between gap-2'
 		"
 	>
-		<NavTabs
-			:links="ctx.selectableProjectTypes.value"
-			:replace="ctx.variant === 'app'"
-			:class="scrollableProjectTypeTabs ? 'shrink-0' : ''"
-		/>
+		<div
+			:class="
+				scrollableProjectTypeTabs
+					? 'flex min-w-0 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+					: 'contents'
+			"
+		>
+			<NavTabs
+				:links="ctx.selectableProjectTypes.value"
+				:replace="ctx.variant === 'app'"
+				:class="scrollableProjectTypeTabs ? 'shrink-0' : ''"
+			/>
+		</div>
 		<!--
 			Platform-specific controls for the tab row (the app puts its content
 			source picker here). Empty on the web, where the slot is unused.
 			`ml-auto` keeps it at the right edge even when NavTabs hides itself
 			for having a single tab, so the picker never disappears with it.
+			Once the tabs wrap, it takes a line of its own, aligned to the same
+			left edge the tabs start from.
 		-->
-		<div v-if="$slots['tabs-actions']" class="ml-auto shrink-0">
+		<div
+			v-if="$slots['tabs-actions']"
+			:class="stackedTabActions ? 'shrink-0' : 'ml-auto shrink-0'"
+		>
 			<slot name="tabs-actions" />
 		</div>
 	</div>

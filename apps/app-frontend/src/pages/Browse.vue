@@ -43,7 +43,7 @@ import {
 } from '@modrinth/ui'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { Ref } from 'vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onScopeDispose, ref, shallowRef, watch } from 'vue'
 import type { LocationQuery } from 'vue-router'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 
@@ -93,7 +93,18 @@ import {
 } from '@/content-sources/preferences'
 import { sourceProvider } from '@/content-sources/registry'
 import SourceSelector from '@/content-sources/SourceSelector.vue'
-import type { ContentQuery, ContentSort, ContentType, ContentVersion } from '@/content-sources/types'
+import SourceRecommendations from '@/content-sources/SourceRecommendations.vue'
+import type {
+    RecommendationCard,
+    RecommendationSource,
+} from '@/content-sources/recommendations'
+import type {
+    ContentCard,
+    ContentQuery,
+    ContentSort,
+    ContentType,
+    ContentVersion,
+} from '@/content-sources/types'
 import { get_project, get_search_results_v3, get_version_many } from '@/helpers/cache.js'
 import { toError } from '@/helpers/errors'
 import {
@@ -1646,6 +1657,72 @@ async function searchModrinth(requestParams: string, contentType: string) {
 /** Sources that failed during the last search, so the notice is not repeated. */
 let lastFailureKey = ''
 
+/**
+ * Content from sources that cannot be sorted alongside the others, shown below
+ * the list. Replaced on every search; the block keeps its own page counters.
+ */
+const recommendationGroups = shallowRef<RecommendationSource[]>([])
+
+/** How many cards one recommendation batch shows. */
+const RECOMMENDATION_BATCH = 6
+
+/** One card as the recommendation block draws it. */
+function toRecommendationCard(card: ContentCard): RecommendationCard {
+    return {
+        id: card.id,
+        name: card.name,
+        iconUrl: card.iconUrl,
+        summary: card.summary,
+        tags: card.tags,
+        // The same location a list row would use, so a card opened from here is
+        // the same page in the same browse context.
+        link: projectLocationFor(toSearchResult(card)),
+    }
+}
+
+/**
+ * Fetch another batch for one recommendation source.
+ *
+ * Deliberately outside the main search's cache and paging: the block is a side
+ * channel, so turning to the next batch must not move the list above it, and the
+ * list's page must not decide what this one shows.
+ */
+async function loadRecommendationBatch(
+    sourceId: string,
+    page: number,
+): Promise<RecommendationCard[]> {
+    const provider = sourceProvider(sourceId)
+    const run = provider?.search ?? provider?.browse
+    if (!provider || !run) return []
+
+    const context = queryContext()
+    const sourceFilters = sourceFiltersFromSelection(
+        flattenSourceGroups(sourceFilterGroups.value),
+        searchState.currentFilters.value,
+    )
+
+    const result = await run.call(provider, {
+        query: searchState.query.value,
+        contentType: projectType.value as ContentQuery['contentType'],
+        gameVersion: context.gameVersion,
+        loader: context.loader,
+        sort: searchState.effectiveCurrentSortType.value.name as ContentSort,
+        page,
+        limit: RECOMMENDATION_BATCH,
+        filters: sourceFilters[sourceId],
+    })
+
+    // Anything already in the list above is not repeated below it. Names are the
+    // only handle two different sources share, and a source that cannot be sorted
+    // by downloads is also the one whose ids mean nothing to the others.
+    const listed = new Set(
+        searchState.projectHits.value.map((hit) => hit.name.trim().toLowerCase()),
+    )
+    return result.items
+        .filter((card) => !listed.has(card.name.trim().toLowerCase()))
+        .map(toRecommendationCard)
+}
+
 function reportSourceFailures(failures: { sourceId: string; message: string }[]) {
     if (failures.length === 0) {
         // A search with no failures means every source is healthy again, so the
@@ -1744,6 +1821,11 @@ async function search(requestParams: string) {
             serverHits: [],
             total_hits: merged.total,
             per_page: request.limit,
+            recommendationGroups: (merged.recommendations ?? []).map((group) => ({
+                sourceId: group.sourceId,
+                total: group.total,
+                items: group.items.map((item) => toRecommendationCard(item.card)),
+            })),
         }
     }
 
@@ -1792,7 +1874,14 @@ async function search(requestParams: string) {
 
     reportSourceFailures(merged.failures)
 
-    return toSearchResponse(merged)
+    const final = toSearchResponse(merged)
+    // The shared search state only knows about the list itself, so the block
+    // below it is published here, after the same generation check a partial
+    // result passes.
+    if (generation === searchGeneration) {
+        recommendationGroups.value = final.recommendationGroups
+    }
+    return final
 }
 
 /** Stamp the installed badge onto a Modrinth hit, as the single-source path did. */
@@ -1903,13 +1992,16 @@ const searchState = useBrowseSearch({
  * user has switched tab or typed a new query would paint rows from a request
  * that is no longer the one on screen.
  */
-function publishPartialResults(
-    generation: number,
-    response: BrowseSearchResponse,
-) {
+/** A search response plus the block that rides below the list. */
+type BrowseResponse = BrowseSearchResponse & {
+    recommendationGroups: RecommendationSource[]
+}
+
+function publishPartialResults(generation: number, response: BrowseResponse) {
     if (generation !== searchGeneration) return
     searchState.projectHits.value = response.projectHits
     searchState.totalHits.value = response.total_hits
+    recommendationGroups.value = response.recommendationGroups
     searchState.loading.value = false
 }
 
@@ -1923,6 +2015,7 @@ watch(projectType, (type, previous) => {
     searchState.projectHits.value = []
     searchState.serverHits.value = []
     searchState.totalHits.value = 0
+    recommendationGroups.value = []
     searchState.loading.value = true
 })
 
@@ -1933,8 +2026,22 @@ watch(() => i18n.global.locale.value, () => {
 	void searchState.refreshSearch()
 })
 
+/*
+ * Debounced, because a gesture can land more than one preference change in the
+ * same instant: a double-click on a source mark is two toggles that cancel out
+ * followed by a solo, and asking every source once per intermediate state would
+ * be several full fan-outs for one gesture.
+ */
+let preferencesRefresh: ReturnType<typeof setTimeout> | null = null
 watch(sourcePreferences, () => {
-    void searchState.refreshSearch()
+	if (preferencesRefresh !== null) clearTimeout(preferencesRefresh)
+	preferencesRefresh = setTimeout(() => {
+		preferencesRefresh = null
+		void searchState.refreshSearch()
+	}, 150)
+})
+onScopeDispose(() => {
+	if (preferencesRefresh !== null) clearTimeout(preferencesRefresh)
 })
 
 // The shared search state refreshes off the Modrinth request string, and source
@@ -2113,6 +2220,9 @@ const translatedProjectHits = computed(() =>
 )
 const translatedServerHits = computed(() => searchState.serverHits.value.map(withTranslatedSummary))
 
+/** The layout the list is drawn in, so the block below it matches. */
+const resultLayout = computed(() => searchState.effectiveLayout.value)
+
 /**
  * Which source a card came from, for its tint and its chip. A merged card is
  * tinted by the source it is drawn from and says how many others also carry it,
@@ -2213,6 +2323,20 @@ provideBrowseManager({
                         <SourceSelector />
                     </template>
                     <template #after>
+                        <!--
+                            Content from sources that carry no number behind the
+                            current sort. It sits below the list and its pager, in
+                            each source's own order, because such a source cannot
+                            be ranked against the others without disappearing
+                            behind the page limit.
+                        -->
+                        <SourceRecommendations
+                            v-if="recommendationGroups.length > 0"
+                            :sources="recommendationGroups"
+                            :limit="RECOMMENDATION_BATCH"
+                            :layout="resultLayout"
+                            :load="loadRecommendationBatch"
+                        />
                         <ContextMenu ref="contextMenuRef" :label="formatMessage(messages.projectActionsLabel)">
                             <template #open_link="{ option }">
                                 <GlobeIcon /> {{ option.label }} <ExternalIcon />

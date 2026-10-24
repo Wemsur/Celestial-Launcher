@@ -293,6 +293,15 @@
   "app.browse.back-to-instance": {
     "message": "Back to instance"
   },
+  "app.browse.content-sources.clear-all": {
+    "message": "Clear all"
+  },
+  "app.browse.content-sources.turn-off": {
+    "message": "Hide content from {source}"
+  },
+  "app.browse.content-sources.turn-on": {
+    "message": "Show content from {source}"
+  },
   "app.browse.discover-project-type": {
     "message": "Discover {projectType}"
   },
@@ -325,6 +334,12 @@
   },
   "app.browse.project-type.shaders": {
     "message": "Shaders"
+  },
+  "app.browse.recommendations.next": {
+    "message": "Show different ones"
+  },
+  "app.browse.recommendations.title": {
+    "message": "Browse · {source}"
   },
   "app.browse.server-instance-content-warning": {
     "message": "Adding content may prevent you from joining this server. Any content you add will be removed when the managed server content is updated."

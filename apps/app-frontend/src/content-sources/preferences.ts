@@ -69,12 +69,21 @@ export function isSourceActive(sourceId: string): boolean {
 	return !preferences.value.excluded.includes(sourceId)
 }
 
-export function setSourceActive(sourceId: string, active: boolean): void {
+/**
+ * Apply a set of on/off changes as one write.
+ *
+ * Every write triggers a search refresh, so a gesture that touches the whole
+ * row — show only this one, clear them all — has to land as a single change or
+ * it would ask every source several times for the same final selection.
+ */
+export function setSourcesActive(entries: { id: string; active: boolean }[]): void {
 	const excluded = new Set(preferences.value.excluded)
-	if (active) {
-		excluded.delete(sourceId)
-	} else {
-		excluded.add(sourceId)
+	for (const { id, active } of entries) {
+		if (active) {
+			excluded.delete(id)
+		} else {
+			excluded.add(id)
+		}
 	}
 	commit({ ...preferences.value, excluded: [...excluded] })
 }

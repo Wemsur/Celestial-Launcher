@@ -269,17 +269,14 @@
   "app.browse.back-to-instance": {
     "message": "返回实例"
   },
-  "app.browse.content-sources.clear": {
-    "message": "清空"
+  "app.browse.content-sources.clear-all": {
+    "message": "全部清除"
   },
-  "app.browse.content-sources.placeholder": {
-    "message": "内容源"
+  "app.browse.content-sources.turn-off": {
+    "message": "隐藏来自 {source} 的内容"
   },
-  "app.browse.content-sources.search": {
-    "message": "搜索内容源"
-  },
-  "app.browse.content-sources.select-all": {
-    "message": "全部内容源"
+  "app.browse.content-sources.turn-on": {
+    "message": "显示来自 {source} 的内容"
   },
   "app.browse.discover-project-type": {
     "message": "探索{projectType}"
@@ -313,6 +310,12 @@
   },
   "app.browse.project-type.shaders": {
     "message": "光影"
+  },
+  "app.browse.recommendations.next": {
+    "message": "换一批"
+  },
+  "app.browse.recommendations.title": {
+    "message": "浏览 · {source}"
   },
   "app.browse.project-type.skins": {
     "message": "皮肤"

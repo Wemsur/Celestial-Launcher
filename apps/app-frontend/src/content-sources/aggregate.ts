@@ -1,7 +1,7 @@
 /**
  * Fans a browse request out to every active source and merges the answers.
  *
- * Three rules shape the merge, all of them the user's:
+ * The rules that shape the merge:
  *
  * - Items with the same name *and* the same content type are one entry, however
  *   many sources offer them, and Modrinth's copy of it is the one drawn —
@@ -10,14 +10,20 @@
  *   source behaves exactly like it did before.
  * - The downloads sort is applied to each source's counts multiplied by that
  *   source's multiplier, so a small site's counts are not drowned by Modrinth's.
- *   A source that cannot supply the number behind the requested sort ranks last
- *   rather than being dropped.
+ * - A source that cannot supply the number behind the requested sort does not
+ *   take part in the merge at all: sorting it last would put every one of its
+ *   rows past the page limit, so its content would vanish. It is returned as a
+ *   recommendation group instead, for the caller to show below the list. A lone
+ *   source is exempt — with nothing to be compared against, its own order stands.
  * - One source failing does not fail the page: its error is reported and the
  *   rest of the results are shown.
  *
  * Paging stays per-source: page N of the merged list is page N from each active
  * source, merged. A global ordering across sources would need every source to be
- * exhaustively fetched, which is not what a paginated browse should do.
+ * exhaustively fetched, which is not what a paginated browse should do. That
+ * makes each page a merge of one page per source, so the merged page is cut back
+ * to `limit` rows — otherwise it would hold every source's page at once while the
+ * pager still advertised pages of `limit`.
  */
 
 import { MODRINTH_SOURCE_ID, sourceMultiplier } from './preferences'
@@ -62,6 +68,22 @@ export interface SourceFailure {
 	message: string
 }
 
+/**
+ * One source's content that could not join the merged list.
+ *
+ * A source that reports no number behind the requested sort — no download
+ * count, no date — cannot be ordered against the others: every one of its rows
+ * would sort last and then be cut by the page limit, so the source would
+ * silently disappear from the page. Its content is handed back here instead,
+ * for the caller to show on its own below the list.
+ */
+export interface RecommendationGroup {
+	sourceId: string
+	items: MergedContentItem[]
+	/** The source's own total for the query, for anything that wants to say so. */
+	total: number
+}
+
 export interface MergedResult {
 	items: MergedContentItem[]
 	/**
@@ -74,9 +96,13 @@ export interface MergedResult {
 	 * sources of 100 items each would advertise 10 pages when page 6 onward is
 	 * empty. An upper bound on the merged catalogue size, when one is wanted, is
 	 * the sum of the per-source totals; that is deliberately not what this is.
+	 *
+	 * Only sources whose content is in `items` count: a source moved to
+	 * `recommendations` contributes no pages to this list.
 	 */
 	total: number
 	failures: SourceFailure[]
+	recommendations: RecommendationGroup[]
 }
 
 /** A source as the aggregator sees it: a source id plus its query function. */
@@ -116,14 +142,54 @@ interface SourceAnswer {
 
 function mergeAnswers(answers: SourceAnswer[], request: FanOutRequest, complete: boolean) {
 	const failures: SourceFailure[] = []
-	const perSource: SourceOffer[][] = []
-	let total = 0
-
-	for (const answer of answers) {
+	const answered = answers.filter((answer) => {
 		if (answer.total < 0) {
 			failures.push({ sourceId: answer.sourceId, message: answer.message ?? '' })
+			return false
+		}
+		return true
+	})
+
+	/*
+	 * A source with nothing behind the requested sort cannot be ordered against
+	 * the others, so it is kept out of the merged list rather than sorted to the
+	 * bottom and cut by the page limit. See `sortableBy`.
+	 *
+	 * Only when something else is answering, though: a lone source is its own
+	 * ordering, and demoting it would empty the list a user asked to see. A
+	 * partial answer counts as lone until a second source arrives, which is what
+	 * keeps the block from flickering into and out of the list as each source
+	 * answers — the caller re-merges on every arrival.
+	 */
+	const comparable = answered.length > 1
+	const perSource: SourceOffer[][] = []
+	const recommendations: RecommendationGroup[] = []
+	let total = 0
+
+	/*
+	 * The order the list will actually be in, which is not always the one asked
+	 * for: browsing with no search term asks for `relevance`, but nothing is
+	 * relevant to an empty query, so the list is ordered by downloads. Both the
+	 * comparability check and the merge have to agree on that, or a source would
+	 * be kept for a sort it cannot answer and then cut away by the page limit.
+	 */
+	const effectiveSort: ContentSort =
+		request.sort === 'relevance' && !request.query?.trim() ? 'downloads' : request.sort
+
+	for (const answer of answered) {
+		if (comparable && !sortableBy(answer.offers, effectiveSort)) {
+			recommendations.push({
+				sourceId: answer.sourceId,
+				items: answer.offers.map((offer) => ({
+					card: offer.card,
+					offers: [offer],
+					shared: false,
+				})),
+				total: answer.total,
+			})
 			continue
 		}
+
 		total = Math.max(total, answer.total)
 		perSource.push(answer.offers)
 	}
@@ -131,12 +197,38 @@ function mergeAnswers(answers: SourceAnswer[], request: FanOutRequest, complete:
 	const singleSource = perSource.length <= 1
 	const items = singleSource
 		? (perSource[0] ?? []).map((offer) => ({ card: offer.card, offers: [offer], shared: false }))
-		: merge(
-				perSource,
-				request.sort === 'relevance' && !request.query?.trim() ? 'downloads' : request.sort,
-			)
+		: merge(perSource, effectiveSort)
 
-	return { items, total, failures, complete }
+	// A page is one page's worth however many sources answered it. Without this
+	// the list would hold every source's rows at once — ten from each of three
+	// sources is thirty rows for a request that asked for ten — while the pager
+	// still advertised `total / limit` pages.
+	return { items: items.slice(0, request.limit), total, failures, complete, recommendations }
+}
+
+/**
+ * Whether a source's answer carries what the requested sort compares.
+ *
+ * `relevance` compares nothing across sources — each source already ordered its
+ * own answer — so it is always sortable. The metric sorts need the field on at
+ * least one row; a source that supplies none of them would sort entirely to the
+ * bottom, which is the same as being absent but with the cost of the request.
+ */
+function sortableBy(offers: SourceOffer[], sort: ContentSort): boolean {
+	if (sort === 'relevance') return true
+	if (offers.length === 0) return true
+	return offers.some((offer) => {
+		switch (sort) {
+			case 'downloads':
+				return typeof offer.adjustedDownloads === 'number'
+			case 'follows':
+				return typeof offer.card.follows === 'number'
+			case 'newest':
+				return typeof offer.card.publishedAt === 'string'
+			case 'updated':
+				return typeof offer.card.updatedAt === 'string'
+		}
+	})
 }
 
 export async function searchAcrossSources(
@@ -145,7 +237,7 @@ export async function searchAcrossSources(
 	options: SearchOptions = {},
 ): Promise<MergedResult> {
 	if (sources.length === 0) {
-		return { items: [], total: 0, failures: [] }
+		return { items: [], total: 0, failures: [], recommendations: [] }
 	}
 
 	const answers: SourceAnswer[] = []
@@ -185,7 +277,12 @@ export async function searchAcrossSources(
 	)
 
 	const final = mergeAnswers(answers, request, true)
-	return { items: final.items, total: final.total, failures: final.failures }
+	return {
+		items: final.items,
+		total: final.total,
+		failures: final.failures,
+		recommendations: final.recommendations,
+	}
 }
 
 /** Group same-name same-type items together, then order the result. */
