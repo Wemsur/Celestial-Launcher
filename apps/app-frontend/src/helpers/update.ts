@@ -244,10 +244,10 @@ export async function downloadAndRunRelease(
     })
 
     try {
-        const filename = assetUrl.split('/').pop() ?? 'update.exe'
-        localStorage.setItem('celestial-last-msi-filename', filename)
-        const result = await invoke('download_and_run_msi', { assetUrl })
-        localStorage.setItem('celestial-last-msi-filename', result as string)
+        // The download is verified in Rust before it is written, and the file it
+        // lands in never comes back here: a path the page can name is a path
+        // anything running in the page can name, and it gets executed.
+        await invoke('download_and_run_msi', { assetUrl })
 
         appUpdateState.progress.value = 1
         appUpdateState.downloading.value = false

@@ -78,7 +78,6 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { type } from '@tauri-apps/plugin-os'
-import { saveWindowState, StateFlags } from '@tauri-apps/plugin-window-state'
 import dayjs from 'dayjs'
 import { $fetch } from 'ofetch'
 import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
@@ -1191,11 +1190,6 @@ traceStartupStep('Initialize backend state', () => initialize_state(appEventChan
 		console.error('Failed to initialize app', err)
 		error.showError(err, null, false, 'state_init')
 	})
-
-const handleClose = async () => {
-	await saveWindowState(StateFlags.ALL)
-	await getCurrentWindow().close()
-}
 
 const loading = setupLoadingStateProvider(() => ({
 	stateInitialized: stateInitialized.value,
@@ -2411,13 +2405,14 @@ async function downloadCelestialUpdate(assetUrl, version, sourceLabel) {
 async function installUpdate() {
     restarting.value = true
     try {
-        const filename = localStorage.getItem('celestial-last-msi-filename')
-        if (filename) {
-            await invoke('install_cached_msi', { filename })
-        } else {
-            await handleClose()
-        }
+        // The installer path stays in Rust, where the download put it. This side
+        // only says "go", so a page that has been tampered with cannot point it
+        // at some other executable.
+        await invoke('install_cached_msi')
     } catch (e) {
+        // Either nothing verified is waiting, or the installer would not start.
+        // Staying open is the honest outcome; closing would look like success.
+        console.error('Failed to start the update installer:', e)
         restarting.value = false
     }
 }

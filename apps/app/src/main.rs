@@ -13,10 +13,9 @@ use tauri_plugin_fs::FsExt;
 use theseus::prelude::*;
 use std::fs;
 use base64::{Engine as _, engine::general_purpose};
-use tauri_plugin_http::reqwest;
 
 mod api;
-mod update_key;
+mod update_security;
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -881,17 +880,21 @@ async fn run_silent_msi(path: String) -> Result<(), String> {
 // 由前端解析。
 #[tauri::command]
 async fn fetch_release_metadata(url: String) -> Result<String, String> {
-    // 与 download_and_run_msi 一致，带浏览器式 UA 以绕过 git.gay (Forgejo) 的 WAF。
-    let client = reqwest::Client::builder()
-        .user_agent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
-             (KHTML, like Gecko) CelestialLauncher/updater",
-        )
-        .build()
-        .map_err(|e| format!("Client build failed: {}", e))?;
+    let parsed = url::Url::parse(&url)
+        .map_err(|error| format!("Invalid release URL: {error}"))?;
+    if parsed.scheme() != "https" {
+        return Err("Release metadata must be fetched over https".to_string());
+    }
+    if !update_security::metadata_host_allowed(&parsed) {
+        return Err(format!(
+            "Refusing to fetch release metadata from an untrusted host: {parsed}"
+        ));
+    }
+
+    let client = update_security::client(update_security::metadata_host_allowed)?;
 
     let resp = client
-        .get(&url)
+        .get(parsed)
         .send()
         .await
         .map_err(|e| format!("Request failed: {}", e))?;
@@ -911,26 +914,27 @@ async fn fetch_release_metadata(url: String) -> Result<String, String> {
     Ok(body)
 }
 
-// 下载 NSIS 安装包到缓存目录，返回文件名
+// 下载安装包，验签通过后写入缓存目录，等用户确认重启再安装
 #[tauri::command]
 async fn download_and_run_msi(
     asset_url: String,
     app_handle: tauri::AppHandle,
-) -> Result<String, String> {
-    // git.gay (Forgejo) sits behind a WAF that 403s requests with no / a
-    // non-browser User-Agent. `reqwest::get` sends none, so the asset download
-    // was rejected even though the release-metadata fetch (from the webview,
-    // which does send a UA) succeeded. Send a browser-like UA explicitly.
-    let client = reqwest::Client::builder()
-        .user_agent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
-             (KHTML, like Gecko) CelestialLauncher/updater",
-        )
-        .build()
-        .map_err(|e| format!("Client build failed: {}", e))?;
+) -> Result<(), String> {
+    let parsed = url::Url::parse(&asset_url)
+        .map_err(|error| format!("Invalid update URL: {error}"))?;
+    if parsed.scheme() != "https" {
+        return Err("Update downloads must be https".to_string());
+    }
+    if !update_security::download_host_allowed(&parsed) {
+        return Err(format!(
+            "Refusing an update from an untrusted host: {parsed}"
+        ));
+    }
+
+    let client = update_security::client(update_security::download_host_allowed)?;
 
     let resp = client
-        .get(&asset_url)
+        .get(parsed.clone())
         .send()
         .await
         .map_err(|e| format!("Download failed: {}", e))?;
@@ -963,34 +967,78 @@ async fn download_and_run_msi(
         }
     }
 
-    let filename = asset_url
-        .split('/')
-        .rev()
-        .nth(0)
-        .unwrap_or("update.exe");
+    // The signature sits beside the asset, on the same host and through the
+    // same redirect policy. A release without one is not an update anyone can
+    // install, so the refusal says why rather than reporting a network error.
+    let mut signature_url = parsed;
+    let signature_path = format!("{}.sig", signature_url.path());
+    signature_url.set_path(&signature_path);
+    let signature = client
+        .get(signature_url)
+        .send()
+        .await
+        .map_err(|e| format!("Signature download failed: {e}"))?;
+    if !signature.status().is_success() {
+        return Err(format!(
+            "This update has no signature ({}), so it cannot be verified",
+            signature.status()
+        ));
+    }
+    let signature = signature
+        .text()
+        .await
+        .map_err(|e| format!("Signature read failed: {e}"))?;
+
+    update_security::verify_signature(&bytes, &signature)?;
 
     let cache_dir = app_handle.path().cache_dir().map_err(|e| e.to_string())?;
-    let full_path = cache_dir.join(filename);
+    std::fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
+    let full_path = cache_dir.join(update_security::installer_file_name(&asset_url));
     std::fs::write(&full_path, &bytes).map_err(|e| e.to_string())?;
+
+    // The path stays in this process. Anything that can name a path can name
+    // any path, and this one is executed.
+    *app_handle
+        .state::<update_security::PendingInstaller>()
+        .0
+        .lock()
+        .map_err(|e| e.to_string())? = Some(full_path);
 
     app_handle.emit_to("main", "app-update-event", "downloaded")
         .map_err(|e| e.to_string())?;
 
-    Ok(filename.to_string())
+    Ok(())
 }
 
-// 运行缓存中的 NSIS 安装程序并退出 app
+// 运行已验签的安装程序并退出 app
 #[tauri::command]
-async fn install_cached_msi(
-    filename: String,
-    app_handle: tauri::AppHandle,
-) -> Result<(), String> {
+async fn install_cached_msi(app_handle: tauri::AppHandle) -> Result<(), String> {
+    // Bound to a variable: `state()` hands back a temporary that the lock guard
+    // borrows from, so chaining it straight into the guard drops the temporary
+    // too early.
+    let installer_state = app_handle.state::<update_security::PendingInstaller>();
+    let pending = installer_state
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone();
+    let pending = pending.ok_or_else(|| {
+        "No verified update is waiting to be installed".to_string()
+    })?;
+
+    // The path came from this process, so this can only fail if something
+    // replaced it — but "only if" is not a guarantee to start a program on.
     let cache_dir = app_handle.path().cache_dir().map_err(|e| e.to_string())?;
-    let full_path = cache_dir.join(&filename);
-    if !full_path.exists() {
-        return Err(format!("Installer not found: {}", filename));
+    let cache_dir = std::fs::canonicalize(&cache_dir).map_err(|e| e.to_string())?;
+    let installer = std::fs::canonicalize(&pending).map_err(|e| e.to_string())?;
+    if !installer.starts_with(&cache_dir) {
+        return Err(
+            "Refusing to run an installer from outside the cache directory"
+                .to_string(),
+        );
     }
-    std::process::Command::new(&full_path)
+
+    std::process::Command::new(&installer)
         .arg("/S")
         .spawn()
         .map_err(|e| e.to_string())?;
@@ -1170,6 +1218,7 @@ fn main() {
         });
 
     builder = builder
+        .manage(update_security::PendingInstaller::default())
         .plugin(api::auth::init())
         .plugin(api::mr_auth::init())
         .plugin(api::onboarding_checklist::init())
