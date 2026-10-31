@@ -1,0 +1,53 @@
+name: Sign installers
+description: Writes a .sig next to every installer in a folder, using the update signing key.
+
+# The launcher refuses to install an update it cannot verify, so every release
+# that ships installers has to come through here. The signature covers the file
+# contents, so this must run *after* the installers have been renamed: the .sig
+# is found next to the asset by its name.
+
+inputs:
+  directory:
+    description: Folder holding the installers to sign.
+    required: false
+    default: dist
+  private-key:
+    description: The update signing private key (the TAURI_SIGNING_PRIVATE_KEY secret).
+    required: true
+  private-key-password:
+    description: The key's password, when it has one.
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Sign every installer
+      shell: bash
+      env:
+        # `tauri signer sign` reads these two, so the key stays out of argv.
+        TAURI_PRIVATE_KEY: ${{ inputs.private-key }}
+        TAURI_PRIVATE_KEY_PASSWORD: ${{ inputs.private-key-password }}
+        DIRECTORY: ${{ inputs.directory }}
+      run: |
+        set -euo pipefail
+        shopt -s nullglob
+
+        signed=0
+        for file in "$DIRECTORY"/*; do
+          case "$file" in
+            *.sig) continue ;;
+          esac
+          echo "Signing $(basename "$file")"
+          pnpm --filter=@modrinth/app exec tauri signer sign "$file"
+          signed=$((signed + 1))
+        done
+
+        # Failing here rather than publishing an unsigned release: the launcher
+        # would reject its installers anyway, and a release that cannot be
+        # installed is harder to notice than a red workflow.
+        if [ "$signed" -eq 0 ]; then
+          echo "::error::No installers found in $DIRECTORY to sign"
+          exit 1
+        fi
+
+        ls -la "$DIRECTORY"

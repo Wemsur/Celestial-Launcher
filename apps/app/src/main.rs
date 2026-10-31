@@ -16,6 +16,7 @@ use base64::{Engine as _, engine::general_purpose};
 use tauri_plugin_http::reqwest;
 
 mod api;
+mod update_key;
 
 #[cfg(target_os = "macos")]
 mod macos;
