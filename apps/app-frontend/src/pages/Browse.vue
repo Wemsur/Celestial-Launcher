@@ -1544,16 +1544,46 @@ function parseRequestParams(requestParams: string): {
 }
 
 /** The game version and loader a source should filter by, when there is one. */
+/**
+ * The game version and loader a content source should filter by.
+ *
+ * Taken from the filters the Modrinth query is built from, not from the instance
+ * directly. The instance's own values are only what those filters start out as:
+ * unlocking one in the sidebar — or picking a different value in it — has to
+ * reach the sources too, or a browse that says "all versions" still asks every
+ * source for the instance's version.
+ */
 function queryContext(): { gameVersion?: string; loader?: string } {
     if (isServerContext.value) {
+        // A server's browse filters on the server's own data; the sidebar state
+        // here belongs to the server search, not to a content source.
         return {
             gameVersion: serverContextServerData.value?.mc_version ?? undefined,
             loader: serverContextServerData.value?.loader ?? undefined,
         }
     }
+
+    // Same precedence the Modrinth request uses: a provided filter wins over a
+    // user selection of the same type, unless the user unlocked that type.
+    const overridden = new Set(searchState.overriddenProvidedFilterTypes.value)
+    const provided = combinedProvidedFilters.value.filter(
+        (filter) => !overridden.has(filter.type),
+    )
+    const effective = [
+        ...searchState.currentFilters.value.filter(
+            (filter) => !provided.some((applied) => applied.type === filter.type),
+        ),
+        ...provided,
+    ]
+
+    const optionOf = (...types: string[]) =>
+        effective.find(
+            (filter) => !filter.negative && types.includes(filter.type),
+        )?.option || undefined
+
     return {
-        gameVersion: instance.value?.game_version ?? undefined,
-        loader: instance.value?.loader ?? undefined,
+        gameVersion: optionOf('game_version'),
+        loader: optionOf('mod_loader', 'modpack_loader', 'plugin_loader', 'shader_loader'),
     }
 }
 
