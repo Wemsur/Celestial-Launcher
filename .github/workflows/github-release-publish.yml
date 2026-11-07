@@ -1,0 +1,244 @@
+name: Github release publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '新 Release tag；留空时预发布用 test.<运行序号>，正式发布用应用版本'
+        required: false
+        type: string
+        default: ''
+      prerelease:
+        description: '标记为预发布，不进入正式版更新检查'
+        required: true
+        type: boolean
+        default: true
+      draft:
+        description: '创建草稿，手动确认后再公开发布'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.symlinks
+          GIT_CONFIG_VALUE_0: 'false'
+
+      - name: Validate release target
+        id: release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        with:
+          script: |
+            const fs = require('node:fs')
+            const { execFileSync } = require('node:child_process')
+            const version = JSON.parse(fs.readFileSync('apps/app-frontend/package.json', 'utf8')).version
+            const tag = process.env.RELEASE_TAG.trim() ||
+              (process.env.PRERELEASE === 'true' ? `test.${context.runNumber}` : version)
+            execFileSync('git', ['check-ref-format', `refs/tags/${tag}`])
+
+            try {
+              await github.rest.repos.getReleaseByTag({ ...context.repo, tag })
+              core.setFailed(`Release ${tag} already exists; use a new tag to avoid modifying it.`)
+              return
+            } catch (error) {
+              if (error.status !== 404) throw error
+            }
+
+            try {
+              await github.rest.git.getRef({ ...context.repo, ref: `tags/${tag}` })
+              core.setFailed(`Tag ${tag} already exists; use a new tag for this build.`)
+              return
+            } catch (error) {
+              if (error.status !== 404) throw error
+            }
+
+            core.setOutput('tag', tag)
+            core.setOutput('version', version)
+            core.info(`Release tag: ${tag}; application version: ${version}`)
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            runner: windows-latest
+            args: --bundles nsis,msi
+            out: target/release/bundle
+            os: windows
+            arch: x64
+            java_distribution: temurin
+            java_version: '17'
+          - name: macos
+            runner: macos-latest
+            args: --target universal-apple-darwin
+            out: target/universal-apple-darwin/release/bundle
+            os: macos
+            arch: universal
+            java_distribution: temurin
+            java_version: '17'
+          - name: linux
+            runner: ubuntu-22.04
+            args: ''
+            out: target/release/bundle
+            os: linux
+            arch: x64
+            java_distribution: temurin
+            java_version: '17'
+          - name: windows-arm64
+            runner: windows-11-arm
+            args: --bundles nsis,msi
+            out: target/release/bundle
+            os: windows
+            arch: arm64
+            java_distribution: zulu
+            java_version: '17'
+            skip_install_scripts: true
+          - name: linux-arm64
+            runner: ubuntu-24.04-arm
+            args: --bundles deb,rpm,appimage
+            out: target/release/bundle
+            os: linux
+            arch: arm64
+            java_distribution: temurin
+            java_version: '21'
+
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.symlinks
+          GIT_CONFIG_VALUE_0: 'false'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.name == 'macos' && 'x86_64-apple-darwin,aarch64-apple-darwin' || '' }}
+
+      - name: Ensure macOS targets
+        if: matrix.name == 'macos'
+        run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ matrix.java_distribution }}
+          java-version: ${{ matrix.java_version }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.name }}
+
+      - name: Install Linux build dependencies
+        if: startsWith(matrix.name, 'linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev rpm xdg-utils
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - run: corepack enable
+
+      - name: Seed app-lib environment
+        shell: bash
+        run: cp packages/app-lib/.env.prod packages/app-lib/.env
+
+      - name: Install dependencies
+        if: ${{ !matrix.skip_install_scripts }}
+        run: pnpm install
+
+      - name: Install dependencies (Windows ARM64)
+        if: ${{ matrix.skip_install_scripts }}
+        shell: bash
+        run: |
+          pnpm install --ignore-scripts
+          pnpm rebuild esbuild
+
+      - name: Build
+        shell: bash
+        env:
+          TAURI_BUNDLER_DMG_IGNORE_CI: 'true'
+        run: pnpm --filter=@modrinth/app run tauri build ${{ matrix.args }}
+
+      - name: Collect installers
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          BUNDLE_DIR: ${{ matrix.out }}
+          BUNDLE_OS: ${{ matrix.os }}
+          BUNDLE_ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          base="CelestialLauncher-${VERSION}-${BUNDLE_OS}-${BUNDLE_ARCH}"
+          mkdir -p dist
+          for file in "$BUNDLE_DIR"/nsis/*-setup.exe; do cp "$file" "dist/${base}-setup.exe"; done
+          for file in "$BUNDLE_DIR"/msi/*.msi; do cp "$file" "dist/${base}.msi"; done
+          for file in "$BUNDLE_DIR"/dmg/*.dmg; do cp "$file" "dist/${base}.dmg"; done
+          for file in "$BUNDLE_DIR"/macos/*.app.tar.gz; do cp "$file" "dist/${base}.app.tar.gz"; done
+          for file in "$BUNDLE_DIR"/deb/*.deb; do cp "$file" "dist/${base}.deb"; done
+          for file in "$BUNDLE_DIR"/rpm/*.rpm; do cp "$file" "dist/${base}.rpm"; done
+          for file in "$BUNDLE_DIR"/appimage/*.AppImage; do cp "$file" "dist/${base}.AppImage"; done
+          ls -la dist
+
+      - uses: ./.github/sign-installers
+        with:
+          directory: ${{ github.workspace }}/dist
+          private-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          private-key-password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Upload build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: CelestialLauncher-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download build output
+        uses: actions/download-artifact@v4
+        with:
+          pattern: CelestialLauncher-*
+          path: release-files
+          merge-multiple: true
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Celestial Launcher ${{ needs.prepare.outputs.tag }}
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.prerelease }}
+          make_latest: 'false'
+          fail_on_unmatched_files: true
+          files: release-files/*
