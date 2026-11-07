@@ -1,73 +1,199 @@
-name: Celestial Launcher release build
+name: Celestial release
 
-# Builds Windows, macOS and Linux bundles in one run. Trigger it manually from
-# the Actions tab (or push a v* tag) — cross-compiling Tauri locally is not
-# possible, so this is the only way to get all platforms from one machine.
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '版本 tag（留空 = v + apps/app-frontend/package.json 版本）'
+        required: false
+        type: string
+        default: ''
+      windows_x64:
+        description: '构建 Windows x64'
+        required: true
+        type: boolean
+        default: true
+      windows_arm64:
+        description: '构建 Windows ARM64'
+        required: true
+        type: boolean
+        default: true
+      linux_x64:
+        description: '构建 Linux x64'
+        required: true
+        type: boolean
+        default: true
+      linux_arm64:
+        description: '构建 Linux ARM64'
+        required: true
+        type: boolean
+        default: true
+      macos:
+        description: '构建 macOS universal'
+        required: true
+        type: boolean
+        default: true
+      publish_github:
+        description: '发布草稿到 GitHub'
+        required: true
+        type: boolean
+        default: true
+      publish_gitgay:
+        description: '发布草稿到 git.gay'
+        required: true
+        type: boolean
+        default: true
+      publish_wemgit:
+        description: '发布草稿到 Wemgit'
+        required: true
+        type: boolean
+        default: true
+  # tag 推送沿用仅构建行为；发布需要手动勾选目标。
   push:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
 jobs:
+  prepare:
+    name: Select platforms and version
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.prepare.outputs.matrix }}
+      tag: ${{ steps.prepare.outputs.tag }}
+      version: ${{ steps.prepare.outputs.version }}
+      commit: ${{ steps.prepare.outputs.commit }}
+      prerelease: ${{ steps.prepare.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.symlinks
+          GIT_CONFIG_VALUE_0: 'false'
+
+      - name: Prepare build matrix
+        id: prepare
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          WINDOWS_X64: ${{ inputs.windows_x64 }}
+          WINDOWS_ARM64: ${{ inputs.windows_arm64 }}
+          LINUX_X64: ${{ inputs.linux_x64 }}
+          LINUX_ARM64: ${{ inputs.linux_arm64 }}
+          MACOS: ${{ inputs.macos }}
+          PUBLISH_GITHUB: ${{ inputs.publish_github }}
+        with:
+          script: |
+            const fs = require('node:fs')
+            const { execFileSync } = require('node:child_process')
+            const projectVersion = JSON.parse(fs.readFileSync('apps/app-frontend/package.json', 'utf8')).version
+            const tag = process.env.RELEASE_TAG.trim() ||
+              (context.eventName === 'push' && context.ref.startsWith('refs/tags/')
+                ? context.ref.slice('refs/tags/'.length)
+                : `v${projectVersion}`)
+            const version = tag.replace(/^v/, '')
+            const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/
+            if (!semver.test(version)) throw new Error(`Invalid version tag: ${tag}; use v3.4.0 or v3.5.0-beta.1.`)
+            execFileSync('git', ['check-ref-format', `refs/tags/${tag}`])
+
+            const platforms = [
+              ['WINDOWS_X64', {
+                name: 'windows', runner: 'windows-latest', args: '--bundles nsis,msi',
+                out: 'target/release/bundle', os: 'windows', arch: 'x64',
+                java_distribution: 'temurin', java_version: '17', skip_install_scripts: false,
+              }],
+              ['WINDOWS_ARM64', {
+                name: 'windows-arm64', runner: 'windows-11-arm', args: '--bundles nsis,msi',
+                out: 'target/release/bundle', os: 'windows', arch: 'arm64',
+                java_distribution: 'zulu', java_version: '17', skip_install_scripts: true,
+              }],
+              ['LINUX_X64', {
+                name: 'linux', runner: 'ubuntu-22.04', args: '',
+                out: 'target/release/bundle', os: 'linux', arch: 'x64',
+                java_distribution: 'temurin', java_version: '17', skip_install_scripts: false,
+              }],
+              ['LINUX_ARM64', {
+                name: 'linux-arm64', runner: 'ubuntu-24.04-arm', args: '--bundles deb,rpm,appimage',
+                out: 'target/release/bundle', os: 'linux', arch: 'arm64',
+                java_distribution: 'temurin', java_version: '21', skip_install_scripts: false,
+              }],
+              ['MACOS', {
+                name: 'macos', runner: 'macos-latest', args: '--target universal-apple-darwin',
+                out: 'target/universal-apple-darwin/release/bundle', os: 'macos', arch: 'universal',
+                java_distribution: 'temurin', java_version: '17', skip_install_scripts: false,
+              }],
+            ]
+            const selected = platforms
+              .filter(([input]) => context.eventName !== 'workflow_dispatch' || process.env[input] === 'true')
+              .map(([, platform]) => platform)
+            if (selected.length === 0) throw new Error('Select at least one platform to build.')
+
+            const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+            if (context.eventName === 'workflow_dispatch' && process.env.PUBLISH_GITHUB === 'true') {
+              try {
+                await github.rest.repos.getReleaseByTag({ ...context.repo, tag })
+                throw new Error(`Release ${tag} already exists; use a new tag or deselect GitHub publishing.`)
+              } catch (error) {
+                if (error.status !== 404) throw error
+              }
+              try {
+                const tagged = await github.rest.repos.getCommit({ ...context.repo, ref: `refs/tags/${tag}` })
+                if (tagged.data.sha !== commit) throw new Error(`Tag ${tag} points to another commit; build that tag or use a new one.`)
+              } catch (error) {
+                if (error.status !== 404) throw error
+              }
+            }
+
+            core.setOutput('matrix', JSON.stringify({ include: selected }))
+            core.setOutput('tag', tag)
+            core.setOutput('version', version)
+            core.setOutput('commit', commit)
+            core.setOutput('prerelease', version.split('+')[0].includes('-'))
+            core.info(`Tag: ${tag}; version: ${version}; platforms: ${selected.map(p => p.name).join(', ')}`)
+
   build:
     name: Build (${{ matrix.name }})
+    needs: prepare
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: windows
-            runner: windows-latest
-            args: --bundles nsis,msi
-            out: target/release/bundle
-          - name: macos
-            runner: macos-latest
-            args: --target universal-apple-darwin
-            out: target/universal-apple-darwin/release/bundle
-          - name: linux
-            runner: ubuntu-22.04
-            args: ''
-            out: target/release/bundle
-
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     runs-on: ${{ matrix.runner }}
-
     steps:
-      # The repo carries a couple of symlink entries (`.dockerignore`, and an
-      # AGENTS.md that upstream committed with an empty target). Checking out a
-      # symlink with an empty target is impossible, which aborts `git checkout`
-      # on every runner, so tell git to materialise symlinks as plain files.
-      - name: Disable git symlinks
-        shell: bash
-        run: git config --global core.symlinks false
-
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.symlinks
+          GIT_CONFIG_VALUE_0: 'false'
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.name == 'macos' && 'x86_64-apple-darwin,aarch64-apple-darwin' || '' }}
+          targets: ${{ matrix.os == 'macos' && 'x86_64-apple-darwin,aarch64-apple-darwin' || '' }}
 
-      # Belt and braces: the universal bundle needs both arches, and a missing
-      # one only surfaces after the ~12 min release build.
       - name: Ensure macOS targets
-        if: matrix.name == 'macos'
+        if: matrix.os == 'macos'
         run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
 
-      # `packages/app-lib/build.rs` shells out to `java/gradlew` to build
-      # theseus.jar, and that Gradle build requires JVM 17+. The ubuntu-22.04
-      # runner still defaults JAVA_HOME to Java 11, so pin it explicitly.
       - uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: '17'
+          distribution: ${{ matrix.java_distribution }}
+          java-version: ${{ matrix.java_version }}
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.name }}
 
       - name: Install Linux build dependencies
-        if: matrix.name == 'linux'
+        if: matrix.os == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev rpm xdg-utils
 
       - uses: actions/setup-node@v4
         with:
@@ -79,7 +205,29 @@ jobs:
         shell: bash
         run: cp packages/app-lib/.env.prod packages/app-lib/.env
 
-      - run: pnpm install
+      - name: Install dependencies
+        if: ${{ !matrix.skip_install_scripts }}
+        run: pnpm install
+
+      - name: Install dependencies (Windows ARM64)
+        if: ${{ matrix.skip_install_scripts }}
+        shell: bash
+        run: |
+          pnpm install --ignore-scripts
+          pnpm rebuild esbuild
+
+      - name: Set application version
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const path = "apps/app-frontend/package.json";
+            const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
+            pkg.version = process.env.VERSION;
+            fs.writeFileSync(path, JSON.stringify(pkg, null, "\t") + "\n");
+          '
 
       - name: Build
         shell: bash
@@ -87,33 +235,131 @@ jobs:
           TAURI_BUNDLER_DMG_IGNORE_CI: 'true'
         run: pnpm --filter=@modrinth/app run tauri build ${{ matrix.args }}
 
-      # Collect the built installers into one flat folder so the uploaded
-      # artifact contains the files directly, not the nsis/ msi/ dmg/ … bundle
-      # subfolders Tauri emits.
       - name: Collect installers
         shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          BUNDLE_DIR: ${{ matrix.out }}
+          BUNDLE_OS: ${{ matrix.os }}
+          BUNDLE_ARCH: ${{ matrix.arch }}
         run: |
+          set -euo pipefail
+          shopt -s nullglob
+          base="CelestialLauncher-${VERSION}-${BUNDLE_OS}-${BUNDLE_ARCH}"
           mkdir -p dist
-          for f in \
-            "${{ matrix.out }}"/nsis/*.exe \
-            "${{ matrix.out }}"/msi/*.msi \
-            "${{ matrix.out }}"/dmg/*.dmg \
-            "${{ matrix.out }}"/macos/*.app.tar.gz \
-            "${{ matrix.out }}"/deb/*.deb \
-            "${{ matrix.out }}"/rpm/*.rpm \
-            "${{ matrix.out }}"/appimage/*.AppImage; do
-            [ -e "$f" ] && cp "$f" dist/
-          done
+          for file in "$BUNDLE_DIR"/nsis/*-setup.exe; do cp "$file" "dist/${base}-setup.exe"; done
+          for file in "$BUNDLE_DIR"/msi/*.msi; do cp "$file" "dist/${base}.msi"; done
+          for file in "$BUNDLE_DIR"/dmg/*.dmg; do cp "$file" "dist/${base}.dmg"; done
+          for file in "$BUNDLE_DIR"/macos/*.app.tar.gz; do cp "$file" "dist/${base}.app.tar.gz"; done
+          for file in "$BUNDLE_DIR"/deb/*.deb; do cp "$file" "dist/${base}.deb"; done
+          for file in "$BUNDLE_DIR"/rpm/*.rpm; do cp "$file" "dist/${base}.rpm"; done
+          for file in "$BUNDLE_DIR"/appimage/*.AppImage; do cp "$file" "dist/${base}.AppImage"; done
           ls -la dist
 
       - uses: ./.github/sign-installers
         with:
+          directory: ${{ github.workspace }}/dist
           private-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           private-key-password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-      - name: Upload bundles
+      - name: Upload build output
         uses: actions/upload-artifact@v4
         with:
           name: CelestialLauncher-${{ matrix.name }}
           path: dist/*
-          if-no-files-found: ignore
+          if-no-files-found: error
+
+  publish-github:
+    name: Publish draft to GitHub
+    needs: [prepare, build]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_github
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download selected build output
+        uses: actions/download-artifact@v4
+        with:
+          pattern: CelestialLauncher-*
+          path: release-files
+          merge-multiple: true
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ needs.prepare.outputs.commit }}
+          name: Celestial Launcher ${{ needs.prepare.outputs.version }}
+          draft: true
+          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
+          make_latest: 'false'
+          fail_on_unmatched_files: true
+          files: release-files/*
+
+  publish-gitgay:
+    name: Publish draft to git.gay
+    needs: [prepare, build]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_gitgay
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download selected build output
+        uses: actions/download-artifact@v4
+        with:
+          pattern: CelestialLauncher-*
+          path: release-files
+          merge-multiple: true
+
+      - name: Create draft release and upload assets
+        shell: bash
+        env:
+          GITGAY_TOKEN: ${{ secrets.GITGAY_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          API="https://git.gay/api/v1/repos/celestial-launcher/Celestial"
+          AUTH="Authorization: token ${GITGAY_TOKEN}"
+          payload=$(node -e "console.log(JSON.stringify({tag_name: process.env.TAG, name: 'Celestial Launcher ' + process.env.VERSION, draft: true, prerelease: process.env.PRERELEASE === 'true'}))")
+          resp=$(curl --fail-with-body -sS -X POST "${API}/releases" -H "${AUTH}" -H "Content-Type: application/json" -d "$payload")
+          release_id=$(node -e "const j=JSON.parse(require('node:fs').readFileSync(0,'utf8'));if(!j.id)throw new Error('No release id returned');console.log(j.id)" <<< "$resp")
+          for file in release-files/*; do
+            [ -f "$file" ] || continue
+            name=$(basename "$file")
+            encoded=$(node -e "console.log(encodeURIComponent(process.argv[1]))" "$name")
+            curl --fail-with-body -sS -X POST "${API}/releases/${release_id}/assets?name=${encoded}" -H "${AUTH}" -H "Content-Type: application/octet-stream" --data-binary "@${file}" -o /dev/null
+          done
+
+  publish-wemgit:
+    name: Publish draft to Wemgit
+    needs: [prepare, build]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_wemgit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download selected build output
+        uses: actions/download-artifact@v4
+        with:
+          pattern: CelestialLauncher-*
+          path: release-files
+          merge-multiple: true
+
+      - name: Create draft release and upload assets
+        shell: bash
+        env:
+          WEMGIT_TOKEN: ${{ secrets.WEMGIT_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          API="https://download.celestial.byside.top/api/v1/repos/celestial/Celestial-Launcher"
+          AUTH="Authorization: token ${WEMGIT_TOKEN}"
+          payload=$(node -e "console.log(JSON.stringify({tag_name: process.env.TAG, name: 'Celestial Launcher ' + process.env.VERSION, draft: true, prerelease: process.env.PRERELEASE === 'true'}))")
+          resp=$(curl --fail-with-body -sS -X POST "${API}/releases" -H "${AUTH}" -H "Content-Type: application/json" -d "$payload")
+          release_id=$(node -e "const j=JSON.parse(require('node:fs').readFileSync(0,'utf8'));if(!j.id)throw new Error('No release id returned');console.log(j.id)" <<< "$resp")
+          for file in release-files/*; do
+            [ -f "$file" ] || continue
+            name=$(basename "$file")
+            encoded=$(node -e "console.log(encodeURIComponent(process.argv[1]))" "$name")
+            curl --fail-with-body -sS -X POST "${API}/releases/${release_id}/assets?name=${encoded}" -H "${AUTH}" -H "Content-Type: application/octet-stream" --data-binary "@${file}" -o /dev/null
+          done
