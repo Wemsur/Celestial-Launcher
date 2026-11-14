@@ -3464,6 +3464,9 @@
   "app.update-popup.download-complete": {
     "message": "Download complete"
   },
+  "app.update-popup.download-failed": {
+    "message": "Update download failed"
+  },
   "app.update-popup.downloading": {
     "message": "正在下载Celestial更新…"
   },
@@ -3472,6 +3475,9 @@
   },
   "app.update-popup.reload": {
     "message": "Reload to update"
+  },
+  "app.update-popup.retry-download": {
+    "message": "Retry download"
   },
   "app.update-popup.title": {
     "message": "Update available"

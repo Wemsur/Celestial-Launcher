@@ -2429,8 +2429,14 @@
   "app.update-popup.download-complete": {
     "message": "下载完成"
   },
+  "app.update-popup.download-failed": {
+    "message": "更新下载失败"
+  },
   "app.update-popup.reload": {
     "message": "重新加载以更新"
+  },
+  "app.update-popup.retry-download": {
+    "message": "重新下载"
   },
   "app.update-popup.title": {
     "message": "有可用的更新"

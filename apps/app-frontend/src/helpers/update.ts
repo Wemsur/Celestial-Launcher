@@ -3,6 +3,7 @@ import {invoke} from "@tauri-apps/api/core";
 import { listen } from '@tauri-apps/api/event'
 import { arch as osArch, type as osType } from '@tauri-apps/plugin-os'
 
+import { toError } from '@/helpers/errors'
 import {
     appUpdateState,
     markAppUpdateActionable,
@@ -120,21 +121,29 @@ export async function checkForUpdate(): Promise<{
     asset: ReleaseAsset
     source: UpdateSource
 } | null> {
-    const currentVersion = await getVersion()
-    const platform = currentPlatform()
+	const currentVersion = await getVersion()
+	const platform = currentPlatform()
+	const testTag = 'v3.5.0-beta.1'
+	const testingPrerelease = import.meta.env.DEV && (await invoke<boolean>('is_dev'))
+	const sources: UpdateSource[] = testingPrerelease
+		? [{
+				id: 'github-preview-test',
+				label: `GitHub 测试发布（${testTag}）`,
+				latestUrl: `https://api.github.com/repos/Wemsur/Celestial-Launcher/releases/tags/${encodeURIComponent(testTag)}`,
+			}]
+		: UPDATE_SOURCES
 
-    // 记录每个源的结局，最后打印一份总表，方便看清"为什么选了 B 而不是 A"。
-    const trail: { source: UpdateSource; outcome: string }[] = []
+	const trail: { source: UpdateSource; outcome: string }[] = []
 
-    console.log(
-        `[updater] 开始检查更新，当前版本 ${currentVersion}，平台 ${platform.label}，优先级顺序: ${UPDATE_SOURCES.map(
-            (s) => s.id,
-        ).join(' → ')}`,
-    )
+	console.log(
+		`[updater] 开始检查更新，当前版本 ${currentVersion}，平台 ${platform.label}，优先级顺序: ${sources.map(
+			(s) => s.id,
+		).join(' → ')}`,
+	)
 
-    for (let i = 0; i < UPDATE_SOURCES.length; i++) {
-        const source = UPDATE_SOURCES[i]
-        const prefix = `[updater] [${i + 1}/${UPDATE_SOURCES.length}] ${source.label}`
+	for (let i = 0; i < sources.length; i++) {
+		const source = sources[i]
+		const prefix = `[updater] [${i + 1}/${sources.length}] ${source.label}`
         console.log(`${prefix}: 请求 ${source.latestUrl}`)
 
         const started = performance.now()
@@ -168,16 +177,20 @@ export async function checkForUpdate(): Promise<{
         }
         console.log(`${prefix}: 成功（耗时 ${ms}ms），tag=${release.tag_name}`)
 
-        // 跳过 draft / prerelease
-        if (release.draft || release.prerelease) {
-            const reason = `最新发布是 ${release.draft ? 'draft' : 'prerelease'}，不作为正式更新`
-            console.log(`${prefix}: ✗ 跳过 — ${reason}`)
-            trail.push({ source, outcome: `跳过（${reason}）` })
-            continue
-        }
+		if (release.draft || (release.prerelease && !testingPrerelease)) {
+			const reason = `最新发布是 ${release.draft ? 'draft' : 'prerelease'}，不作为更新`
+			console.log(`${prefix}: ✗ 跳过 — ${reason}`)
+			trail.push({ source, outcome: `跳过（${reason}）` })
+			continue
+		}
+		if (testingPrerelease && release.tag_name !== testTag) {
+			console.warn(`${prefix}: 测试发布 tag 不匹配，拒绝使用 ${release.tag_name}`)
+			continue
+		}
 
-        const latestVersion = release.tag_name.replace(/^v/, '')
-        const cmp = compareVersions(latestVersion, currentVersion)
+		const latestVersion = release.tag_name.replace(/^v/, '')
+		// 开发测试允许重复验证同一个包，不依赖正式版的版本比较。
+		const cmp = testingPrerelease ? 1 : compareVersions(latestVersion, currentVersion)
         if (cmp <= 0) {
             const reason =
                 cmp === 0
@@ -201,12 +214,13 @@ export async function checkForUpdate(): Promise<{
             continue
         }
 
-        console.log(
-            `${prefix}: ✓ 采用此源 — 版本 ${latestVersion} > 当前 ${currentVersion}，安装包 ${asset.name}（${asset.browser_download_url}）`,
-        )
-        trail.push({ source, outcome: `✓ 采用（版本 ${latestVersion}，安装包 ${asset.name}）` })
-        printTrail(trail)
-        return { currentVersion, latestVersion, release, asset, source }
+		const outcome = testingPrerelease
+			? `测试发布 ${latestVersion}，安装包 ${asset.name}（不比较版本高低）`
+			: `版本 ${latestVersion} > 当前 ${currentVersion}，安装包 ${asset.name}`
+		console.log(`${prefix}: ✓ 采用此源 — ${outcome}（${asset.browser_download_url}）`)
+		trail.push({ source, outcome: `✓ 采用（${outcome}）` })
+		printTrail(trail)
+		return { currentVersion, latestVersion, release, asset, source }
     }
 
     console.error('[updater] 所有更新源均检查失败或无更新')
@@ -233,8 +247,9 @@ export async function downloadAndRunRelease(
     console.log(
         `[updater] 开始下载更新${sourceLabel ? `（源: ${sourceLabel}）` : ''}: ${assetUrl}`,
     )
-    appUpdateState.downloading.value = true
-    appUpdateState.progress.value = 0
+	appUpdateState.downloading.value = true
+	appUpdateState.finishedDownloading.value = false
+	appUpdateState.progress.value = 0
 
     // The Rust side streams the download and emits `app-update-progress` with a
     // 0..1 fraction; mirror it into the shared state so the settings-page
@@ -247,7 +262,8 @@ export async function downloadAndRunRelease(
         // The download is verified in Rust before it is written, and the file it
         // lands in never comes back here: a path the page can name is a path
         // anything running in the page can name, and it gets executed.
-        await invoke('download_and_run_msi', { assetUrl })
+		await invoke('download_and_run_msi', { assetUrl })
+		console.info('[updater] 更新包下载完成，签名验证通过')
 
         appUpdateState.progress.value = 1
         appUpdateState.downloading.value = false
@@ -258,11 +274,13 @@ export async function downloadAndRunRelease(
         // showDelayedUpdatePopup() bailed before ever adding the toast. App.vue
         // marks it shown after it actually renders the notification.
         markAppUpdateActionable(version, 'downloaded')
-    } catch (e) {
-        appUpdateState.downloading.value = false
-        appUpdateState.progress.value = 0
-        console.error('Update download failed:', e)
-    } finally {
-        unlisten()
-    }
+	} catch (e) {
+		appUpdateState.downloading.value = false
+		appUpdateState.finishedDownloading.value = false
+		appUpdateState.progress.value = 0
+		console.error('Update download failed:', e)
+		throw toError(e)
+	} finally {
+		unlisten()
+	}
 }

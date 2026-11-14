@@ -937,7 +937,7 @@ async fn download_and_run_msi(
         .get(parsed.clone())
         .send()
         .await
-        .map_err(|e| format!("Download failed: {}", e))?;
+        .map_err(|e| format!("Download failed: {e:?}"))?;
 
     if !resp.status().is_success() {
         return Err(format!("HTTP error: {}", resp.status()));
@@ -977,7 +977,7 @@ async fn download_and_run_msi(
         .get(signature_url)
         .send()
         .await
-        .map_err(|e| format!("Signature download failed: {e}"))?;
+        .map_err(|e| format!("Signature download failed: {e:?}"))?;
     if !signature.status().is_success() {
         return Err(format!(
             "This update has no signature ({}), so it cannot be verified",

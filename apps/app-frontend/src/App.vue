@@ -144,6 +144,7 @@ import { check_reachable } from '@/helpers/auth.js'
 import { getAssetUrl } from '@/helpers/background';
 import {applyBackground} from "@/helpers/backgroundApply.ts";
 import { get_user, get_user_many, get_version } from '@/helpers/cache.js'
+import { toError } from '@/helpers/errors'
 import { gameSettingsQueryOptions } from '@/helpers/game-options'
 import { install_create_modpack_instance, install_get_modpack_preview } from '@/helpers/install'
 import {
@@ -2131,10 +2132,18 @@ const updatePopupMessages = defineMessages({
         id: 'app.update-popup.downloading',
         defaultMessage: `正在下载Celestial更新…`,
     },
-    downloadingBody: {
-        id: 'app.update-popup.downloading.body',
-        defaultMessage: `Celestial Launcher v{version}`,
-    },
+	downloadingBody: {
+		id: 'app.update-popup.downloading.body',
+		defaultMessage: `Celestial Launcher v{version}`,
+	},
+	downloadFailed: {
+		id: 'app.update-popup.download-failed',
+		defaultMessage: 'Update download failed',
+	},
+	retryDownload: {
+		id: 'app.update-popup.retry-download',
+		defaultMessage: 'Retry download',
+	},
 })
 
 function clearDelayedUpdatePopup() {
@@ -2373,6 +2382,7 @@ async function downloadAvailableUpdate() {
 }
 
 async function downloadCelestialUpdate(assetUrl, version, sourceLabel) {
+	if (downloading.value) return
     console.log(`Downloading update ${version}${sourceLabel ? ` (源: ${sourceLabel})` : ''}`)
     downloading.value = true
     // The settings modal reads the version from the download-progress provider
@@ -2390,11 +2400,22 @@ async function downloadCelestialUpdate(assetUrl, version, sourceLabel) {
 
     try {
         await downloadAndRunRelease(assetUrl, version, sourceLabel)
-    } catch (e) {
-        downloading.value = false
-        appUpdateDownload.progress.value = 0
-        handleError(e)
-    } finally {
+	} catch (e) {
+		downloading.value = false
+		finishedDownloading.value = false
+		appUpdateDownload.progress.value = 0
+		addPopupNotification({
+			title: formatMessage(updatePopupMessages.downloadFailed),
+			text: toError(e).message,
+			type: 'warning',
+			autoCloseMs: null,
+			buttons: [{
+				label: formatMessage(updatePopupMessages.retryDownload),
+				action: () => downloadAvailableUpdate(),
+				color: 'brand',
+			}],
+		})
+	} finally {
         if (downloadingUpdateNotificationId != null) {
             popupNotificationManager.removeNotification(downloadingUpdateNotificationId)
             downloadingUpdateNotificationId = null

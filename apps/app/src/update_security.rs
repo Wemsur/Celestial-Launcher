@@ -132,15 +132,25 @@ pub fn installer_file_name(asset_url: &str) -> String {
 /// Check that `signature` — the contents of a `.sig` file — was made for `data`
 /// by the private key matching [`UPDATER_PUBLIC_KEY`].
 pub fn verify_signature(data: &[u8], signature: &str) -> Result<(), String> {
+	use base64::{engine::general_purpose::STANDARD, Engine as _};
 	use minisign_verify::{PublicKey, Signature};
 
-	let key = PublicKey::from_base64(UPDATER_PUBLIC_KEY)
+	let key_bytes = STANDARD
+		.decode(UPDATER_PUBLIC_KEY.trim())
+		.map_err(|error| format!("The embedded update key is not valid base64: {error}"))?;
+	let key_text = std::str::from_utf8(&key_bytes)
+		.map_err(|error| format!("The embedded update key is not valid text: {error}"))?;
+	let key = PublicKey::decode(key_text)
 		.map_err(|error| format!("The embedded update key is unusable: {error}"))?;
-	let signature = Signature::decode(signature)
+
+	let signature_bytes = STANDARD
+		.decode(signature.trim())
+		.map_err(|error| format!("The update signature is not valid base64: {error}"))?;
+	let signature_text = std::str::from_utf8(&signature_bytes)
+		.map_err(|error| format!("The update signature is not valid text: {error}"))?;
+	let signature = Signature::decode(signature_text)
 		.map_err(|error| format!("The update signature is malformed: {error}"))?;
 
-	// `allow_legacy` stays off: releases are signed by the current signer, and
-	// accepting the older format would only widen what counts as valid.
 	key.verify(data, &signature, false)
 		.map_err(|error| format!("The update signature does not match it: {error}"))
 }

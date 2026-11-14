@@ -1,5 +1,6 @@
 <script setup lang="ts" generic="T extends string">
 import { MoonIcon, RadioButtonCheckedIcon, RadioButtonIcon, SunIcon } from '@modrinth/assets'
+import { computed } from 'vue'
 
 import { defineMessages, useVIntl } from '#ui/composables/i18n'
 
@@ -12,6 +13,10 @@ const { ariaLabel, modelValue, themeOptions, systemThemeColor, preferredDarkThem
 	systemThemeColor: T
 	preferredDarkTheme: T
 }>()
+
+const visibleThemeOptions = computed(() =>
+	themeOptions.filter((option) => !['light', 'dark'].includes(option)),
+)
 
 const emit = defineEmits<{
 	'update:modelValue': [theme: T]
@@ -85,10 +90,9 @@ function getPreviewClass(option: T): string {
 <template>
 	<div class="theme-options" role="group" :aria-label="ariaLabel">
 		<button
-			v-for="option in themeOptions"
+			v-for="option in visibleThemeOptions"
 			:key="option"
 			type="button"
-			v-if="!['light', 'dark'].includes(option)"
 			class="preview-radio button-base"
 			:class="{ selected: modelValue === option }"
 			:aria-pressed="modelValue === option"
