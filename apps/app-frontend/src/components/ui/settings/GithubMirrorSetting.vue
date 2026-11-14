@@ -2,10 +2,10 @@
 // 两个商店共用的 GitHub 加速设置：一个开关 + 一个镜像下拉。
 //
 // 抽成组件是因为插件商店和内容源商店各有一个「商店」标签页，两处都要有同一份
-// 设置，而设置只有一份（存在 interface/ui-preferences.json），所以界面也共用，
+// 设置，而设置只有一份（celestial.db 的 ui_preferences 文档），所以界面也共用，
 // 避免两处各写一遍后慢慢漂移。
 import { RefreshCwIcon } from '@modrinth/assets'
-import { Button, DropdownSelect, Toggle } from '@modrinth/ui'
+import { Button, DropdownSelect, injectNotificationManager, Toggle } from '@modrinth/ui'
 import { computed } from 'vue'
 
 import { setUiPreferences, useUiPreferences } from '@/composables/use-ui-preferences'
@@ -14,6 +14,7 @@ import { GITHUB_MIRRORS, mirrorById } from '@/helpers/github-mirror'
 const emit = defineEmits<{ refresh: [] }>()
 
 const preferences = useUiPreferences()
+const { handleError } = injectNotificationManager()
 
 const mirrorIds = GITHUB_MIRRORS.map((mirror) => mirror.id)
 
@@ -28,13 +29,21 @@ const mirrorDescription = computed(() => {
 })
 
 async function setEnabled(enabled: boolean) {
-	await setUiPreferences({ githubMirrorEnabled: enabled })
-	emit('refresh')
+	try {
+		await setUiPreferences({ githubMirrorEnabled: enabled })
+		emit('refresh')
+	} catch (error) {
+		handleError(error instanceof Error ? error : new Error(String(error)))
+	}
 }
 
 async function setMirror(id: string) {
-	await setUiPreferences({ githubMirrorId: id })
-	emit('refresh')
+	try {
+		await setUiPreferences({ githubMirrorId: id })
+		emit('refresh')
+	} catch (error) {
+		handleError(error instanceof Error ? error : new Error(String(error)))
+	}
 }
 </script>
 

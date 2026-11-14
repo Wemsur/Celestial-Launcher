@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
 	defineMessages,
+	DropdownSelect,
 	injectNotificationManager,
 	Toggle,
 	useSavable,
@@ -26,6 +27,10 @@ import {
 	get,
 	set,
 } from '@/helpers/settings.ts'
+import {
+	MINECRAFT_DOWNLOAD_SOURCE_PREFERENCES,
+	type MinecraftDownloadSourcePreference,
+} from '@/helpers/ui-preferences-store'
 import { appSettingsModalContextKey } from '@/providers/app-settings-modal'
 
 const appSettings = useAppSettings()
@@ -51,6 +56,31 @@ const messages = defineMessages({
 	confirmationsTitle: {
 		id: 'app.behavior-settings.confirmations.title',
 		defaultMessage: 'Confirmations',
+	},
+	downloadsTitle: {
+		id: 'app.behavior-settings.downloads.title',
+		defaultMessage: 'Downloads',
+	},
+	minecraftDownloadSourceTitle: {
+		id: 'app.behavior-settings.minecraft-download-source-preference.title',
+		defaultMessage: 'Minecraft download source preference',
+	},
+	minecraftDownloadSourceDescription: {
+		id: 'app.behavior-settings.minecraft-download-source-preference.description',
+		defaultMessage:
+			'All three preferences allow fallback to another source. Mirrors use BMCLAPI, a third-party service. Automatic starts with the original source; if it times out or stalls and a mirror succeeds, the mirror is temporarily prioritized for files of the same type and original host in this download batch. After a 60-second cooldown, the original source can be tried again.',
+	},
+	minecraftDownloadSourceAuto: {
+		id: 'app.behavior-settings.minecraft-download-source-preference.options.auto',
+		defaultMessage: 'Automatic',
+	},
+	minecraftDownloadSourceOfficialFirst: {
+		id: 'app.behavior-settings.minecraft-download-source-preference.options.official-first',
+		defaultMessage: 'Official first',
+	},
+	minecraftDownloadSourceMirrorFirst: {
+		id: 'app.behavior-settings.minecraft-download-source-preference.options.mirror-first',
+		defaultMessage: 'Mirror first',
 	},
 	minimizeLauncherTitle: {
 		id: 'app.appearance-settings.minimize-launcher.title',
@@ -121,11 +151,23 @@ const messages = defineMessages({
 	},
 })
 
+const minecraftDownloadSourceOptions = [...MINECRAFT_DOWNLOAD_SOURCE_PREFERENCES]
+const minecraftDownloadSourceLabels = {
+	auto: messages.minecraftDownloadSourceAuto,
+	official_first: messages.minecraftDownloadSourceOfficialFirst,
+	mirror_first: messages.minecraftDownloadSourceMirrorFirst,
+}
+
+function minecraftDownloadSourceLabel(preference: MinecraftDownloadSourcePreference): string {
+	return formatMessage(minecraftDownloadSourceLabels[preference])
+}
+
 type BehaviorSettingsState = {
 	minimizeApp: boolean
-	/** File-backed: the sidebar's state at launch, nothing more. */
+	/** UI document preference: the sidebar's state at launch, nothing more. */
 	showSidebarOnStartup: boolean
 	showJumpInSidebar: boolean
+	minecraftDownloadSourcePreference: MinecraftDownloadSourcePreference
 	compactInstanceCards: boolean
 	showPlayTime: boolean
 	hideNametag: boolean
@@ -136,9 +178,7 @@ type BehaviorSettingsState = {
 const settingsQuery = useQuery(appSettingsQueryOptions())
 await settingsQuery.suspense()
 
-// File-backed, not part of `AppSettings`: it lives in
-// `<appdata>/interface/ui-preferences.json` so no interface preference has to be
-// added to the settings database. Awaited here so `saved` starts out correct.
+/** Await the `ui_preferences` document in `celestial.db` so `saved` starts out correct. */
 const uiPreferences = useUiPreferences()
 await ensureUiPreferencesLoaded()
 
@@ -147,6 +187,7 @@ function getBehaviorSettingsState(settings: AppSettings): BehaviorSettingsState 
 		minimizeApp: settings.hide_on_process_start,
 		showSidebarOnStartup: uiPreferences.sidebarVisibleOnStartup,
 		showJumpInSidebar: uiPreferences.jumpBackInSidebar,
+		minecraftDownloadSourcePreference: uiPreferences.minecraftDownloadSourcePreference,
 		compactInstanceCards:
 			settings.feature_flags[compactInstanceCardsFlag] ??
 			DEFAULT_FEATURE_FLAGS[compactInstanceCardsFlag],
@@ -185,6 +226,7 @@ const settingsMutation = useMutation({
 		await setUiPreferences({
 			jumpBackInSidebar: value.showJumpInSidebar,
 			sidebarVisibleOnStartup: value.showSidebarOnStartup,
+			minecraftDownloadSourcePreference: value.minecraftDownloadSourcePreference,
 		})
 		queryClient.setQueryData(appSettingsKeys.all, nextSettings)
 		appSettings.hideNametagSkinsPage = value.hideNametag
@@ -302,6 +344,34 @@ onBeforeUnmount(() => {
 				</div>
 				<Toggle id="hide-nametag-skins-page" v-model="current.hideNametag" />
 			</div>
+		</div>
+	</section>
+
+	<section class="mt-8 border-0 border-t border-solid border-divider pt-6">
+		<h2 class="m-0 text-xl font-semibold text-contrast">
+			{{ formatMessage(messages.downloadsTitle) }}
+		</h2>
+		<div class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+			<div class="min-w-0">
+				<h3
+					id="minecraft-download-source-preference-label"
+					class="m-0 text-lg font-semibold text-contrast"
+				>
+					{{ formatMessage(messages.minecraftDownloadSourceTitle) }}
+				</h3>
+				<p id="minecraft-download-source-preference-description" class="m-0 mt-1">
+					{{ formatMessage(messages.minecraftDownloadSourceDescription) }}
+				</p>
+			</div>
+			<DropdownSelect
+				v-model="current.minecraftDownloadSourcePreference"
+				:options="minecraftDownloadSourceOptions"
+				:display-name="minecraftDownloadSourceLabel"
+				name="minecraft-download-source-preference"
+				aria-labelledby="minecraft-download-source-preference-label"
+				aria-describedby="minecraft-download-source-preference-description"
+				class="shrink-0"
+			/>
 		</div>
 	</section>
 

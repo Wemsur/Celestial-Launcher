@@ -2,6 +2,7 @@ import { reactive } from 'vue'
 
 import { mirrorById } from '@/helpers/github-mirror'
 import {
+	isMinecraftDownloadSourcePreference,
 	loadUiPreferences,
 	saveUiPreferences,
 	UI_PREFERENCE_DEFAULTS,
@@ -11,8 +12,7 @@ import {
 type UiPreferences = Omit<UiPreferencesFile, 'version'>
 
 /**
- * Interface preferences held in `<appdata>/interface/ui-preferences.json` rather
- * than the settings database — see the store module for why.
+ * Interface preferences use the `ui_preferences` document in `celestial.db.ui_settings`.
  *
  * One module-level reactive object, so every reader sees the same values and a
  * change from the settings modal reaches the sidebar without an event.
@@ -20,15 +20,19 @@ type UiPreferences = Omit<UiPreferencesFile, 'version'>
 const preferences = reactive<UiPreferences>({ ...UI_PREFERENCE_DEFAULTS })
 
 let load: Promise<void> | null = null
-/** Set by the first write, so a save cannot be undone by a read still in flight. */
+let saveQueue: Promise<void> = Promise.resolve()
+/** Set by the first successful write, so a read cannot undo a saved change. */
 let dirty = false
 
 /**
- * Copy one stored field over its default, but only when the file's value has
- * the same type the default does. A hand-edited or older file must not be able
- * to put a string where a toggle goes, or the reverse.
+ * Copy one stored field over its default only when its type and allowed values
+ * match. Older or hand-edited documents must not replace valid defaults.
  */
 function adopt<K extends keyof UiPreferences>(key: K, value: unknown): void {
+	if (key === 'minecraftDownloadSourcePreference' && !isMinecraftDownloadSourcePreference(value)) {
+		return
+	}
+
 	if (typeof value === typeof UI_PREFERENCE_DEFAULTS[key]) {
 		preferences[key] = value as UiPreferences[K]
 	}
@@ -66,7 +70,16 @@ export function useUiPreferences(): UiPreferences {
 export const uiPreferences = preferences
 
 export async function setUiPreferences(patch: Partial<UiPreferences>): Promise<void> {
-	dirty = true
-	Object.assign(preferences, patch)
-	await saveUiPreferences({ ...preferences })
+	const pendingPatch = { ...patch }
+	await ensureUiPreferencesLoaded()
+
+	const save = saveQueue.then(async () => {
+		const candidate: UiPreferences = { ...preferences, ...pendingPatch }
+		await saveUiPreferences(candidate)
+		Object.assign(preferences, candidate)
+		dirty = true
+	})
+
+	saveQueue = save.catch(() => {})
+	await save
 }

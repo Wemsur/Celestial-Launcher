@@ -236,6 +236,24 @@
   "app.behavior-settings.content.title": {
     "message": "显示内容"
   },
+	"app.behavior-settings.downloads.title": {
+		"message": "下载"
+	},
+	"app.behavior-settings.minecraft-download-source-preference.description": {
+		"message": "三种偏好均可回退到其他来源；镜像使用 BMCLAPI 第三方服务。自动模式起初优先原始来源；原始来源超时或停滞且镜像成功后，本批次中同类文件、同源站会暂时优先镜像，冷却 60 秒后允许再次尝试原始来源。"
+	},
+	"app.behavior-settings.minecraft-download-source-preference.options.auto": {
+		"message": "自动"
+	},
+	"app.behavior-settings.minecraft-download-source-preference.options.mirror-first": {
+		"message": "镜像优先"
+	},
+	"app.behavior-settings.minecraft-download-source-preference.options.official-first": {
+		"message": "官方优先"
+	},
+	"app.behavior-settings.minecraft-download-source-preference.title": {
+		"message": "Minecraft 下载来源偏好"
+	},
   "app.behavior-settings.startup-and-navigation.title": {
     "message": "页面与导航"
   },

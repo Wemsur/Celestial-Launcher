@@ -260,6 +260,24 @@
   "app.behavior-settings.content.title": {
     "message": "Home and content"
   },
+	"app.behavior-settings.downloads.title": {
+		"message": "Downloads"
+	},
+	"app.behavior-settings.minecraft-download-source-preference.description": {
+		"message": "All three preferences allow fallback to another source. Mirrors use BMCLAPI, a third-party service. Automatic starts with the original source; if it times out or stalls and a mirror succeeds, the mirror is temporarily prioritized for files of the same type and original host in this download batch. After a 60-second cooldown, the original source can be tried again."
+	},
+	"app.behavior-settings.minecraft-download-source-preference.options.auto": {
+		"message": "Automatic"
+	},
+	"app.behavior-settings.minecraft-download-source-preference.options.mirror-first": {
+		"message": "Mirror first"
+	},
+	"app.behavior-settings.minecraft-download-source-preference.options.official-first": {
+		"message": "Official first"
+	},
+	"app.behavior-settings.minecraft-download-source-preference.title": {
+		"message": "Minecraft download source preference"
+	},
   "app.behavior-settings.startup-and-navigation.title": {
     "message": "Startup and navigation"
   },

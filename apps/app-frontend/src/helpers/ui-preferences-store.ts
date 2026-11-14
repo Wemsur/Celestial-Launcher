@@ -1,20 +1,27 @@
-// Disk persistence for interface preferences that deliberately stay out of the
-// database.
-//
-// Its own file, `<appdata>/interface/ui-preferences.json`, written through the
-// Rust commands in `apps/app/src/main.rs`. Two reasons it is not part of
-// `settings.feature_flags`:
-//
-//  - `feature_flags` is a `HashMap<FeatureFlag, bool>` behind a strict Rust enum.
-//    An unknown key makes the whole map fail to deserialize, and the call site
-//    falls back to `unwrap_or_default()` — silently wiping every other flag.
-//  - Adding a flag there means touching the DB-backed settings type on every
-//    change. A frontend-owned JSON file needs no Rust change to grow.
-//
-// Not localStorage either, so preferences survive a webview data wipe.
+/**
+ * Interface preferences use the `ui_preferences` document in
+ * `celestial.db.ui_settings`, through the existing load/save commands.
+ * They stay separate from `AppSettings` and its strictly typed feature flags,
+ * and survive a webview data wipe.
+ */
 import { invoke } from '@tauri-apps/api/core'
 
 import { DEFAULT_MIRROR_ID } from '@/helpers/github-mirror'
+
+export const MINECRAFT_DOWNLOAD_SOURCE_PREFERENCES = [
+	'auto',
+	'official_first',
+	'mirror_first',
+] as const
+
+export type MinecraftDownloadSourcePreference =
+	(typeof MINECRAFT_DOWNLOAD_SOURCE_PREFERENCES)[number]
+
+export function isMinecraftDownloadSourcePreference(
+	value: unknown,
+): value is MinecraftDownloadSourcePreference {
+	return MINECRAFT_DOWNLOAD_SOURCE_PREFERENCES.some((preference) => preference === value)
+}
 
 export interface UiPreferencesFile {
 	version: 1
@@ -34,6 +41,8 @@ export interface UiPreferencesFile {
 	githubMirrorEnabled: boolean
 	/** Which mirror to use, by its id in `helpers/github-mirror.ts`. */
 	githubMirrorId: string
+	/** Preferred source order for Minecraft file downloads, with fallback allowed. */
+	minecraftDownloadSourcePreference: MinecraftDownloadSourcePreference
 }
 
 export const UI_PREFERENCE_DEFAULTS: Omit<UiPreferencesFile, 'version'> = {
@@ -43,6 +52,7 @@ export const UI_PREFERENCE_DEFAULTS: Omit<UiPreferencesFile, 'version'> = {
 	// wherever GitHub itself is reachable.
 	githubMirrorEnabled: false,
 	githubMirrorId: DEFAULT_MIRROR_ID,
+	minecraftDownloadSourcePreference: 'auto',
 }
 
 /** `null` when nothing has been saved yet, so the caller keeps its defaults. */
@@ -68,5 +78,6 @@ export async function saveUiPreferences(
 		await invoke('save_ui_preferences', { contents: JSON.stringify(file, null, 2) })
 	} catch (error) {
 		console.error('Failed to save UI preferences:', error)
+		throw error
 	}
 }

@@ -604,36 +604,238 @@ pub async fn fetch_file_mirrors(
     unreachable!()
 }
 
+#[derive(Debug)]
+pub(crate) enum CheckedFileFailure {
+	Retryable {
+		error: crate::Error,
+		retry_after: Option<Duration>,
+		stalled: bool,
+	},
+	Rejected(crate::Error),
+	Fatal(crate::Error),
+}
+
+impl CheckedFileFailure {
+	pub(crate) fn into_error(self) -> crate::Error {
+		match self {
+			Self::Retryable { error, .. } | Self::Rejected(error) | Self::Fatal(error) => error,
+		}
+	}
+
+	fn network(error: reqwest::Error) -> Self {
+		let stalled = error.is_timeout();
+		if stalled || error.is_connect() || error.is_body() {
+			Self::Retryable { error: error.into(), retry_after: None, stalled }
+		} else {
+			Self::Rejected(error.into())
+		}
+	}
+
+	fn timeout() -> Self {
+		Self::Retryable {
+			error: ErrorKind::FSError("Minecraft download made no progress before its deadline".into()).into(),
+			retry_after: None,
+			stalled: true,
+		}
+	}
+}
+
+/// A single anonymous, host-checked transfer. Minecraft owns the retry budget.
+pub(crate) async fn fetch_checked_file(
+	url: reqwest::Url,
+	sha1: &str,
+	expected_size: u64,
+	allowed_hosts: &[String],
+	semaphore: &FetchSemaphore,
+	progress: Option<&mut FetchProgressFn<'_>>,
+	stall_timeout: Duration,
+) -> Result<DownloadedFile, CheckedFileFailure> {
+	let _permit = semaphore.0.acquire().await
+		.map_err(|error| CheckedFileFailure::Fatal(error.into()))?;
+	let deadline = tokio::time::Instant::now() + stall_timeout;
+	let response = tokio::time::timeout_at(deadline, send_checked(
+		&NO_REDIRECT_REQWEST_CLIENT,
+		Method::GET,
+		url,
+		&HashMap::new(),
+		None,
+		|host| async move {
+			if allowed_hosts.iter().any(|allowed| allowed == &host) {
+				Ok(())
+			} else {
+				Err(ErrorKind::InputError(format!("Unapproved Minecraft download host: {host}")).into())
+			}
+		},
+	)).await.map_err(|_| CheckedFileFailure::timeout())?
+		.map_err(|error| {
+			let (retryable, stalled) = match error.raw.as_ref() {
+				ErrorKind::FetchError(inner) => (inner.is_timeout() || inner.is_connect() || inner.is_body(), inner.is_timeout()),
+				_ => (false, false),
+			};
+			if retryable {
+				CheckedFileFailure::Retryable { error, retry_after: None, stalled }
+			} else {
+				CheckedFileFailure::Rejected(error)
+			}
+		})?;
+	let status = response.status();
+	if !status.is_success() {
+		let retry_after = response.headers().get(reqwest::header::RETRY_AFTER)
+			.and_then(|value| value.to_str().ok())
+			.and_then(|value| value.parse::<u64>().ok().or_else(|| {
+				DateTime::parse_from_rfc2822(value).ok().map(|time| {
+					(time.timestamp() - Utc::now().timestamp()).max(0) as u64
+				})
+			}))
+			.map(|seconds| Duration::from_secs(seconds.min(5)))
+			.or_else(|| (status.as_u16() == 429).then_some(Duration::from_secs(1)));
+		let error = ErrorKind::FSError(format!("Minecraft download returned HTTP {status}")).into();
+		return Err(if matches!(status.as_u16(), 408 | 429 | 500 | 502 | 503 | 504) {
+			CheckedFileFailure::Retryable { error, retry_after, stalled: false }
+		} else {
+			CheckedFileFailure::Rejected(error)
+		});
+	}
+	let file = read_file_response_with_policy(
+		response, progress, Some((deadline, stall_timeout)), Some(expected_size),
+	).await?;
+	validate_checked_file(file, sha1, expected_size)
+}
+
+fn validate_checked_file(file: DownloadedFile, sha1: &str, expected_size: u64) -> Result<DownloadedFile, CheckedFileFailure> {
+	if !file.sha1.eq_ignore_ascii_case(sha1) {
+		return Err(CheckedFileFailure::Rejected(ErrorKind::HashError(file.sha1.clone(), sha1.to_string()).into()));
+	}
+	if file.size != expected_size {
+		return Err(CheckedFileFailure::Rejected(ErrorKind::FSError(format!(
+			"Minecraft download has size {}, expected {expected_size}", file.size,
+		)).into()));
+	}
+	Ok(file)
+}
+
 async fn read_file_response(
-    response: reqwest::Response,
-    mut progress: Option<&mut FetchProgressFn<'_>>,
+	response: reqwest::Response,
+	progress: Option<&mut FetchProgressFn<'_>>,
 ) -> crate::Result<DownloadedFile> {
-    use futures::StreamExt;
-    let path = tokio::task::spawn_blocking(|| {
-        tempfile::NamedTempFile::new().map(|file| file.into_temp_path())
-    })
-    .await??;
-    let mut file = File::create(&path).await?;
-    let total = response.content_length().unwrap_or(0);
-    let mut stream = response.bytes_stream();
-    let mut hasher = sha1_smol::Sha1::new();
-    let mut size = 0_u64;
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk?;
-        file.write_all(&chunk).await?;
-        hasher.update(&chunk);
-        size += chunk.len() as u64;
-        if let Some(progress) = progress.as_mut() {
-            progress(size, total).await?;
-        }
-    }
-    file.flush().await?;
-    drop(file);
-    Ok(DownloadedFile {
-        path: Arc::new(path),
-        size,
-        sha1: hasher.hexdigest(),
-    })
+	read_file_response_with_policy(response, progress, None, None).await
+		.map_err(CheckedFileFailure::into_error)
+}
+
+async fn read_file_response_with_policy(
+	response: reqwest::Response,
+	mut progress: Option<&mut FetchProgressFn<'_>>,
+	mut timing: Option<(tokio::time::Instant, Duration)>,
+	size_limit: Option<u64>,
+) -> Result<DownloadedFile, CheckedFileFailure> {
+	use futures::StreamExt;
+	let path = tokio::task::spawn_blocking(|| {
+		tempfile::NamedTempFile::new().map(|file| file.into_temp_path())
+	}).await.map_err(|error| CheckedFileFailure::Fatal(error.into()))?
+		.map_err(|error| CheckedFileFailure::Fatal(error.into()))?;
+	let mut file = File::create(&path).await
+		.map_err(|error| CheckedFileFailure::Fatal(error.into()))?;
+	let total = response.content_length().unwrap_or(0);
+	let mut stream = response.bytes_stream();
+	let mut hasher = sha1_smol::Sha1::new();
+	let mut size = 0_u64;
+	loop {
+		let next = if let Some((deadline, _)) = timing {
+			tokio::time::timeout_at(deadline, stream.next()).await
+				.map_err(|_| CheckedFileFailure::timeout())?
+		} else {
+			stream.next().await
+		};
+		let Some(chunk) = next else { break };
+		let chunk = chunk.map_err(CheckedFileFailure::network)?;
+		if chunk.is_empty() { continue; }
+		size = size.checked_add(chunk.len() as u64).ok_or_else(|| {
+			CheckedFileFailure::Rejected(ErrorKind::FSError("Minecraft download size overflow".into()).into())
+		})?;
+		if size_limit.is_some_and(|limit| size > limit) {
+			return Err(CheckedFileFailure::Rejected(ErrorKind::FSError("Minecraft download exceeds its expected size".into()).into()));
+		}
+		if let Some((deadline, timeout)) = timing.as_mut() {
+			*deadline = tokio::time::Instant::now() + *timeout;
+		}
+		file.write_all(&chunk).await
+			.map_err(|error| CheckedFileFailure::Fatal(error.into()))?;
+		hasher.update(&chunk);
+		if let Some(progress) = progress.as_mut() {
+			progress(size, total).await.map_err(CheckedFileFailure::Fatal)?;
+		}
+	}
+	file.flush().await.map_err(|error| CheckedFileFailure::Fatal(error.into()))?;
+	drop(file);
+	Ok(DownloadedFile { path: Arc::new(path), size, sha1: hasher.hexdigest() })
+}
+
+#[cfg(test)]
+mod checked_file_tests {
+	use super::*;
+
+	async fn response(chunks: Vec<(Duration, &'static [u8])>) -> reqwest::Response {
+		let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+		let address = listener.local_addr().unwrap();
+		std::thread::spawn(move || {
+			use std::io::{Read, Write};
+			let (mut stream, _) = listener.accept().unwrap();
+			let mut request = [0; 2048];
+			let _ = stream.read(&mut request);
+			let size: usize = chunks.iter().map(|(_, bytes)| bytes.len()).sum();
+			if write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {size}\r\nConnection: close\r\n\r\n").is_err() { return; }
+			for (delay, bytes) in chunks {
+				std::thread::sleep(delay);
+				if stream.write_all(bytes).is_err() { return; }
+			}
+		});
+		reqwest::Client::builder().no_proxy().build().unwrap()
+			.get(format!("http://{address}/file")).send().await.unwrap()
+	}
+
+	#[tokio::test]
+	async fn first_byte_stall_is_retryable() {
+		let response = response(vec![(Duration::from_millis(100), b"1234")]).await;
+		let timeout = Duration::from_millis(20);
+		let error = read_file_response_with_policy(response, None, Some((tokio::time::Instant::now() + timeout, timeout)), Some(4)).await.unwrap_err();
+		assert!(matches!(error, CheckedFileFailure::Retryable { stalled: true, .. }));
+	}
+
+	#[tokio::test]
+	async fn flowing_body_can_take_longer_than_the_stall_timeout() {
+		let response = response(vec![
+			(Duration::from_millis(40), b"1"),
+			(Duration::from_millis(40), b"2"),
+			(Duration::from_millis(40), b"3"),
+			(Duration::from_millis(40), b"4"),
+		]).await;
+		let timeout = Duration::from_millis(100);
+		let file = read_file_response_with_policy(response, None, Some((tokio::time::Instant::now() + timeout, timeout)), Some(4)).await.unwrap();
+		assert_eq!(std::fs::read(file.path()).unwrap(), b"1234");
+		let mut hasher = sha1_smol::Sha1::new();
+		hasher.update(b"1234");
+		assert_eq!(file.sha1, hasher.hexdigest());
+	}
+
+	#[tokio::test]
+	async fn size_and_hash_rejection_never_publish_a_file() {
+		let response = response(vec![(Duration::ZERO, b"1234")]).await;
+		assert!(matches!(read_file_response_with_policy(response, None, None, Some(3)).await, Err(CheckedFileFailure::Rejected(_))));
+		let response = self::response(vec![(Duration::ZERO, b"1234")]).await;
+		let file = read_file_response_with_policy(response, None, None, Some(4)).await.unwrap();
+		let hash = file.sha1.clone();
+		assert!(matches!(validate_checked_file(file.clone(), &"0".repeat(40), 4), Err(CheckedFileFailure::Rejected(_))));
+		assert!(matches!(validate_checked_file(file, &hash, 5), Err(CheckedFileFailure::Rejected(_))));
+	}
+
+	#[tokio::test]
+	async fn progress_callback_termination_is_fatal() {
+		let response = response(vec![(Duration::ZERO, b"1234")]).await;
+		let mut stop = |_current: u64, _total: u64| -> Pin<Box<dyn Future<Output = crate::Result<()>> + Send>> {
+			Box::pin(async { Err(ErrorKind::InputError("cancelled by progress reporter".into()).into()) })
+		};
+		assert!(matches!(read_file_response_with_policy(response, Some(&mut stop), None, Some(4)).await, Err(CheckedFileFailure::Fatal(_))));
+	}
 }
 
 async fn read_memory_response(

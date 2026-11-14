@@ -1,5 +1,6 @@
 //! Downloader for Minecraft data
 
+use super::download_sources::{FileRole, MinecraftDownloadSources};
 use crate::install::{
     InstallErrorContext, InstallPhaseDetails, InstallPhaseId, InstallProgress,
     InstallProgressReporter,
@@ -144,76 +145,53 @@ impl MinecraftDownloadProgress {
     }
 }
 
+fn advance_file_progress(high_water: &AtomicU64, downloaded: u64, expected_size: Option<u64>) -> u64 {
+	let covered = expected_size.filter(|size| *size > 0).map_or(downloaded, |size| downloaded.min(size));
+	covered.saturating_sub(high_water.fetch_max(covered, Ordering::Relaxed))
+}
+
 async fn fetch_minecraft_file(
-    st: &State,
-    url: &str,
-    sha1: Option<&str>,
-    expected_size: Option<u64>,
-    progress: Option<MinecraftDownloadProgress>,
-    context: InstallErrorContext,
+	st: &State,
+	sources: &MinecraftDownloadSources,
+	role: FileRole,
+	url: &str,
+	sha1: Option<&str>,
+	expected_size: Option<u64>,
+	progress: Option<MinecraftDownloadProgress>,
+	context: InstallErrorContext,
 ) -> crate::Result<DownloadedFile> {
-    let mut context = context;
-    context.urls.push(url.to_string());
-    context.expected_hash = sha1.map(str::to_string);
-    context.expected_size = expected_size;
-    if let Some(progress) = &progress {
-        progress.set_context(context.clone()).await?;
-    }
-
-    let Some(progress) = progress else {
-        return fetch_file(
-            url,
-            sha1,
-            None,
-            None,
-            &st.fetch_semaphore,
-            &st.pool,
-            None,
-        )
-        .await;
-    };
-
-    let last_downloaded = Arc::new(AtomicU64::new(0));
-    let mut progress_fn = {
-        let progress = progress.clone();
-        let last_downloaded = last_downloaded.clone();
-        move |downloaded: u64,
-              _total: u64|
-              -> Pin<Box<dyn Future<Output = crate::Result<()>> + Send>> {
-            let previous =
-                last_downloaded.swap(downloaded, Ordering::Relaxed);
-            let delta = downloaded.saturating_sub(previous);
-            let progress = progress.clone();
-            Box::pin(async move { progress.add_bytes(delta).await })
-        }
-    };
-
-    let bytes = match fetch_file(
-        url,
-        sha1,
-        None,
-        None,
-        &st.fetch_semaphore,
-        &st.pool,
-        Some(&mut progress_fn as &mut FetchProgressFn<'_>),
-    )
-    .await
-    {
-        Ok(bytes) => bytes,
-        Err(error) => {
-            progress.persist_failure_context(context).await;
-            return Err(error);
-        }
-    };
-
-    if let Some(expected_size) = expected_size {
-        let downloaded = last_downloaded.load(Ordering::Relaxed);
-        progress
-            .add_bytes(expected_size.saturating_sub(downloaded))
-            .await?;
-    }
-
-    Ok(bytes)
+	let mut context = context;
+	context.urls = sources.candidate_urls(url, role, sha1, expected_size)?;
+	context.expected_hash = sha1.map(str::to_string);
+	context.expected_size = expected_size;
+	if let Some(progress) = &progress {
+		progress.set_context(context.clone()).await?;
+	}
+	let Some(progress) = progress else {
+		return sources.fetch(st, url, role, sha1, expected_size, None).await;
+	};
+	let high_water = Arc::new(AtomicU64::new(0));
+	let mut progress_fn = {
+		let progress = progress.clone();
+		let high_water = high_water.clone();
+		move |downloaded: u64, _total: u64| -> Pin<Box<dyn Future<Output = crate::Result<()>> + Send>> {
+			let delta = advance_file_progress(&high_water, downloaded, expected_size);
+			let progress = progress.clone();
+			Box::pin(async move { progress.add_bytes(delta).await })
+		}
+	};
+	let bytes = match sources.fetch(
+		st, url, role, sha1, expected_size,
+		Some(&mut progress_fn as &mut FetchProgressFn<'_>),
+	).await {
+		Ok(bytes) => bytes,
+		Err(error) => {
+			progress.persist_failure_context(context).await;
+			return Err(error);
+		}
+	};
+	progress.add_bytes(advance_file_progress(&high_water, bytes.size, expected_size)).await?;
+	Ok(bytes)
 }
 
 fn should_download(path_exists: bool, force: bool) -> bool {
@@ -421,6 +399,7 @@ pub async fn download_minecraft(
     instance_assets_dir: Option<PathBuf>,
 ) -> crate::Result<()> {
     tracing::info!("Downloading Minecraft version {}", version.id);
+	let sources = MinecraftDownloadSources::load(st).await?;
     let progress = if let Some(reporter) = reporter {
         Some(
             MinecraftDownloadProgress::new(
@@ -442,8 +421,9 @@ pub async fn download_minecraft(
     };
 
     // 5
-    let assets_index = download_assets_index(
+    let assets_index = download_assets_index_with_sources(
         st,
+		&sources,
         version,
         loading_bar,
         force,
@@ -471,10 +451,10 @@ pub async fn download_minecraft(
 
     tokio::try_join! {
         // Total loading sums to 90/60
-        download_client(st, version, loading_bar, force, progress.clone(), instance_dir, instance_version_id), // 9
-        download_log_config(st, version, loading_bar, force, progress.clone()),
-        download_assets(st, version.assets == "legacy", &assets_index, loading_bar, amount, force, progress.clone(), instance_assets_dir.as_deref()), // 40
-        download_libraries(st, version.libraries.as_slice(), &version.id, loading_bar, amount, java_arch, force, minecraft_updated, progress.clone(), libraries_dir) // 40
+        download_client_with_sources(st, &sources, version, loading_bar, force, progress.clone(), instance_dir, instance_version_id), // 9
+        download_log_config_with_sources(st, &sources, version, loading_bar, force, progress.clone()),
+        download_assets_with_sources(st, &sources, version.assets == "legacy", &assets_index, loading_bar, amount, force, progress.clone(), instance_assets_dir.as_deref()), // 40
+        download_libraries_with_sources(st, &sources, version.libraries.as_slice(), &version.id, loading_bar, amount, java_arch, force, minecraft_updated, progress.clone(), libraries_dir) // 40
     }?;
 
     tracing::info!("Done downloading Minecraft!");
@@ -604,8 +584,9 @@ pub async fn download_version_info(
 
 #[tracing::instrument(skip_all)]
 
-pub async fn download_client(
+async fn download_client_with_sources(
     st: &State,
+	sources: &MinecraftDownloadSources,
     version_info: &GameVersionInfo,
     loading_bar: Option<&LoadingBarId>,
     force: bool,
@@ -633,6 +614,8 @@ pub async fn download_client(
     if !path.exists() || force {
         let bytes = fetch_minecraft_file(
             st,
+			sources,
+			FileRole::Launcher,
             &client_download.url,
             Some(&client_download.sha1),
             Some(client_download.size as u64),
@@ -685,8 +668,9 @@ pub async fn download_client(
 
 #[tracing::instrument(skip_all)]
 
-pub async fn download_assets_index(
+async fn download_assets_index_with_sources(
     st: &State,
+	sources: &MinecraftDownloadSources,
     version: &GameVersionInfo,
     loading_bar: Option<&LoadingBarId>,
     force: bool,
@@ -710,8 +694,10 @@ pub async fn download_assets_index(
     } else {
         let index = fetch_minecraft_file(
             st,
+			sources,
+			FileRole::Launcher,
             &version.asset_index.url,
-            None,
+            Some(&version.asset_index.sha1),
             Some(version.asset_index.size as u64),
             progress,
             InstallErrorContext::new("download Minecraft assets index")
@@ -737,8 +723,9 @@ pub async fn download_assets_index(
 
 #[tracing::instrument(skip(st, index))]
 
-pub async fn download_assets(
+async fn download_assets_with_sources(
     st: &State,
+	sources: &MinecraftDownloadSources,
     with_legacy: bool,
     index: &AssetsIndex,
     loading_bar: Option<&LoadingBarId>,
@@ -796,6 +783,8 @@ pub async fn download_assets(
                             let resource = fetch_cell
                                 .get_or_try_init(|| fetch_minecraft_file(
                                     st,
+									sources,
+									FileRole::Asset,
                                     &url,
                                     Some(hash),
                                     Some(asset.size as u64),
@@ -816,6 +805,8 @@ pub async fn download_assets(
                             let resource = fetch_cell
                                 .get_or_try_init(|| fetch_minecraft_file(
                                     st,
+									sources,
+									FileRole::Asset,
                                     &url,
                                     Some(hash),
                                     Some(asset.size as u64),
@@ -843,8 +834,9 @@ pub async fn download_assets(
 
 #[tracing::instrument(skip(st, libraries))]
 #[allow(clippy::too_many_arguments)]
-pub async fn download_libraries(
+async fn download_libraries_with_sources(
     st: &State,
+	sources: &MinecraftDownloadSources,
     libraries: &[Library],
     version: &str,
     loading_bar: Option<&LoadingBarId>,
@@ -907,6 +899,8 @@ pub async fn download_libraries(
                 if let Some(native) = classifiers.get(&parsed_key) {
                     let data = fetch_minecraft_file(
                         st,
+						sources,
+						FileRole::Library,
                         &native.url,
                         Some(&native.sha1),
                         Some(native.size as u64),
@@ -959,6 +953,8 @@ pub async fn download_libraries(
                 {
                     let bytes = fetch_minecraft_file(
                         st,
+						sources,
+						FileRole::Library,
                         &artifact.url,
                         Some(&artifact.sha1),
                         Some(artifact.size as u64),
@@ -1045,8 +1041,9 @@ pub async fn download_libraries(
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn download_log_config(
+async fn download_log_config_with_sources(
     st: &State,
+	sources: &MinecraftDownloadSources,
     version_info: &GameVersionInfo,
     loading_bar: Option<&LoadingBarId>,
     force: bool,
@@ -1071,6 +1068,8 @@ pub async fn download_log_config(
     if !path.exists() || force {
         let bytes = fetch_minecraft_file(
             st,
+			sources,
+			FileRole::Launcher,
             &log_download.url,
             Some(&log_download.sha1),
             Some(log_download.size as u64),
@@ -1091,4 +1090,88 @@ pub async fn download_log_config(
 
     tracing::debug!("Log config {} loaded", log_download.id);
     Ok(true)
+}
+
+/// Standalone transfers keep the existing public API and read one preference snapshot.
+pub async fn download_client(
+	st: &State,
+	version_info: &GameVersionInfo,
+	loading_bar: Option<&LoadingBarId>,
+	force: bool,
+	progress: Option<MinecraftDownloadProgress>,
+	instance_dir: Option<&PathBuf>,
+	instance_version_id: Option<&str>,
+) -> crate::Result<()> {
+	let sources = MinecraftDownloadSources::load(st).await?;
+	download_client_with_sources(st, &sources, version_info, loading_bar, force, progress, instance_dir, instance_version_id).await
+}
+
+pub async fn download_assets_index(
+	st: &State,
+	version: &GameVersionInfo,
+	loading_bar: Option<&LoadingBarId>,
+	force: bool,
+	progress: Option<MinecraftDownloadProgress>,
+	instance_assets_dir: Option<&Path>,
+) -> crate::Result<AssetsIndex> {
+	let sources = MinecraftDownloadSources::load(st).await?;
+	download_assets_index_with_sources(st, &sources, version, loading_bar, force, progress, instance_assets_dir).await
+}
+
+pub async fn download_assets(
+	st: &State,
+	with_legacy: bool,
+	index: &AssetsIndex,
+	loading_bar: Option<&LoadingBarId>,
+	loading_amount: f64,
+	force: bool,
+	progress: Option<MinecraftDownloadProgress>,
+	instance_assets_dir: Option<&Path>,
+) -> crate::Result<()> {
+	let sources = MinecraftDownloadSources::load(st).await?;
+	download_assets_with_sources(st, &sources, with_legacy, index, loading_bar, loading_amount, force, progress, instance_assets_dir).await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn download_libraries(
+	st: &State,
+	libraries: &[Library],
+	version: &str,
+	loading_bar: Option<&LoadingBarId>,
+	loading_amount: f64,
+	java_arch: &str,
+	force: bool,
+	minecraft_updated: bool,
+	progress: Option<MinecraftDownloadProgress>,
+	libraries_dir: Option<PathBuf>,
+) -> crate::Result<()> {
+	let sources = MinecraftDownloadSources::load(st).await?;
+	download_libraries_with_sources(st, &sources, libraries, version, loading_bar, loading_amount, java_arch, force, minecraft_updated, progress, libraries_dir).await
+}
+
+pub async fn download_log_config(
+	st: &State,
+	version_info: &GameVersionInfo,
+	loading_bar: Option<&LoadingBarId>,
+	force: bool,
+	progress: Option<MinecraftDownloadProgress>,
+) -> crate::Result<bool> {
+	let sources = MinecraftDownloadSources::load(st).await?;
+	download_log_config_with_sources(st, &sources, version_info, loading_bar, force, progress).await
+}
+
+#[cfg(test)]
+mod source_progress_tests {
+	use super::*;
+
+	#[test]
+	fn retries_only_add_new_logical_bytes() {
+		let high_water = AtomicU64::new(0);
+		assert_eq!(advance_file_progress(&high_water, 10, Some(20)), 10);
+		assert_eq!(advance_file_progress(&high_water, 5, Some(20)), 0);
+		assert_eq!(advance_file_progress(&high_water, 10, Some(20)), 0);
+		assert_eq!(advance_file_progress(&high_water, 30, Some(20)), 10);
+		assert_eq!(advance_file_progress(&high_water, 20, Some(20)), 0);
+		assert_eq!(high_water.load(Ordering::Relaxed), 20);
+	}
 }

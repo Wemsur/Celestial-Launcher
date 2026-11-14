@@ -34,6 +34,7 @@ mod args;
 pub(crate) mod hooks;
 
 pub mod download;
+pub(crate) mod download_sources;
 pub mod quick_play_version;
 
 // All nones -> disallowed
