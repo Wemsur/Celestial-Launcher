@@ -30,6 +30,7 @@ pub use event::{
 pub use event::emit::emit_library_changed;
 pub use logger::start_logger;
 pub use state::State;
+pub use state::celestial_db;
 pub use state::libraries;
 pub use state::libraries::{LibrariesConfig, LibraryInfo};
 pub use util::fetch::DownloadReason;

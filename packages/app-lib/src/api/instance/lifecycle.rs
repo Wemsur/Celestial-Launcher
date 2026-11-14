@@ -81,13 +81,13 @@ pub async fn edit(
                 let library_format = inst.library_format.clone();
                 let mut saved = false;
 
-                // Group membership lives in `instance_groups.json`, not in the
+                // Group membership lives in celestial.db, not in the
                 // sidecars, so it is applied once here for both branches below.
                 if let Some(group_ids) = &patch.group_ids {
                     crate::state::instance_groups::set_instance_groups(
                         instance_id,
                         group_ids,
-                    );
+                    ).await?;
                 }
 
                 // Try instance.json first (Modrinth format, or .minecraft with sidecar)
@@ -291,7 +291,7 @@ pub async fn remove(instance_id: &str) -> crate::Result<()> {
     )
     .await?;
     crate::state::remove_instance(instance_id, &state).await?;
-    crate::state::instance_groups::forget_instance(instance_id);
+    crate::state::instance_groups::forget_instance(instance_id).await?;
 
     emit_instance(instance_id, InstancePayloadType::Removed).await?;
 
@@ -346,7 +346,7 @@ pub async fn rename(
             );
         // `local:` ids are derived from the path, so renaming mints a new id —
         // carry the group membership over to it.
-        crate::state::instance_groups::rename_instance(instance_id, &id);
+        crate::state::instance_groups::rename_instance(instance_id, &id).await?;
         let updated_inst = Instance {
             id,
             path: new_dir.to_string_lossy().to_string(),

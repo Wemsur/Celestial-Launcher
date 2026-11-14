@@ -66,9 +66,12 @@ pub mod libraries;
 pub mod attached_world_data;
 pub mod server_join_log;
 
+pub mod celestial_db;
+
 // Global state
 // RwLock on state only has concurrent reads, except for config dir change which takes control of the State
 static LAUNCHER_STATE: OnceCell<Arc<State>> = OnceCell::const_new();
+static STORAGE_READY: OnceCell<()> = OnceCell::const_new();
 const MAX_CONCURRENT_INSTALL_JOBS: usize = 3;
 pub struct State {
     /// Information on the location of files used in the launcher
@@ -112,6 +115,9 @@ pub struct State {
     pub restart_after_pending_update: AtomicBool,
 
     pub(crate) pool: SqlitePool,
+
+    /// The Celestial fork's own storage (celestial.db), separate from app.db.
+    pub celestial: Arc<celestial_db::CelestialDb>,
 
     pub(crate) file_watcher: FileWatcher,
 }
@@ -171,6 +177,15 @@ impl State {
             .get_or_try_init(move || Self::initialize_state(app_identifier))
             .await?;
 
+        // These paths need the global state, but must finish before startup succeeds.
+		STORAGE_READY
+			.get_or_try_init(|| async {
+				libraries::ensure_migration_done(state).await?;
+				instance_groups::ensure_imported(state).await?;
+				Ok::<(), crate::Error>(())
+			})
+			.await?;
+
         if let Err(e) =
             crate::install::recovery::recover_interrupted_jobs(state).await
         {
@@ -204,16 +219,6 @@ impl State {
 
             if let Err(e) = crate::api::instance::migrate_legacy_icons().await {
                 tracing::error!("Error migrating legacy instance icons: {e}");
-            }
-
-            if let Err(e) = libraries::ensure_migration_done(state).await {
-                tracing::error!("Error ensuring migration done: {e}");
-            }
-
-            // Must run after the library migration so JSON-backed instances
-            // exist and their sidecar groups can be imported.
-            if let Err(e) = instance_groups::ensure_imported(state).await {
-                tracing::error!("Error importing instance groups: {e}");
             }
 
             let res = tokio::try_join!(
@@ -296,6 +301,12 @@ impl State {
         let directories =
             DirectoryInfo::init(settings.custom_dir, &app_identifier).await?;
 
+        tracing::info!("Connecting to celestial database");
+        let celestial = Arc::new(
+            celestial_db::CelestialDb::connect(&directories.settings_dir)
+                .await?,
+        );
+
         let discord_rpc = DiscordGuard::init()?;
 
         tracing::info!("Initializing file watcher");
@@ -305,7 +316,7 @@ impl State {
 
         let friends_socket = FriendsSocket::new();
 
-        Ok(Arc::new(Self {
+        let state = Arc::new(Self {
             directories,
             fetch_semaphore,
             io_semaphore,
@@ -324,8 +335,12 @@ impl State {
             friends_socket,
             restart_after_pending_update: AtomicBool::new(false),
             pool,
+            celestial,
             file_watcher,
             // app_identifier,
-        }))
+        });
+		// Import before publishing State so early IPC readers cannot observe empty tables.
+		celestial_db::ensure_imported(&state).await?;
+		Ok(state)
     }
 }

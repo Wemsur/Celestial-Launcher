@@ -150,11 +150,11 @@ async fn restore_instance_metadata(
         &mut tx,
     )
     .await?;
-    // Groups live in `instance_groups.json`, not the DB.
+    // Groups are persisted separately in celestial.db.
     crate::state::instance_groups::set_instance_groups(
         &metadata.instance.id,
         &metadata.group_ids,
-    );
+    ).await?;
     instance_rows::upsert_instance_launch_overrides(
         &metadata.launch_overrides,
         &mut tx,

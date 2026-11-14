@@ -81,7 +81,7 @@ pub async fn list_groups() -> crate::Result<Vec<InstanceGroup>> {
 pub async fn create_group(name: String) -> crate::Result<InstanceGroup> {
     let name = validate_group_name(&name)?;
     let id = Uuid::new_v4().to_string();
-    instance_groups::create(&id, name);
+    instance_groups::create(&id, name).await?;
 
     Ok(InstanceGroup {
         id,
@@ -90,7 +90,7 @@ pub async fn create_group(name: String) -> crate::Result<InstanceGroup> {
 }
 
 pub async fn set_group_order(group_ids: Vec<String>) -> crate::Result<()> {
-    instance_groups::set_order(&group_ids);
+    instance_groups::set_order(&group_ids).await?;
     Ok(())
 }
 
@@ -126,7 +126,7 @@ pub async fn set_group_memberships(
                 (update.instance_id.clone(), update.group_ids.clone())
             })
             .collect::<Vec<_>>(),
-    );
+    ).await?;
 
     let instance_ids = updates
         .into_iter()
@@ -150,7 +150,7 @@ pub async fn rename_group(
 
     let new_name = validate_group_name(&new_name)?;
 
-    let Some(instance_ids) = instance_groups::rename(&id, new_name) else {
+    let Some(instance_ids) = instance_groups::rename(&id, new_name).await? else {
         return Err(crate::ErrorKind::InputError(format!(
             "Unknown instance group {id}"
         ))
@@ -173,7 +173,7 @@ pub async fn delete_group(id: String) -> crate::Result<()> {
         .into());
     }
 
-    let Some(instance_ids) = instance_groups::delete(&id) else {
+    let Some(instance_ids) = instance_groups::delete(&id).await? else {
         return Err(crate::ErrorKind::InputError(format!(
             "Unknown instance group {id}"
         ))

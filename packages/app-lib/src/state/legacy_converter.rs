@@ -591,15 +591,7 @@ where
     .execute(exec)
     .await?;
 
-    // Groups are stored in `instance_groups.json`, not the DB.
-    for group in input.groups {
-        let group_id =
-            crate::state::instance_groups::find_or_create_by_name(&group);
-        crate::state::instance_groups::add_instance_to_group(
-            instance_id_str,
-            &group_id,
-        );
-    }
+	persist_legacy_groups(instance_id_str, &input.groups, exec).await?;
 
     let launch_overrides = InstanceLaunchOverrides {
         instance_id: instance_id.clone(),
@@ -1042,4 +1034,80 @@ enum LegacyInstanceInstallStage {
     PackInstalling,
     #[default]
     NotInstalled,
+}
+
+/// Writes to app.db before global State is available. Startup imports this data.
+async fn persist_legacy_groups<'a, E>(
+	instance_id: &str,
+	groups: &[String],
+	exec: E,
+) -> crate::Result<()>
+where
+	E: sqlx::Executor<'a, Database = sqlx::Sqlite> + Copy,
+{
+	for group in groups {
+		let existing: Option<(String,)> = sqlx::query_as(
+			"SELECT id FROM instance_groups WHERE name = ? ORDER BY display_order, id LIMIT 1",
+		)
+		.bind(group)
+		.fetch_optional(exec)
+		.await?;
+		let group_id = match existing {
+			Some((id,)) => id,
+			None => {
+				let id = Uuid::new_v4().to_string();
+				sqlx::query(
+					"INSERT INTO instance_groups (id, name, display_order)
+					 SELECT ?, ?, COALESCE(MAX(display_order), -1) + 1 FROM instance_groups",
+				)
+				.bind(&id)
+				.bind(group)
+				.execute(exec)
+				.await?;
+				id
+			}
+		};
+		sqlx::query(
+			"INSERT INTO instance_group_memberships (instance_id, group_id)
+			 VALUES (?, ?) ON CONFLICT(instance_id, group_id) DO NOTHING",
+		)
+		.bind(instance_id)
+		.bind(&group_id)
+		.execute(exec)
+		.await?;
+	}
+
+	Ok(())
+}
+
+#[cfg(test)]
+mod group_tests {
+	use super::*;
+
+	#[tokio::test(flavor = "current_thread")]
+	async fn legacy_groups_persist_without_global_state() {
+		let pool = sqlx::sqlite::SqlitePoolOptions::new()
+			.max_connections(1)
+			.connect("sqlite::memory:").await.unwrap();
+		sqlx::query("CREATE TABLE instance_groups (id TEXT PRIMARY KEY, name TEXT NOT NULL, display_order INTEGER NOT NULL DEFAULT 0)")
+			.execute(&pool).await.unwrap();
+		sqlx::query("CREATE TABLE instance_group_memberships (instance_id TEXT NOT NULL, group_id TEXT NOT NULL REFERENCES instance_groups(id), PRIMARY KEY (instance_id, group_id))")
+			.execute(&pool).await.unwrap();
+		persist_legacy_groups("first", &["Legacy".into(), "Legacy".into()], &pool).await.unwrap();
+		persist_legacy_groups("second", &["Legacy".into(), "Other".into()], &pool).await.unwrap();
+		let rows: Vec<(String, String)> = sqlx::query_as(
+			"SELECT memberships.instance_id, groups.name
+			 FROM instance_group_memberships memberships
+			 JOIN instance_groups groups ON groups.id = memberships.group_id
+			 ORDER BY memberships.instance_id, groups.name",
+		).fetch_all(&pool).await.unwrap();
+		assert_eq!(rows, vec![
+			("first".into(), "Legacy".into()),
+			("second".into(), "Legacy".into()),
+			("second".into(), "Other".into()),
+		]);
+		let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM instance_groups")
+			.fetch_one(&pool).await.unwrap();
+		assert_eq!(count.0, 2);
+	}
 }
