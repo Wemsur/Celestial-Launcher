@@ -123,7 +123,7 @@ async fn run_migrations(pool: &SqlitePool) -> crate::Result<()> {
 /// untouched; cleanup is a separate future step.
 pub(crate) async fn ensure_imported(state: &State) -> crate::Result<()> {
 	libraries::ensure_imported(state).await?;
-	groups::ensure_imported(state).await?;
+	groups::ensure_imported(&state.celestial, &state.directories.settings_dir).await?;
 	content_sources::ensure_imported(state).await?;
 	ui_settings::ensure_imported(state).await?;
 	translation_cache::ensure_imported(state).await?;

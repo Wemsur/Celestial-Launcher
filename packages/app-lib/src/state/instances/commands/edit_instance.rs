@@ -183,11 +183,11 @@ pub(crate) async fn edit_instance(
     }
 
     if let Some(group_ids) = &patch.group_ids {
-        // Groups live in `instance_groups.json`, not the DB.
+        // Groups are persisted separately in celestial.db.
         crate::state::instance_groups::set_instance_groups(
             &instance.id,
             group_ids,
-        );
+        ).await?;
     }
 
     if let Some(overrides) = launch_overrides.as_mut() {

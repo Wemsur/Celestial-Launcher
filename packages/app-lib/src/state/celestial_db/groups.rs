@@ -5,72 +5,55 @@ use super::CelestialDb;
 use crate::state::instance_groups::{
 	GroupDefinition, InstanceGroupsFile, INSTANCE_GROUPS_FILE_NAME,
 };
-use crate::state::State;
 use crate::util::io;
 use std::collections::HashMap;
+use std::path::Path;
 
 pub(crate) const IMPORT_FLAG: &str = "import_groups_done";
 
-/// Imports `instance_groups.json` when it exists. The flag is only set on a
-/// successful import: a missing file must leave it unset so the legacy SQLite
-/// fallback in `instance_groups::ensure_imported` still gets its chance.
-pub(crate) async fn ensure_imported(state: &State) -> crate::Result<()> {
-	let db = &state.celestial;
+/// Runs inside the database initializer, without accessing global State.
+/// Only a missing JSON file permits the later app.db fallback.
+pub(crate) async fn ensure_imported(
+	db: &CelestialDb,
+	settings_dir: &Path,
+) -> crate::Result<()> {
 	if db.get_meta(IMPORT_FLAG).await?.is_some() {
 		return Ok(());
 	}
 
-	let path = state.directories.settings_dir.join(INSTANCE_GROUPS_FILE_NAME);
-	if !path.exists() {
-		return Ok(());
-	}
-	match io::read(&path).await {
-		Ok(content) => {
-			match serde_json::from_slice::<InstanceGroupsFile>(&content) {
-				Ok(file) => {
-					save(db, &file).await?;
-					db.set_meta(IMPORT_FLAG, "done").await?;
-				}
-				Err(error) => {
-					tracing::warn!(
-						"Failed to parse legacy {INSTANCE_GROUPS_FILE_NAME} for import: {error}"
-					);
-				}
-			}
-		}
-		Err(error) => {
-			tracing::warn!(
-				"Failed to read legacy {INSTANCE_GROUPS_FILE_NAME} for import: {error}"
-			);
-		}
-	}
-
-	Ok(())
+	let path = settings_dir.join(INSTANCE_GROUPS_FILE_NAME);
+	let content = match io::read(&path).await {
+		Ok(content) => content,
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+		Err(error) => return Err(error.into()),
+	};
+	let mut file = serde_json::from_slice::<InstanceGroupsFile>(&content)?;
+	file.normalize();
+	save_imported(db, &file).await
 }
 
 pub(crate) async fn load(
 	db: &CelestialDb,
 ) -> crate::Result<InstanceGroupsFile> {
+	let mut tx = db.pool().begin().await?;
 	let group_rows: Vec<(String, String, i64)> = sqlx::query_as(
 		"SELECT id, name, display_order FROM instance_groups
 		 ORDER BY display_order, id",
 	)
-	.fetch_all(db.pool())
+	.fetch_all(&mut *tx)
 	.await?;
 
 	let membership_rows: Vec<(String, String, i64)> = sqlx::query_as(
 		"SELECT instance_id, group_id, position FROM group_memberships
 		 ORDER BY instance_id, position",
 	)
-	.fetch_all(db.pool())
+	.fetch_all(&mut *tx)
 	.await?;
+	tx.commit().await?;
 
 	let mut memberships: HashMap<String, Vec<String>> = HashMap::new();
 	for (instance_id, group_id, _) in membership_rows {
-		memberships
-			.entry(instance_id)
-			.or_default()
-			.push(group_id);
+		memberships.entry(instance_id).or_default().push(group_id);
 	}
 
 	Ok(InstanceGroupsFile {
@@ -87,8 +70,23 @@ pub(crate) async fn save(
 	db: &CelestialDb,
 	file: &InstanceGroupsFile,
 ) -> crate::Result<()> {
+	save_snapshot(db, file, false).await
+}
+
+/// The imported snapshot and its completion marker become visible together.
+pub(crate) async fn save_imported(
+	db: &CelestialDb,
+	file: &InstanceGroupsFile,
+) -> crate::Result<()> {
+	save_snapshot(db, file, true).await
+}
+
+async fn save_snapshot(
+	db: &CelestialDb,
+	file: &InstanceGroupsFile,
+	imported: bool,
+) -> crate::Result<()> {
 	let mut tx = db.pool().begin().await?;
-	// Groups cascade their memberships, so one delete clears both tables.
 	sqlx::query("DELETE FROM instance_groups")
 		.execute(&mut *tx)
 		.await?;
@@ -116,6 +114,67 @@ pub(crate) async fn save(
 			.await?;
 		}
 	}
+	if imported {
+		sqlx::query(
+			"INSERT INTO meta (key, value) VALUES (?, 'done')
+			 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+		)
+		.bind(IMPORT_FLAG)
+		.execute(&mut *tx)
+		.await?;
+	}
 	tx.commit().await?;
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[tokio::test(flavor = "current_thread")]
+	async fn json_import_only_allows_missing_file_fallback() {
+		let dir = tempfile::tempdir().unwrap();
+		let db = CelestialDb::connect(dir.path()).await.unwrap();
+		ensure_imported(&db, dir.path()).await.unwrap();
+		assert!(db.get_meta(IMPORT_FLAG).await.unwrap().is_none());
+		let path = dir.path().join(INSTANCE_GROUPS_FILE_NAME);
+		std::fs::write(&path, b"not json").unwrap();
+		assert!(ensure_imported(&db, dir.path()).await.is_err());
+		assert!(db.get_meta(IMPORT_FLAG).await.unwrap().is_none());
+		std::fs::remove_file(&path).unwrap();
+		std::fs::create_dir(&path).unwrap();
+		assert!(ensure_imported(&db, dir.path()).await.is_err());
+		assert!(db.get_meta(IMPORT_FLAG).await.unwrap().is_none());
+	}
+
+	#[tokio::test(flavor = "current_thread")]
+	async fn json_import_normalizes_before_persisting() {
+		let dir = tempfile::tempdir().unwrap();
+		let db = CelestialDb::connect(dir.path()).await.unwrap();
+		std::fs::write(dir.path().join(INSTANCE_GROUPS_FILE_NAME), br#"{
+			"groups": [{"id":"a","name":"A"}],
+			"memberships": {"local:test":["a","missing","a"],"empty":["missing"]}
+		}"#).unwrap();
+		ensure_imported(&db, dir.path()).await.unwrap();
+		let file = load(&db).await.unwrap();
+		assert_eq!(file.groups[0].id, crate::state::instance_groups::FAVORITES_GROUP_ID);
+		assert_eq!(file.memberships["local:test"], vec!["a".to_string()]);
+		assert!(!file.memberships.contains_key("empty"));
+		assert_eq!(db.get_meta(IMPORT_FLAG).await.unwrap().as_deref(), Some("done"));
+	}
+
+	#[tokio::test(flavor = "current_thread")]
+	async fn import_marker_failure_rolls_back_data() {
+		let dir = tempfile::tempdir().unwrap();
+		let db = CelestialDb::connect(dir.path()).await.unwrap();
+		let original = InstanceGroupsFile::default();
+		save(&db, &original).await.unwrap();
+		sqlx::query("CREATE TRIGGER reject_import BEFORE INSERT ON meta BEGIN SELECT RAISE(ABORT, 'injected failure'); END")
+			.execute(db.pool()).await.unwrap();
+		let mut changed = original.clone();
+		changed.groups[0].name = "changed".into();
+		assert!(save_imported(&db, &changed).await.is_err());
+		assert_eq!(load(&db).await.unwrap().groups[0].name, original.groups[0].name);
+		assert!(db.get_meta(IMPORT_FLAG).await.unwrap().is_none());
+	}
 }
