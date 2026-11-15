@@ -87,7 +87,7 @@
 			"persistent": true,
 			"inputs": ["$TURBO_DEFAULT$", ".env*"],
 			"env": ["CARGO_*", "RUST_*", "RUSTFLAGS", "FORCE_COLOR", "NEXTEST_*"],
-			"passThroughEnv": ["DISPLAY", "WEBKIT_DISABLE_DMABUF_RENDERER", "JAVA_HOME"]
+			"passThroughEnv": ["DISPLAY", "WEBKIT_DISABLE_DMABUF_RENDERER", "JAVA_HOME", "THESEUS_CONFIG_DIR"]
 		},
 		"test": {
 			"env": [
