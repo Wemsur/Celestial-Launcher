@@ -54,9 +54,7 @@ pub(crate) async fn create(
             })
     } else {
         // JSON-backed: build metadata from the instance directly
-        Ok(crate::api::instance::get::instance_metadata_from_instance(
-            &instance,
-        ))
+		crate::api::instance::get::instance_metadata_from_instance(&instance)
     }
 }
 
@@ -240,9 +238,7 @@ pub async fn edit(
                 crate::ErrorKind::InputError("Unknown instance".to_string()).into()
             })?;
         emit_instance(&inst.id, InstancePayloadType::Edited).await?;
-        return Ok(crate::api::instance::get::instance_metadata_from_instance(
-            &inst,
-        ));
+		return crate::api::instance::get::instance_metadata_from_instance(&inst);
     }
 
     // DB-backed instances (fallback for legacy + migrated)
@@ -369,9 +365,7 @@ pub async fn rename(
             library_format: crate::state::libraries::InstanceFormat::Minecraft,
         };
         emit_instance(instance_id, InstancePayloadType::Edited).await?;
-        return Ok(crate::api::instance::get::instance_metadata_from_instance(
-            &updated_inst,
-        ));
+		return crate::api::instance::get::instance_metadata_from_instance(&updated_inst);
     }
 
     // Modrinth format: only update the name field in instance.json
@@ -386,5 +380,5 @@ pub async fn rename(
     tracing::info!("rename: instance.json written successfully");
 
     emit_instance(instance_id, InstancePayloadType::Edited).await?;
-    Ok(crate::api::instance::get::instance_metadata_from_instance(&inst))
+	crate::api::instance::get::instance_metadata_from_instance(&inst)
 }

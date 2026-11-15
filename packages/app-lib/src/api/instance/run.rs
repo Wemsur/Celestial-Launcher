@@ -165,6 +165,12 @@ async fn run_credentials(
         .filter(|hook_command| !hook_command.is_empty());
 
     let memory = context.launch_overrides.memory.unwrap_or(settings.memory);
+	tracing::debug!(
+		instance_id,
+		memory_maximum_mb = memory.maximum,
+		memory_source = if context.launch_overrides.memory.is_some() { "instance" } else { "launcher" },
+		"Resolved Minecraft memory allocation"
+	);
     let resolution = context
         .launch_overrides
         .game_resolution

@@ -12,8 +12,10 @@ use std::time::{Duration, Instant};
 use tokio::fs as tokio_fs;
 use tracing::{info, warn};
 
+mod instance_settings;
 mod version_resolve;
 
+pub(crate) use instance_settings::{JsonInstanceSettings, read_json_instance_settings};
 pub(crate) use version_resolve::{resolve_version_dir, resolve_version_info};
 
 /// Retry a closure on `std::io::Error`, with 200ms delay between attempts.
@@ -207,13 +209,16 @@ fn default_install_stage() -> String {
 
 impl InstanceJson {
     pub(crate) fn read_from_dir(dir: &Path) -> crate::Result<Option<Self>> {
-        let json_path = dir.join("instance.json");
-        if !json_path.exists() {
-            return Ok(None);
-        }
-        let content = fs::read_to_string(&json_path)?;
-        let instance: Self = serde_json::from_str(&content)?;
-        Ok(Some(instance))
+		let json_path = dir.join("instance.json");
+		let content = match fs::read_to_string(&json_path) {
+			Ok(content) => content,
+			Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+			Err(error) => return Err(crate::util::io::IOError::with_path(error, &json_path).into()),
+		};
+		let instance: Self = serde_json::from_str(&content).map_err(|error| {
+			crate::ErrorKind::InputError(format!("Invalid {}: {error}", json_path.display()))
+		})?;
+		Ok(Some(instance))
     }
 
     pub(crate) fn write_to_dir(&self, dir: &Path) -> crate::Result<()> {
@@ -355,13 +360,16 @@ pub(crate) struct CelestialJson {
 
 impl CelestialJson {
     pub(crate) fn read_from_dir(dir: &Path) -> crate::Result<Option<Self>> {
-        let json_path = dir.join("celestial.json");
-        if !json_path.exists() {
-            return Ok(None);
-        }
-        let content = fs::read_to_string(&json_path)?;
-        let instance: Self = serde_json::from_str(&content)?;
-        Ok(Some(instance))
+		let json_path = dir.join("celestial.json");
+		let content = match fs::read_to_string(&json_path) {
+			Ok(content) => content,
+			Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+			Err(error) => return Err(crate::util::io::IOError::with_path(error, &json_path).into()),
+		};
+		let instance: Self = serde_json::from_str(&content).map_err(|error| {
+			crate::ErrorKind::InputError(format!("Invalid {}: {error}", json_path.display()))
+		})?;
+		Ok(Some(instance))
     }
 
     pub(crate) fn write_to_dir(&self, dir: &Path) -> crate::Result<()> {

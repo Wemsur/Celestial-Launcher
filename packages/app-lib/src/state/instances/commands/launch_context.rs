@@ -22,7 +22,7 @@ pub(crate) async fn get_instance_launch_context(
         crate::state::libraries::list_instances_from_json(&state).await?
     {
         if instance.id == instance_id {
-            return Ok(Some(json_backed_launch_context(&instance)));
+            return Ok(Some(json_backed_launch_context(&instance)?));
         }
     }
 
@@ -30,62 +30,111 @@ pub(crate) async fn get_instance_launch_context(
 }
 
 fn json_backed_launch_context(
-    instance: &crate::state::Instance,
-) -> InstanceLaunchContext {
-    use crate::state::{
-        ContentSet, ContentSetStatus, ContentSourceKind, InstanceLaunchOverrides,
-        InstanceLink,
-    };
-    // Try to read version info from instance.json
-    let dir = if let Some(state) = State::get_if_initialized() {
-        crate::state::libraries::resolve_instance_dir_with_dirs(&state.directories, &instance.path)
-    } else {
-        crate::state::libraries::resolve_instance_dir_with_dirs(
-            &crate::state::DirectoryInfo {
-                settings_dir: std::path::PathBuf::new(),
-                config_dir: std::path::PathBuf::new(),
-                app_identifier: String::new(),
-            },
-            &instance.path,
-        )
-    };
-    let (game_version, loader, loader_version) =
-        if let Ok(Some(json)) = crate::state::libraries::InstanceJson::read_from_dir(&dir) {
-            (json.game_version, json.loader, json.loader_version)
-        } else {
-            (None, None, None)
-        };
+	instance: &crate::state::Instance,
+) -> crate::Result<InstanceLaunchContext> {
+	use crate::state::{ContentSet, ContentSetStatus, ContentSourceKind, libraries};
 
-    // Fallback: detect version and loader from the filesystem
-    let game_version = game_version.or_else(|| {
-        crate::state::libraries::detect_game_version_from_dir(&dir)
-    });
-    let loader = loader.or_else(|| {
-        if game_version.as_ref().is_some_and(|gv| gv.is_empty()) {
-            None
-        } else {
-            Some(crate::state::libraries::detect_loader_from_dir(&dir).as_str().to_string())
-        }
-    });
+	let dir = if let Some(state) = State::get_if_initialized() {
+		libraries::resolve_instance_dir_with_dirs(&state.directories, &instance.path)
+	} else {
+		libraries::resolve_instance_dir_with_dirs(
+			&crate::state::DirectoryInfo {
+				settings_dir: std::path::PathBuf::new(),
+				config_dir: std::path::PathBuf::new(),
+				app_identifier: String::new(),
+			},
+			&instance.path,
+		)
+	};
+	let settings = libraries::read_json_instance_settings(&dir, instance)?;
+	let game_version = settings.game_version.or_else(|| {
+		libraries::detect_game_version_from_dir(&dir)
+	});
+	let loader = settings.loader.or_else(|| {
+		if game_version.as_ref().is_some_and(|gv| gv.is_empty()) {
+			None
+		} else {
+			Some(libraries::detect_loader_from_dir(&dir).as_str().to_string())
+		}
+	});
 
-    InstanceLaunchContext {
-        instance: instance.clone(),
-        applied_content_set: ContentSet {
-            id: instance.applied_content_set_id.clone().unwrap_or_default(),
-            instance_id: instance.id.clone(),
-            name: "Applied Content Set".to_string(),
-            source_kind: ContentSourceKind::Local,
-            status: ContentSetStatus::Available,
-            game_version: game_version.unwrap_or_default(),
-            protocol_version: None,
-            loader: ModLoader::from_string(&loader.unwrap_or_default()),
-            loader_version,
-            created: chrono::Utc::now(),
-            modified: chrono::Utc::now(),
-        },
-        link: InstanceLink::Unmanaged,
-        launch_overrides: InstanceLaunchOverrides::empty(instance.id.clone()),
-    }
+	Ok(InstanceLaunchContext {
+		instance: crate::state::Instance {
+			update_channel: settings.update_channel,
+			..instance.clone()
+		},
+		applied_content_set: ContentSet {
+			id: instance.applied_content_set_id.clone().unwrap_or_default(),
+			instance_id: instance.id.clone(),
+			name: "Applied Content Set".to_string(),
+			source_kind: ContentSourceKind::Local,
+			status: ContentSetStatus::Available,
+			game_version: game_version.unwrap_or_default(),
+			protocol_version: None,
+			loader: ModLoader::from_string(&loader.unwrap_or_default()),
+			loader_version: settings.loader_version,
+			created: chrono::Utc::now(),
+			modified: chrono::Utc::now(),
+		},
+		link: settings.link,
+		launch_overrides: settings.launch_overrides,
+	})
+}
+
+#[cfg(test)]
+mod json_settings_tests {
+	use super::*;
+	use crate::state::{InstanceLaunchOverridesData, MemorySettings, libraries};
+
+	#[test]
+	fn json_launch_uses_saved_memory_from_shared_settings() {
+		for (format, primary_sidecar) in [
+			(libraries::InstanceFormat::Modrinth, true),
+			(libraries::InstanceFormat::Minecraft, true),
+			(libraries::InstanceFormat::Minecraft, false),
+		] {
+			let dir = tempfile::tempdir().unwrap();
+			let instance = libraries::InstanceJson::default().to_instance_with_format(
+				dir.path().to_string_lossy().as_ref(),
+				format,
+			);
+			let mut overrides = InstanceLaunchOverridesData::new(instance.id.clone());
+			overrides.memory = Some(MemorySettings { maximum: 8192 });
+			if primary_sidecar {
+				libraries::InstanceJson {
+					launch_overrides: Some(overrides),
+					..libraries::InstanceJson::default()
+				}.write_to_dir(dir.path()).unwrap();
+			} else {
+				libraries::CelestialJson {
+					launch_overrides: Some(overrides),
+					..libraries::CelestialJson::default()
+				}.write_to_dir(dir.path()).unwrap();
+			}
+
+			let context = json_backed_launch_context(&instance).unwrap();
+			let settings = libraries::read_json_instance_settings(dir.path(), &instance).unwrap();
+			assert_eq!(
+				context.launch_overrides.memory.unwrap_or(MemorySettings { maximum: 4096 }).maximum,
+				8192,
+			);
+			assert_eq!(
+				serde_json::to_value(context.launch_overrides).unwrap(),
+				serde_json::to_value(settings.launch_overrides).unwrap(),
+			);
+		}
+	}
+
+	#[test]
+	fn json_launch_rejects_unreadable_overrides_instead_of_using_global_memory() {
+		let dir = tempfile::tempdir().unwrap();
+		let instance = libraries::InstanceJson::default().to_instance_with_format(
+			dir.path().to_string_lossy().as_ref(),
+			libraries::InstanceFormat::Minecraft,
+		);
+		std::fs::write(dir.path().join("celestial.json"), "{").unwrap();
+		assert!(json_backed_launch_context(&instance).is_err());
+	}
 }
 
 // ─── DB-backed operations ────────────────────────────────────────────────────

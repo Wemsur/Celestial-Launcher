@@ -202,6 +202,13 @@ pub fn get_jvm_arguments(
         ]);
     }
 
+	if custom_args.iter().any(|arg| arg.starts_with("-Xmx")) {
+		tracing::warn!(
+			configured_memory_mb = memory.maximum,
+			"A custom -Xmx follows the configured heap limit; the effective memory allocation may differ"
+		);
+	}
+
     for arg in custom_args {
         if !arg.is_empty() {
             parsed_arguments.push(arg);
@@ -209,6 +216,76 @@ pub fn get_jvm_arguments(
     }
 
     Ok(parsed_arguments)
+}
+
+#[cfg(test)]
+mod memory_tests {
+	use super::*;
+	use crate::state::{InstanceLaunchOverridesData, libraries};
+
+	fn jvm_arguments(dir: &Path, memory: MemorySettings, custom_args: Vec<String>) -> Vec<String> {
+		let agent = dir.join("agent.jar");
+		std::fs::write(&agent, b"").unwrap();
+		get_jvm_arguments(
+			None,
+			dir,
+			dir,
+			dir,
+			"example-classpath",
+			&agent,
+			"example-version",
+			memory,
+			custom_args,
+			"x64",
+			&QuickPlayType::None,
+			QuickPlayVersion::find_version(0, &[]),
+			None,
+			"127.0.0.1:0".parse().unwrap(),
+		).unwrap()
+	}
+
+	#[test]
+	fn saved_memory_and_inheritance_generate_the_expected_heap_argument() {
+		for primary in [true, false] {
+			let dir = tempfile::tempdir().unwrap();
+			let instance = libraries::InstanceJson::default().to_instance_with_format(
+				dir.path().to_string_lossy().as_ref(),
+				libraries::InstanceFormat::Minecraft,
+			);
+			for (saved, expected) in [(Some(8192), "-Xmx8192M"), (None, "-Xmx4096M")] {
+				let mut overrides = InstanceLaunchOverridesData::new(instance.id.clone());
+				overrides.memory = saved.map(|maximum| MemorySettings { maximum });
+				if primary {
+					libraries::InstanceJson {
+						launch_overrides: Some(overrides),
+						..libraries::InstanceJson::default()
+					}.write_to_dir(dir.path()).unwrap();
+				} else {
+					libraries::CelestialJson {
+						launch_overrides: Some(overrides),
+						..libraries::CelestialJson::default()
+					}.write_to_dir(dir.path()).unwrap();
+				}
+				let settings = libraries::read_json_instance_settings(dir.path(), &instance).unwrap();
+				let memory = settings.launch_overrides.memory.unwrap_or(MemorySettings { maximum: 4096 });
+				let args = jvm_arguments(dir.path(), memory, Vec::new());
+				let heap_args = args.iter().filter(|arg| arg.starts_with("-Xmx")).map(String::as_str).collect::<Vec<_>>();
+				assert_eq!(heap_args, vec![expected]);
+			}
+		}
+	}
+
+	#[test]
+	fn custom_heap_arguments_keep_their_existing_precedence() {
+		let dir = tempfile::tempdir().unwrap();
+		let args = jvm_arguments(
+			dir.path(),
+			MemorySettings { maximum: 8192 },
+			vec!["-Xmx2048M".into()],
+		);
+		let heap_args = args.iter().filter(|arg| arg.starts_with("-Xmx")).map(String::as_str).collect::<Vec<_>>();
+		assert_eq!(heap_args, vec!["-Xmx8192M", "-Xmx2048M"]);
+	}
 }
 
 fn parse_jvm_argument(

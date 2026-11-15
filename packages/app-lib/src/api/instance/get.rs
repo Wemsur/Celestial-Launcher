@@ -11,7 +11,7 @@ pub async fn get(instance_id: &str) -> crate::Result<Option<InstanceMetadata>> {
     let json_instances =
         crate::state::libraries::list_instances_from_json(&state).await?;
     if let Some(inst) = json_instances.iter().find(|i| i.id == instance_id) {
-        return Ok(Some(instance_metadata_from_instance(inst)));
+        return Ok(Some(instance_metadata_from_instance(inst)?));
     }
 
     // Fall back to DB-backed instances
@@ -35,7 +35,7 @@ pub async fn get_by_id(
     let json_instances =
         crate::state::libraries::list_instances_from_json(&state).await?;
     if let Some(inst) = json_instances.iter().find(|i| i.id == instance_id) {
-        return Ok(Some(instance_metadata_from_instance(inst)));
+        return Ok(Some(instance_metadata_from_instance(inst)?));
     }
 
     // Fall back to DB-backed instances
@@ -79,7 +79,7 @@ pub async fn get_many(
             if let Some(inst) =
                 json_instances.iter().find(|i| i.id == id)
             {
-                out.push(instance_metadata_from_instance(inst));
+                out.push(instance_metadata_for_listing(inst));
             } else if let Some(meta) =
                 crate::state::get_instance(id, &state.pool).await?
             {
@@ -119,7 +119,7 @@ pub async fn list(library_path: Option<&str>) -> crate::Result<Vec<InstanceMetad
             }
         }
         if seen_paths.insert(resolved) {
-            result.push(instance_metadata_from_instance(instance));
+            result.push(instance_metadata_for_listing(instance));
         }
     }
 
@@ -148,94 +148,129 @@ pub async fn list(library_path: Option<&str>) -> crate::Result<Vec<InstanceMetad
 }
 
 pub(crate) fn instance_metadata_from_instance(
-    instance: &Instance,
+	instance: &Instance,
+) -> crate::Result<InstanceMetadata> {
+	let dir = json_instance_dir(instance);
+	let settings = libraries::read_json_instance_settings(&dir, instance)?;
+	Ok(instance_metadata_from_settings(instance, &dir, settings))
+}
+
+fn json_instance_dir(instance: &Instance) -> PathBuf {
+	if let Some(state) = State::get_if_initialized() {
+		libraries::resolve_instance_dir_with_dirs(&state.directories, &instance.path)
+	} else {
+		libraries::resolve_instance_dir_with_dirs(
+			&crate::state::DirectoryInfo {
+				settings_dir: PathBuf::new(),
+				config_dir: PathBuf::new(),
+				app_identifier: String::new(),
+			},
+			&instance.path,
+		)
+	}
+}
+
+/// Keep damaged instances visible without letting their unreadable settings be launched.
+fn instance_metadata_for_listing(instance: &Instance) -> InstanceMetadata {
+	let dir = json_instance_dir(instance);
+	match libraries::read_json_instance_settings(&dir, instance) {
+		Ok(settings) => instance_metadata_from_settings(instance, &dir, settings),
+		Err(error) => {
+			tracing::warn!(instance_id = %instance.id, "Cannot read instance settings: {error}");
+			let mut broken = instance.clone();
+			broken.install_stage = crate::state::InstanceInstallStage::Broken;
+			let settings = libraries::JsonInstanceSettings::empty(&broken);
+			instance_metadata_from_settings(&broken, &dir, settings)
+		}
+	}
+}
+
+fn instance_metadata_from_settings(
+	instance: &Instance,
+	dir: &std::path::Path,
+	settings: libraries::JsonInstanceSettings,
 ) -> InstanceMetadata {
-    // Try to read instance.json to get game_version/loader info and settings
-    let dir = if let Some(state) = State::get_if_initialized() {
-        libraries::resolve_instance_dir_with_dirs(&state.directories, &instance.path)
-    } else {
-        libraries::resolve_instance_dir_with_dirs(
-            &crate::state::DirectoryInfo {
-                settings_dir: std::path::PathBuf::new(),
-                config_dir: std::path::PathBuf::new(),
-                app_identifier: String::new(),
-            },
-            &instance.path,
-        )
-    };
-    let (game_version, loader, loader_version) =
-        if let Ok(Some(json)) = libraries::InstanceJson::read_from_dir(&dir) {
-            (json.game_version.clone(), json.loader.clone(), json.loader_version.clone())
-        } else {
-            (None, None, None)
-        };
+	let game_version = settings.game_version.or_else(|| {
+		libraries::detect_game_version_from_dir(dir)
+	});
+	let loader = settings.loader.or_else(|| {
+		if game_version.as_ref().is_some_and(|gv| gv.is_empty()) {
+			None
+		} else {
+			Some(libraries::detect_loader_from_dir(dir).as_str().to_string())
+		}
+	});
+	let content_set = crate::state::ContentSet {
+		id: instance.applied_content_set_id.clone().unwrap_or_default(),
+		instance_id: instance.id.clone(),
+		name: "Applied Content Set".to_string(),
+		source_kind: crate::state::ContentSourceKind::Local,
+		status: crate::state::ContentSetStatus::Available,
+		game_version: game_version.unwrap_or_default(),
+		protocol_version: None,
+		loader: crate::state::ModLoader::from_string(&loader.unwrap_or_default()),
+		loader_version: settings.loader_version,
+		created: chrono::Utc::now(),
+		modified: chrono::Utc::now(),
+	};
 
-    // Fallback: detect version and loader from the filesystem
-    let game_version = game_version.or_else(|| {
-        libraries::detect_game_version_from_dir(&dir)
-    });
-    let loader = loader.or_else(|| {
-        if game_version.as_ref().is_some_and(|gv| gv.is_empty()) {
-            None
-        } else {
-            Some(libraries::detect_loader_from_dir(&dir).as_str().to_string())
-        }
-    });
+	InstanceMetadata {
+		instance: Instance {
+			update_channel: settings.update_channel,
+			..instance.clone()
+		},
+		icon_config: None,
+		applied_content_set: content_set,
+		link: settings.link,
+		shared_instance: None,
+		quarantined: false,
+		group_ids: crate::state::instance_groups::group_ids_for(&instance.id),
+		synced_options: settings.synced_options,
+		launch_overrides: settings.launch_overrides,
+	}
+}
 
-    let content_set = crate::state::ContentSet {
-        id: instance.applied_content_set_id.clone().unwrap_or_default(),
-        instance_id: instance.id.clone(),
-        name: "Applied Content Set".to_string(),
-        source_kind: crate::state::ContentSourceKind::Local,
-        status: crate::state::ContentSetStatus::Available,
-        game_version: game_version.unwrap_or_default(),
-        protocol_version: None,
-        loader: crate::state::ModLoader::from_string(&loader.unwrap_or_default()),
-        loader_version,
-        created: chrono::Utc::now(),
-        modified: chrono::Utc::now(),
-    };
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::state::{InstanceLaunchOverridesData, MemorySettings};
 
-    // Read settings from instance.json if available. Group membership no longer
-    // lives in the sidecar — it comes from `instance_groups.json`.
-    let group_ids =
-        crate::state::instance_groups::group_ids_for(&instance.id);
-    let (link, launch_overrides, update_channel) =
-        if let Ok(Some(json)) = libraries::InstanceJson::read_from_dir(&dir) {
-            let json_update_channel = json.update_channel();
-            (
-                json.link.clone().unwrap_or(crate::state::InstanceLink::Unmanaged),
-                json.launch_overrides(&instance.id),
-                json_update_channel,
-            )
-        } else {
-            (
-                crate::state::InstanceLink::Unmanaged,
-                crate::state::InstanceLaunchOverrides::empty(instance.id.clone()),
-                instance.update_channel,
-            )
-        };
+	fn instance(dir: &std::path::Path) -> Instance {
+		libraries::InstanceJson::default().to_instance_with_format(
+			dir.to_string_lossy().as_ref(),
+			libraries::InstanceFormat::Minecraft,
+		)
+	}
 
-    // Sync preferences live in the instance's own sidecar, so a JSON-backed
-    // instance reports the same `synced_options` a DB-backed one would.
-    let synced_options = libraries::CelestialJson::read_from_dir(&dir)
-        .ok()
-        .flatten()
-        .map(|celestial| celestial.synced_options)
-        .unwrap_or_default();
+	#[test]
+	fn lightweight_memory_is_returned_to_instance_settings() {
+		let dir = tempfile::tempdir().unwrap();
+		let instance = instance(dir.path());
+		let mut overrides = InstanceLaunchOverridesData::new(instance.id.clone());
+		overrides.memory = Some(MemorySettings { maximum: 8192 });
+		libraries::CelestialJson {
+			launch_overrides: Some(overrides),
+			..libraries::CelestialJson::default()
+		}.write_to_dir(dir.path()).unwrap();
 
-    InstanceMetadata {
-        instance: Instance {
-            update_channel,
-            ..instance.clone()
-        },
-        icon_config: None,
-        applied_content_set: content_set,
-        link,
-        shared_instance: None,
-        quarantined: false,
-        group_ids,
-        synced_options,
-        launch_overrides,
-    }
+		let metadata = instance_metadata_from_instance(&instance).unwrap();
+		assert_eq!(metadata.launch_overrides.memory.unwrap().maximum, 8192);
+		assert_eq!(
+			instance_metadata_for_listing(&instance).launch_overrides.memory.unwrap().maximum,
+			8192,
+		);
+	}
+
+	#[test]
+	fn damaged_settings_fail_detail_reads_but_remain_visible_as_broken() {
+		let damaged = tempfile::tempdir().unwrap();
+		let healthy = tempfile::tempdir().unwrap();
+		std::fs::write(damaged.path().join("celestial.json"), "{").unwrap();
+		let damaged_instance = instance(damaged.path());
+		assert!(instance_metadata_from_instance(&damaged_instance).is_err());
+		let damaged_metadata = instance_metadata_for_listing(&damaged_instance);
+		assert_eq!(damaged_metadata.instance.install_stage, crate::state::InstanceInstallStage::Broken);
+		let healthy_metadata = instance_metadata_for_listing(&instance(healthy.path()));
+		assert_eq!(healthy_metadata.instance.install_stage, crate::state::InstanceInstallStage::Installed);
+	}
 }
