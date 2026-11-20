@@ -68,7 +68,8 @@ watch(
 					重置为默认值
 				</Button>
 				<Toggle
-					id="advanced-rendering"
+					:id="`feature-flag-${option}`"
+					:aria-label="option.replaceAll('_', ' ')"
 					:model-value="appSettings.getFeatureFlag(option)"
 					@update:model-value="() => setFeatureFlag(option, !appSettings.getFeatureFlag(option))"
 				/>

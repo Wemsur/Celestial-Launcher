@@ -76,6 +76,7 @@ pub enum FeatureFlag {
     ServersInApp,
     ServerProjectQa,
     I18nDebug,
+	GithubTestReleaseUpdates,
     ShowInstancePlayTime,
     CompactInstanceCards,
     SkipNonEssentialWarnings,
@@ -88,6 +89,21 @@ pub enum FeatureFlag {
     FriendsPendingCollapsed,
     DismissedPhotosensitivityFilterWarning,
     LocalhostSignIn,
+}
+
+#[cfg(test)]
+mod feature_flag_tests {
+	use super::*;
+
+	#[test]
+	fn github_test_updates_keep_existing_flags() {
+		assert_eq!(serde_json::to_string(&FeatureFlag::GithubTestReleaseUpdates).unwrap(), "\"github_test_release_updates\"");
+		let flags: HashMap<FeatureFlag, bool> = serde_json::from_str(
+			r#"{"i18n_debug":true,"github_test_release_updates":false}"#,
+		).unwrap();
+		assert_eq!(flags.get(&FeatureFlag::I18nDebug), Some(&true));
+		assert_eq!(flags.get(&FeatureFlag::GithubTestReleaseUpdates), Some(&false));
+	}
 }
 
 impl Settings {

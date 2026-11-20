@@ -13,6 +13,7 @@ export const DEFAULT_FEATURE_FLAGS = {
 	skip_unknown_pack_warning: false,
 	pride_fundraiser: true,
 	i18n_debug: false,
+	github_test_release_updates: false,
 	show_instance_play_time: true,
 	compact_instance_cards: false,
 	advanced_filters_collapsed: true,

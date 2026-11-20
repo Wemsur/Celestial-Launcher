@@ -4,6 +4,7 @@ import { listen } from '@tauri-apps/api/event'
 import { arch as osArch, type as osType } from '@tauri-apps/plugin-os'
 
 import { toError } from '@/helpers/errors'
+import { get as getSettings } from '@/helpers/settings'
 import {
     appUpdateState,
     markAppUpdateActionable,
@@ -32,6 +33,8 @@ interface UpdateSource {
      *  字段兼容：tag_name、draft、prerelease、assets[].browser_download_url。 */
     latestUrl: string
 }
+
+const GITHUB_TEST_RELEASE_TAG = 'v3.5.0-beta.1'
 
 // 优先级：自部署 wemgit → git.gay → GitHub（最次）。
 const UPDATE_SOURCES: UpdateSource[] = [
@@ -123,8 +126,8 @@ export async function checkForUpdate(): Promise<{
 } | null> {
 	const currentVersion = await getVersion()
 	const platform = currentPlatform()
-	const testTag = 'v3.5.0-beta.1'
-	const testingPrerelease = import.meta.env.DEV && (await invoke<boolean>('is_dev'))
+	const testTag = GITHUB_TEST_RELEASE_TAG
+	const testingPrerelease = (await getSettings()).feature_flags.github_test_release_updates === true
 	const sources: UpdateSource[] = testingPrerelease
 		? [{
 				id: 'github-preview-test',
@@ -213,6 +216,11 @@ export async function checkForUpdate(): Promise<{
             trail.push({ source, outcome: `跳过（${reason}）` })
             continue
         }
+
+		if (((await getSettings()).feature_flags.github_test_release_updates === true) !== testingPrerelease) {
+			console.info('[updater] 更新模式已改变，忽略本次检查结果')
+			return null
+		}
 
 		const outcome = testingPrerelease
 			? `测试发布 ${latestVersion}，安装包 ${asset.name}（不比较版本高低）`
