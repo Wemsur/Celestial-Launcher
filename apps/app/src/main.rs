@@ -950,6 +950,7 @@ fn main() {
         .plugin(api::worlds::init())
         .plugin(api::plugins::init())
         .plugin(api::content_sources::init())
+		.plugin(api::announcements::init())
         .invoke_handler(tauri::generate_handler![
             initialize_state,
             is_dev,

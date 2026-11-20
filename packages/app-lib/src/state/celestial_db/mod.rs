@@ -17,6 +17,7 @@ use sqlx::sqlite::{
 use sqlx::{Pool, Sqlite, SqlitePool};
 use std::path::Path;
 
+pub mod announcements;
 pub mod content_sources;
 pub mod groups;
 pub mod libraries;
@@ -153,6 +154,10 @@ mod tests {
 		assert_eq!(
 			names,
 			vec![
+				"announcement_body_cache",
+				"announcement_preferences",
+				"announcement_sync",
+				"announcements",
 				"content_sources",
 				"group_memberships",
 				"instance_groups",

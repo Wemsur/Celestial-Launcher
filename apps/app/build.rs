@@ -8,6 +8,18 @@ fn main() {
     tauri_build::try_build(
         tauri_build::Attributes::new()
             .codegen(tauri_build::CodegenContext::new())
+			.plugin(
+				"announcements",
+				InlinedPlugin::new()
+					.commands(&[
+						"announcement_snapshot",
+						"announcement_list",
+						"announcement_get",
+						"announcement_refresh",
+						"announcement_suppress",
+					])
+					.default_permission(DefaultPermissionRule::AllowAllCommands),
+			)
             .plugin(
                 "auth",
                 InlinedPlugin::new()

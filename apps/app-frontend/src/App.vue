@@ -69,7 +69,6 @@ import {
 	UserRoleIcon,
 	useVIntl,
 } from '@modrinth/ui'
-import { renderString } from '@modrinth/utils/parse'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { getVersion } from '@tauri-apps/api/app'
 import { convertFileSrc, invoke } from '@tauri-apps/api/core'
@@ -86,6 +85,7 @@ import { RouterView, useRoute, useRouter } from 'vue-router'
 import CelestialLogo from '@/assets/celestial.svg?component'
 import AccountsCard from '@/components/ui/AccountsCard.vue'
 import AppActionBar from '@/components/ui/AppActionBar.vue'
+import AnnouncementModal from '@/components/ui/announcements/AnnouncementModal.vue'
 import Breadcrumbs from '@/components/ui/Breadcrumbs.vue'
 import ErrorModal from '@/components/ui/ErrorModal.vue'
 import FriendsList from '@/components/ui/friends/FriendsList.vue'
@@ -591,8 +591,6 @@ useQueries({
 		})),
 	),
 })
-
-const criticalErrorMessage = ref()
 
 const isMaximized = ref(false)
 const isFullscreen = ref(false)
@@ -1134,19 +1132,6 @@ async function setupApp() {
 	} else {
 		document.getElementsByTagName('html')[0].classList.add('windows')
 	}
-
-	fetch(`https://api.modrinth.com/appCriticalAnnouncement.json?version=${version}`)
-		.then((response) => response.json())
-		.then((res) => {
-			if (res && res.header && res.body) {
-				criticalErrorMessage.value = res
-			}
-		})
-		.catch(() => {
-			console.log(
-				`No critical announcement found at https://api.modrinth.com/appCriticalAnnouncement.json?version=${version}`,
-			)
-		})
 
 	fetch(`https://modrinth.com/news/feed/articles.json`)
 		.then((response) => response.json())
@@ -2563,6 +2548,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			</div>
 		</Transition>
 		<AppSettingsModal ref="appSettingsModal" />
+		<AnnouncementModal :ready="stateInitialized" />
 		<SyncInstancesUpdateModal ref="syncInstancesUpdateModal" />
 		<Suspense>
 			<ModrinthAccountRequiredModal ref="modrinthLoginModal" :request-auth="requestModrinthAuth" />
@@ -2849,17 +2835,6 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 					width: 'calc(100% - var(--right-bar-width))',
 				}"
 			></div>
-			<Admonition
-				v-if="criticalErrorMessage"
-				type="critical"
-				:header="criticalErrorMessage.header"
-				class="m-6 mb-0"
-			>
-				<div
-					class="markdown-body text-primary"
-					v-html="renderString(criticalErrorMessage.body ?? '')"
-				></div>
-			</Admonition>
 			<Admonition
 				v-if="authUnreachable"
 				type="warning"

@@ -1,0 +1,28 @@
+import { defineMessages } from '@modrinth/ui'
+
+export const announcementMessages = defineMessages({
+	title: { id: 'app.announcements.title', defaultMessage: 'Announcements' },
+	current: { id: 'app.announcements.current', defaultMessage: 'Current announcement' },
+	history: { id: 'app.announcements.history', defaultMessage: 'Announcement history' },
+	other: { id: 'app.announcements.other', defaultMessage: 'Other announcements' },
+	active: { id: 'app.announcements.active', defaultMessage: 'Active' },
+	ended: { id: 'app.announcements.ended', defaultMessage: 'Ended' },
+	expired: { id: 'app.announcements.expired', defaultMessage: 'Expired' },
+	withdrawn: { id: 'app.announcements.withdrawn', defaultMessage: 'Withdrawn announcement' },
+	info: { id: 'app.announcements.info', defaultMessage: 'Notice' },
+	warning: { id: 'app.announcements.warning', defaultMessage: 'Important' },
+	critical: { id: 'app.announcements.critical', defaultMessage: 'Critical' },
+	published: { id: 'app.announcements.published', defaultMessage: 'Published {date}' },
+	period: { id: 'app.announcements.period', defaultMessage: 'Valid from {start} to {end}' },
+	close: { id: 'app.announcements.close', defaultMessage: 'Close' },
+	suppress: { id: 'app.announcements.suppress', defaultMessage: "Don't show again" },
+	suppressed: { id: 'app.announcements.suppressed', defaultMessage: 'Automatic reminders are disabled for this announcement.' },
+	cache: { id: 'app.announcements.cache', defaultMessage: 'Showing locally cached announcements. They may have changed since the last successful refresh.' },
+	lastSync: { id: 'app.announcements.last-sync', defaultMessage: 'Last successful refresh: {date}' },
+	cachedBody: { id: 'app.announcements.cached-body', defaultMessage: 'This is an older, verified copy of the announcement.' },
+	unavailable: { id: 'app.announcements.unavailable', defaultMessage: 'The announcement body is not available offline or could not be downloaded.' },
+	loading: { id: 'app.announcements.loading', defaultMessage: 'Loading announcements…' },
+	more: { id: 'app.announcements.more', defaultMessage: 'Load more history' },
+	retry: { id: 'app.announcements.retry', defaultMessage: 'Retry' },
+	empty: { id: 'app.announcements.empty', defaultMessage: 'No announcements are available.' },
+})

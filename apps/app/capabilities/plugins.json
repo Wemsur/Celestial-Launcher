@@ -115,6 +115,7 @@
 			]
 		},
 		"auth:default",
+		"announcements:default",
 		"import:default",
 		"jre:default",
 		"logs:default",
