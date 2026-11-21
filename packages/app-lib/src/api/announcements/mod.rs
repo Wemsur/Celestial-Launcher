@@ -164,7 +164,7 @@ async fn refresh_source(state: &State, source: network::Source) -> crate::Result
 
 pub async fn refresh(state: &State) -> crate::Result<()> {
 	tracing::info!("[announcements] 开始后台公告刷新，依次尝试 wemgit 和 GitHub published");
-	let result = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+	let result = tokio::time::timeout(std::time::Duration::from_secs(60), async {
 		let mut failures = Vec::new();
 		for source in network::SOURCES {
 			match refresh_source(state, source).await {
@@ -237,7 +237,7 @@ pub async fn get(state: &State, id: &str) -> crate::Result<AnnouncementBody> {
 			return finish_body(state, metadata, markdown, true, None).await;
 		}
 	}
-	let downloaded = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+	let downloaded = tokio::time::timeout(std::time::Duration::from_secs(25), async {
 		let _permit = BODY_REQUESTS.acquire().await.map_err(|_| input("Announcement downloads are unavailable"))?;
 		let path = metadata.announcement.body_path.as_deref().ok_or_else(|| input("Announcement has no body path"))?;
 		let preferred = STATUS.lock().unwrap_or_else(|error| error.into_inner()).preferred_source;

@@ -27,6 +27,10 @@ impl Source {
 		}
 	}
 
+	fn timeout(self) -> std::time::Duration {
+		std::time::Duration::from_secs(match self { Self::Wemgit => 4, Self::Github => 15 })
+	}
+
 	pub(super) fn label(self) -> &'static str {
 		match self { Self::Wemgit => "wemgit", Self::Github => "GitHub published" }
 	}
@@ -56,7 +60,7 @@ fn validate_url(url: &Url, source: Source) -> crate::Result<()> {
 
 pub(super) async fn fetch(source: Source, path: &str, limit: usize) -> crate::Result<Vec<u8>> {
 	let started = std::time::Instant::now();
-	let result = tokio::time::timeout(std::time::Duration::from_secs(4), fetch_inner(source, path, limit))
+	let result = tokio::time::timeout(source.timeout(), fetch_inner(source, path, limit))
 		.await.unwrap_or_else(|_| Err(input(format!("{} announcement request timed out", source.label()))));
 	match &result {
 		Ok(bytes) => tracing::info!(source = source.label(), bytes = bytes.len(), elapsed_ms = started.elapsed().as_millis() as u64, "[announcements] 公告文件获取完成"),
@@ -113,6 +117,12 @@ mod tests {
 			assert!(validate_url(&valid, other).is_err());
 		}
 		assert!(validate_url(&Url::parse("https://raw.githubusercontent.com/Wemsur/celestial-announcement/main/index.json").unwrap(), Source::Github).is_err());
+	}
+
+	#[test]
+	fn fallback_has_a_larger_cold_connection_budget() {
+		assert_eq!(Source::Wemgit.timeout(), std::time::Duration::from_secs(4));
+		assert_eq!(Source::Github.timeout(), std::time::Duration::from_secs(15));
 	}
 
 	#[test]
