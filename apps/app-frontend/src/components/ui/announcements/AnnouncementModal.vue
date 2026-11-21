@@ -35,6 +35,13 @@ let viewEpoch = 0
 let initialized = false
 let autoHandled = false
 let autoChecking = false
+let lastAutoReason = ''
+
+function logAutoReason(reason: string, details?: Record<string, unknown>): void {
+	if (reason === lastAutoReason) return
+	lastAutoReason = reason
+	console.info(`[announcements] 自动显示判断：${reason}`, details ?? {})
+}
 
 const others = computed(() => entries.value.filter((item) => item.id !== currentId.value && isAnnouncementActive(item, now.value)))
 const history = computed(() => entries.value.filter((item) => item.id !== currentId.value && !isAnnouncementActive(item, now.value)))
@@ -49,7 +56,9 @@ async function loadMore(): Promise<void> {
 	loadingPage.value = true
 	pageError.value = null
 	try {
+		console.info('[announcements] 请求历史公告列表', { cursor: cursor.value })
 		const page = await announcementList(cursor.value)
+		console.info('[announcements] 历史列表返回', { count: page.items.length, nextCursor: page.next_cursor })
 		if (epoch !== viewEpoch) return
 		const seen = new Set(entries.value.map((item) => item.id))
 		entries.value.push(...page.items.filter((item) => !seen.has(item.id)))
@@ -83,6 +92,7 @@ async function resetContent(): Promise<void> {
 
 async function show(id: string | null): Promise<void> {
 	if (!mounted.value) return
+	console.info('[announcements] 打开公告弹窗', { id, historyOnly: id === null })
 	currentId.value = id
 	opened.value = true
 	await nextTick()
@@ -91,6 +101,7 @@ async function show(id: string | null): Promise<void> {
 }
 
 function onHide(): void {
+	console.info('[announcements] 弹窗关闭；关闭动作本身不更改“不再显示”记录')
 	opened.value = false
 	viewEpoch++
 	observer?.disconnect()
@@ -130,6 +141,7 @@ watch(sentinel, (element) => {
 
 watch(() => [props.ready, mounted.value], () => {
 	if (props.ready && mounted.value && !initialized) {
+		console.info('[announcements] 后端与弹窗组件已就绪，启动公告初始化')
 		initialized = true
 		void initializeAnnouncements()
 	}
@@ -137,32 +149,54 @@ watch(() => [props.ready, mounted.value], () => {
 
 watch(() => [props.ready, mounted.value, hasModal.value, snapshot.value.fresh,
 	snapshot.value.refreshing, snapshot.value.error, snapshot.value.candidate_id, now.value], async () => {
-	if (!props.ready || !mounted.value || autoHandled || autoChecking || snapshot.value.refreshing) return
+	if (autoHandled || autoChecking) return
+	if (!props.ready || !mounted.value) {
+		logAutoReason('等待后端或弹窗组件就绪')
+		return
+	}
+	if (snapshot.value.refreshing) { logAutoReason('远端公告刷新中'); return }
 	if (!snapshot.value.fresh) {
-		if (snapshot.value.error) autoHandled = true
+		if (snapshot.value.error) {
+			logAutoReason('本次获取失败，不自动弹窗', { error: snapshot.value.error })
+			autoHandled = true
+		} else logAutoReason('等待本次成功获取公告')
 		return
 	}
 	const id = snapshot.value.candidate_id
-	if (!id) { autoHandled = true; return }
-	if (hasModal.value) return
+	if (!id) {
+		logAutoReason(active.value.length > 0 ? '有效公告均已设置不再显示'
+			: snapshot.value.visible_count > 0 ? '只有历史公告，没有有效公告'
+				: snapshot.value.total_count > 0 ? '有公告记录，但尚无已生效的可展示公告' : '公告索引为空',
+			{ total: snapshot.value.total_count, visible: snapshot.value.visible_count, active: active.value.length })
+		autoHandled = true
+		return
+	}
+	if (hasModal.value) { logAutoReason('已有原生弹窗，延后公告自动显示', { id }); return }
+	logAutoReason('正在准备自动显示的公告正文', { id })
 	autoChecking = true
 	try {
 		const body = await loadAnnouncementBody(id)
 		if (autoHandled || !snapshot.value.fresh || hasModal.value) return
 		const latest = active.value.find((item) => item.id === id && !item.suppressed)
 		if (!latest || body.stale || !body.markdown || !isAnnouncementActive(body.announcement)) {
+			logAutoReason('候选公告已失效、被抑制，或正文不是可展示的新版本', {
+				id, activeCandidate: Boolean(latest), hasBody: Boolean(body.markdown), stale: body.stale,
+				expires: body.announcement.expires_at, error: body.error,
+			})
 			autoHandled = true
 			return
 		}
+		logAutoReason('校验通过，自动打开公告', { id })
 		autoHandled = true
 		await show(id)
 	} catch (error) {
 		autoHandled = true
-		console.warn('Announcement could not be shown:', error)
+		console.warn('[announcements] 公告无法自动展示:', error)
 	} finally { autoChecking = false }
 })
 
 onMounted(() => {
+	console.info('[announcements] 公告组件已挂载', { backendReady: props.ready })
 	mounted.value = true
 	clock = setInterval(updateAnnouncementClock, 30_000)
 	window.addEventListener('focus', updateAnnouncementClock)

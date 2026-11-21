@@ -88,11 +88,13 @@ pub struct AnnouncementMetadata {
 #[derive(Serialize)]
 pub struct Snapshot {
 	pub generation: Option<u64>,
+	pub source: Option<&'static str>,
 	pub last_success_at: Option<DateTime<Utc>>,
 	pub refreshing: bool,
 	pub fresh: bool,
 	pub error: Option<String>,
 	pub active: Vec<AnnouncementMetadata>,
+	pub total_count: usize,
 	pub visible_count: usize,
 	pub candidate_id: Option<String>,
 }
@@ -117,6 +119,7 @@ struct RefreshStatus {
 	refreshing: bool,
 	fresh: bool,
 	error: Option<String>,
+	preferred_source: Option<network::Source>,
 }
 
 static STATUS: LazyLock<Mutex<RefreshStatus>> = LazyLock::new(|| Mutex::new(RefreshStatus::default()));
@@ -135,28 +138,51 @@ pub fn begin_refresh() -> bool {
 	true
 }
 
+async fn refresh_source(state: &State, source: network::Source) -> crate::Result<()> {
+	let bytes = network::fetch(source, "index.json", MAX_INDEX_BYTES).await?;
+	let feed: Feed = serde_json::from_slice(&bytes)?;
+	validate_feed(&feed)?;
+	storage::accept_feed(&state.celestial, &feed, &digest(&bytes)).await?;
+	STATUS.lock().unwrap_or_else(|error| error.into_inner()).preferred_source = Some(source);
+	let entries = storage::load_metadata(&state.celestial).await?;
+	let now = Utc::now();
+	let active_count = entries.iter().filter(|entry| entry.announcement.is_active(now)).count();
+	tracing::info!(source = source.label(), generation = feed.generation, remote_items = feed.announcements.len(), local_items = entries.len(), active = active_count, "[announcements] 公告索引已验证并保存");
+	for entry in entries.iter().take(10) {
+		tracing::info!(id = %entry.announcement.id, state = ?entry.announcement.state, starts = ?entry.announcement.starts_at, expires = ?entry.announcement.expires_at,
+			suppressed = entry.suppressed, active = entry.announcement.is_active(now), "[announcements] 公告有效期与提示资格");
+	}
+	if let Some(candidate) = entries.iter().find(|entry| !entry.suppressed && entry.announcement.is_active(now)) {
+		let body = get(state, &candidate.announcement.id).await?;
+		if body.stale || body.markdown.is_none() {
+			return Err(input(body.error.unwrap_or_else(|| "Announcement body is unavailable".into())));
+		}
+	}
+	tracing::info!(source = source.label(), "[announcements] 公告来源获取成功");
+	Ok(())
+}
+
 pub async fn refresh(state: &State) -> crate::Result<()> {
-	let result = tokio::time::timeout(std::time::Duration::from_secs(10), async {
-		let bytes = network::fetch("index.json", MAX_INDEX_BYTES).await?;
-		let feed: Feed = serde_json::from_slice(&bytes)?;
-		validate_feed(&feed)?;
-		storage::accept_feed(&state.celestial, &feed, &digest(&bytes)).await?;
-		let entries = storage::load_metadata(&state.celestial).await?;
-		let now = Utc::now();
-		if let Some(candidate) = entries.iter().find(|entry| !entry.suppressed && entry.announcement.is_active(now)) {
-			let body = get(state, &candidate.announcement.id).await?;
-			if body.stale || body.markdown.is_none() {
-				return Err(input(body.error.unwrap_or_else(|| "Announcement body is unavailable".into())));
+	tracing::info!("[announcements] 开始后台公告刷新，依次尝试 wemgit 和 GitHub published");
+	let result = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+		let mut failures = Vec::new();
+		for source in network::SOURCES {
+			match refresh_source(state, source).await {
+				Ok(()) => return Ok(()),
+				Err(error) => {
+					tracing::info!(source = source.label(), "[announcements] 公告来源失败: {error}");
+					failures.push(format!("{}: {error}", source.label()));
+				}
 			}
 		}
-		Ok::<(), crate::Error>(())
+		Err::<(), crate::Error>(input(failures.join("; ")))
 	}).await.unwrap_or_else(|_| Err(input("Announcement refresh timed out")));
 	let mut status = STATUS.lock().unwrap_or_else(|error| error.into_inner());
 	status.refreshing = false;
 	status.fresh = result.is_ok();
 	status.error = result.as_ref().err().map(ToString::to_string);
 	if let Err(error) = &result {
-		tracing::warn!("Announcement refresh failed: {error}");
+		tracing::warn!("[announcements] 公告刷新失败: {error}");
 	}
 	result
 }
@@ -164,17 +190,20 @@ pub async fn refresh(state: &State) -> crate::Result<()> {
 pub async fn snapshot(state: &State) -> crate::Result<Snapshot> {
 	let (entries, sync) = storage::load_snapshot(&state.celestial).await?;
 	let now = Utc::now();
+	let total_count = entries.len();
 	let visible_count = entries.iter().filter(|entry| entry.announcement.is_visible(now)).count();
 	let active: Vec<_> = entries.into_iter().filter(|entry| entry.announcement.is_active(now)).collect();
 	let candidate_id = active.iter().find(|entry| !entry.suppressed).map(|entry| entry.announcement.id.clone());
 	let status = STATUS.lock().unwrap_or_else(|error| error.into_inner());
 	Ok(Snapshot {
 		generation: sync.as_ref().map(|(generation, _)| *generation),
+		source: status.preferred_source.map(network::Source::label),
 		last_success_at: sync.map(|(_, at)| at),
 		refreshing: status.refreshing,
 		fresh: status.fresh,
 		error: status.error.clone(),
 		active,
+		total_count,
 		visible_count,
 		candidate_id,
 	})
@@ -203,6 +232,7 @@ pub async fn get(state: &State, id: &str) -> crate::Result<AnnouncementBody> {
 	let hash = metadata.announcement.body_sha256.as_deref().ok_or_else(|| input("Announcement has no body digest"))?;
 	if let Some((_, markdown)) = storage::cached_body(&state.celestial, id, Some(hash)).await? {
 		if digest(markdown.as_bytes()) == hash {
+			tracing::info!(id = id, "[announcements] 命中已验证的正文缓存，不重复下载");
 			storage::cache_body(&state.celestial, &metadata.announcement, &markdown).await?;
 			return finish_body(state, metadata, markdown, true, None).await;
 		}
@@ -210,15 +240,26 @@ pub async fn get(state: &State, id: &str) -> crate::Result<AnnouncementBody> {
 	let downloaded = tokio::time::timeout(std::time::Duration::from_secs(10), async {
 		let _permit = BODY_REQUESTS.acquire().await.map_err(|_| input("Announcement downloads are unavailable"))?;
 		let path = metadata.announcement.body_path.as_deref().ok_or_else(|| input("Announcement has no body path"))?;
-		let bytes = network::fetch(path, MAX_BODY_BYTES).await?;
-		if digest(&bytes) != hash {
-			return Err(input("Announcement body digest does not match the index"));
+		let preferred = STATUS.lock().unwrap_or_else(|error| error.into_inner()).preferred_source;
+		let mut failures = Vec::new();
+		for source in network::Source::body_order(preferred) {
+			let attempt = async {
+				let bytes = network::fetch(source, path, MAX_BODY_BYTES).await?;
+				if digest(&bytes) != hash {
+					return Err(input("Announcement body digest does not match the index"));
+				}
+				let markdown = String::from_utf8(bytes).map_err(|_| input("Announcement body is not UTF-8"))?;
+				if markdown.trim().is_empty() {
+					return Err(input("Announcement body is empty"));
+				}
+				Ok::<_, crate::Error>(markdown)
+			}.await;
+			match attempt {
+				Ok(markdown) => return Ok(markdown),
+				Err(error) => failures.push(format!("{}: {error}", source.label())),
+			}
 		}
-		let markdown = String::from_utf8(bytes).map_err(|_| input("Announcement body is not UTF-8"))?;
-		if markdown.trim().is_empty() {
-			return Err(input("Announcement body is empty"));
-		}
-		Ok::<_, crate::Error>(markdown)
+		Err::<String, crate::Error>(input(failures.join("; ")))
 	}).await.unwrap_or_else(|_| Err(input("Announcement body download timed out")));
 	match downloaded {
 		Ok(markdown) => {

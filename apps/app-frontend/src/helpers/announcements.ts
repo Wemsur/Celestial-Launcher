@@ -18,11 +18,13 @@ export interface AnnouncementMetadata {
 
 export interface AnnouncementSnapshot {
 	generation: number | null
+	source: string | null
 	last_success_at: string | null
 	refreshing: boolean
 	fresh: boolean
 	error: string | null
 	active: AnnouncementMetadata[]
+	total_count: number
 	visible_count: number
 	candidate_id: string | null
 }
