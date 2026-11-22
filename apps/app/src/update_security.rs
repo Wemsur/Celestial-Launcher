@@ -25,7 +25,7 @@ pub const UPDATER_PUBLIC_KEY: &str =
 
 /// The release APIs the update check reads.
 const METADATA_HOSTS: &[&str] = &[
-	"download.celestial.byside.top",
+	"api.gitcode.com",
 	"git.gay",
 	"api.github.com",
 ];
@@ -42,7 +42,7 @@ const METADATA_HOSTS: &[&str] = &[
 /// the worst a stale list does is refuse a legitimate update, never accept a
 /// forged one.
 const DOWNLOAD_HOSTS: &[&str] = &[
-	"download.celestial.byside.top",
+	"api.gitcode.com",
 	"git.gay",
 	"github.com",
 	"objects.githubusercontent.com",
@@ -58,11 +58,39 @@ const DOWNLOAD_HOSTS: &[&str] = &[
 pub struct PendingInstaller(pub Mutex<Option<PathBuf>>);
 
 pub fn metadata_host_allowed(url: &Url) -> bool {
-	host_in(url, METADATA_HOSTS)
+	if !safe_https(url) || !host_in(url, METADATA_HOSTS) {
+		return false;
+	}
+	url.host_str() != Some("api.gitcode.com") || url.path().starts_with(GITCODE_RELEASE_ROOT)
+}
+
+const GITCODE_RELEASE_ROOT: &str = "/api/v5/repos/Wemsur/Celestial-Launcher/releases/";
+
+fn safe_https(url: &Url) -> bool {
+	url.scheme() == "https" && url.port().is_none_or(|port| port == 443)
+		&& url.username().is_empty() && url.password().is_none()
 }
 
 pub fn download_host_allowed(url: &Url) -> bool {
-	host_in(url, DOWNLOAD_HOSTS)
+	if !safe_https(url) { return false; }
+	match url.host_str() {
+		Some("api.gitcode.com") => {
+			url.path().starts_with(GITCODE_RELEASE_ROOT) && url.path().ends_with("/download")
+				&& url.path().contains("/attach_files/") && !url.path().contains("%2f") && !url.path().contains("%2F")
+		}
+		Some("gitcode.com") => url.path().starts_with("/Wemsur/Celestial-Launcher/"),
+		Some(host) if gitcode_object_host(host) => true,
+		_ => host_in(url, DOWNLOAD_HOSTS),
+	}
+}
+
+fn gitcode_object_host(host: &str) -> bool {
+	let Some((bucket, storage)) = host.split_once(".obs.") else { return false; };
+	let Some(region) = storage.strip_suffix(".myhuaweicloud.com") else { return false; };
+	(bucket == "gitcode" || bucket.starts_with("gitcode-") || bucket == "atomgit" || bucket.starts_with("atomgit-"))
+		&& bucket.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+		&& !region.is_empty()
+		&& region.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
 fn host_in(url: &Url, allowed: &[&str]) -> bool {
@@ -114,6 +142,57 @@ pub fn client(
 		.redirect(redirect_policy(allowed))
 		.build()
 		.map_err(|error| format!("Could not build the update client: {error}"))
+}
+
+/// Resolves the detached signature without appending `.sig` to a download action.
+pub fn signature_url(asset: &Url) -> Result<Url, String> {
+	if !download_host_allowed(asset) {
+		return Err("Untrusted installer URL".into());
+	}
+	let mut signature = asset.clone();
+	if asset.host_str() == Some("api.gitcode.com") {
+		if asset.query().is_some() || asset.fragment().is_some() {
+			return Err("GitCode attachment URLs must use the public canonical endpoint".into());
+		}
+		let prefix = asset.path().strip_suffix("/download")
+			.ok_or_else(|| "Invalid GitCode attachment endpoint".to_string())?;
+		let (release, filename) = prefix.rsplit_once("/attach_files/")
+			.ok_or_else(|| "Invalid GitCode attachment endpoint".to_string())?;
+		if !release.starts_with(GITCODE_RELEASE_ROOT) || filename.is_empty() || filename.contains('/') {
+			return Err("Invalid GitCode attachment name".into());
+		}
+		signature.set_path(&format!("{release}/attach_files/{filename}.sig/download"));
+	} else {
+		signature.set_path(&format!("{}.sig", asset.path()));
+	}
+	if !download_host_allowed(&signature) { return Err("Untrusted signature URL".into()); }
+	Ok(signature)
+}
+
+#[cfg(test)]
+mod gitcode_tests {
+	use super::*;
+
+	#[test]
+	fn signature_uses_filename_not_download_action() {
+		let asset = Url::parse("https://api.gitcode.com/api/v5/repos/Wemsur/Celestial-Launcher/releases/v3.5.0/attach_files/CelestialLauncher-3.5.0-windows-x64-setup.exe/download").unwrap();
+		assert_eq!(signature_url(&asset).unwrap().as_str(),
+			"https://api.gitcode.com/api/v5/repos/Wemsur/Celestial-Launcher/releases/v3.5.0/attach_files/CelestialLauncher-3.5.0-windows-x64-setup.exe.sig/download");
+		let legacy = Url::parse("https://github.com/Wemsur/Celestial-Launcher/releases/download/v3.5.0/setup.exe").unwrap();
+		assert!(signature_url(&legacy).unwrap().path().ends_with("/setup.exe.sig"));
+	}
+
+	#[test]
+	fn restricts_gitcode_sources_and_storage() {
+		assert!(metadata_host_allowed(&Url::parse("https://api.gitcode.com/api/v5/repos/Wemsur/Celestial-Launcher/releases/latest?type=latest").unwrap()));
+		assert!(!metadata_host_allowed(&Url::parse("https://api.gitcode.com/api/v5/repos/other/other/releases/latest").unwrap()));
+		assert!(!download_host_allowed(&Url::parse("https://api.gitcode.com/api/v5/repos/other/other/releases/v1/attach_files/setup.exe/download").unwrap()));
+		assert!(!download_host_allowed(&Url::parse("http://gitcode.com/Wemsur/Celestial-Launcher/setup.exe").unwrap()));
+		assert!(!download_host_allowed(&Url::parse("https://user:password@gitcode.com/Wemsur/Celestial-Launcher/setup.exe").unwrap()));
+		assert!(gitcode_object_host("gitcode-release.obs.cn-north-4.myhuaweicloud.com"));
+		assert!(!gitcode_object_host("unrelated.obs.cn-north-4.myhuaweicloud.com"));
+		assert!(!gitcode_object_host("gitcode-release.obs.cn-north-4.myhuaweicloud.com.evil.example"));
+	}
 }
 
 /// The name an installer is stored under.

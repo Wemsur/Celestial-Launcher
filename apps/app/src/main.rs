@@ -677,9 +677,7 @@ async fn download_and_run_msi(
     // The signature sits beside the asset, on the same host and through the
     // same redirect policy. A release without one is not an update anyone can
     // install, so the refusal says why rather than reporting a network error.
-    let mut signature_url = parsed;
-    let signature_path = format!("{}.sig", signature_url.path());
-    signature_url.set_path(&signature_path);
+	let signature_url = update_security::signature_url(&parsed)?;
     let signature = client
         .get(signature_url)
         .send()

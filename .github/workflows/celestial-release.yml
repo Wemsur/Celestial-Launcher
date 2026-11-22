@@ -43,8 +43,8 @@ on:
         required: true
         type: boolean
         default: true
-      publish_wemgit:
-        description: '发布草稿到 Wemgit'
+      publish_gitcode:
+        description: '暂存 GitCode prerelease（公开预发布，上传后人工推广）'
         required: true
         type: boolean
         default: true
@@ -330,12 +330,29 @@ jobs:
             curl --fail-with-body -sS -X POST "${API}/releases/${release_id}/assets?name=${encoded}" -H "${AUTH}" -H "Content-Type: application/octet-stream" --data-binary "@${file}" -o /dev/null
           done
 
-  publish-wemgit:
-    name: Publish draft to Wemgit
+  publish_gitcode:
+    name: Stage GitCode prerelease (manual promotion)
     needs: [prepare, build]
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_wemgit
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_gitcode
     runs-on: ubuntu-latest
+    concurrency:
+      group: gitcode-release-${{ needs.prepare.outputs.tag }}
+      cancel-in-progress: false
     steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.symlinks
+          GIT_CONFIG_VALUE_0: 'false'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Download selected build output
         uses: actions/download-artifact@v4
         with:
@@ -343,23 +360,11 @@ jobs:
           path: release-files
           merge-multiple: true
 
-      - name: Create draft release and upload assets
-        shell: bash
+      - name: Stage GitCode prerelease and verify signed assets
         env:
-          WEMGIT_TOKEN: ${{ secrets.WEMGIT_TOKEN }}
-          TAG: ${{ needs.prepare.outputs.tag }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
-        run: |
-          set -euo pipefail
-          API="https://download.celestial.byside.top/api/v1/repos/celestial/Celestial-Launcher"
-          AUTH="Authorization: token ${WEMGIT_TOKEN}"
-          payload=$(node -e "console.log(JSON.stringify({tag_name: process.env.TAG, name: 'Celestial Launcher ' + process.env.VERSION, draft: true, prerelease: process.env.PRERELEASE === 'true'}))")
-          resp=$(curl --fail-with-body -sS -X POST "${API}/releases" -H "${AUTH}" -H "Content-Type: application/json" -d "$payload")
-          release_id=$(node -e "const j=JSON.parse(require('node:fs').readFileSync(0,'utf8'));if(!j.id)throw new Error('No release id returned');console.log(j.id)" <<< "$resp")
-          for file in release-files/*; do
-            [ -f "$file" ] || continue
-            name=$(basename "$file")
-            encoded=$(node -e "console.log(encodeURIComponent(process.argv[1]))" "$name")
-            curl --fail-with-body -sS -X POST "${API}/releases/${release_id}/assets?name=${encoded}" -H "${AUTH}" -H "Content-Type: application/octet-stream" --data-binary "@${file}" -o /dev/null
-          done
+          GITCODE_USERNAME: ${{ secrets.GITCODE_USERNAME }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+        run: node .github/scripts/publish-gitcode.mjs release-files

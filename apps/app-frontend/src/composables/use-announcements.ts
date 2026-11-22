@@ -74,7 +74,7 @@ export function reloadAnnouncements(): Promise<void> {
 
 export function initializeAnnouncements(): Promise<void> {
 	if (initialize) return initialize
-	console.info('[announcements] 初始化公告：先读取本地缓存，再按 wemgit → GitHub published 获取公告。')
+	console.info('[announcements] 初始化公告：先读取本地缓存，再按 GitCode → GitHub published 获取公告。')
 	const token = ++session
 	initialize = (async () => {
 		const off = await listen('announcements-updated', () => {

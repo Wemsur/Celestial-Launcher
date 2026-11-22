@@ -7,17 +7,17 @@ use url::Url;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Source {
-	Wemgit,
+	Gitcode,
 	Github,
 }
 
 impl Source {
 	fn location(self) -> (&'static str, &'static str, &'static str) {
 		match self {
-			Self::Wemgit => (
-				"download.celestial.byside.top",
-				"/celestial/celestial-announcement/raw/branch/main/",
-				"https://download.celestial.byside.top/celestial/celestial-announcement/raw/branch/main/",
+			Self::Gitcode => (
+				"api.gitcode.com",
+				"/api/v5/repos/Wemsur/celestial-announcement/raw/",
+				"https://api.gitcode.com/api/v5/repos/Wemsur/celestial-announcement/raw/",
 			),
 			Self::Github => (
 				"raw.githubusercontent.com",
@@ -28,29 +28,33 @@ impl Source {
 	}
 
 	fn timeout(self) -> std::time::Duration {
-		std::time::Duration::from_secs(match self { Self::Wemgit => 4, Self::Github => 15 })
+		std::time::Duration::from_secs(match self { Self::Gitcode => 4, Self::Github => 15 })
 	}
 
 	pub(super) fn label(self) -> &'static str {
-		match self { Self::Wemgit => "wemgit", Self::Github => "GitHub published" }
+		match self { Self::Gitcode => "GitCode main", Self::Github => "GitHub published" }
 	}
 
 	pub(super) fn body_order(preferred: Option<Self>) -> [Self; 2] {
 		match preferred {
-			Some(Self::Github) => [Self::Github, Self::Wemgit],
-			_ => [Self::Wemgit, Self::Github],
+			Some(Self::Github) => [Self::Github, Self::Gitcode],
+			_ => [Self::Gitcode, Self::Github],
 		}
 	}
 }
 
-pub(super) const SOURCES: [Source; 2] = [Source::Wemgit, Source::Github];
+pub(super) const SOURCES: [Source; 2] = [Source::Gitcode, Source::Github];
 
 fn validate_url(url: &Url, source: Source) -> crate::Result<()> {
 	let (host, root, _) = source.location();
+	let valid_query = match source {
+		Source::Gitcode => url.query() == Some("ref=main"),
+		Source::Github => url.query().is_none(),
+	};
 	if url.scheme() != "https" || url.host_str() != Some(host)
 		|| url.port().is_some_and(|port| port != 443)
 		|| !url.username().is_empty() || url.password().is_some()
-		|| url.query().is_some() || url.fragment().is_some()
+		|| !valid_query || url.fragment().is_some()
 		|| !url.path().starts_with(root) || url.path().contains('%') || url.path().contains('\\')
 	{
 		return Err(input("Announcement URL is outside its public source"));
@@ -75,6 +79,7 @@ async fn fetch_inner(source: Source, path: &str, limit: usize) -> crate::Result<
 	}
 	let mut url = Url::parse(source.location().2).map_err(|_| input("Invalid announcement source"))?
 		.join(path).map_err(|_| input("Invalid announcement file path"))?;
+	if source == Source::Gitcode { url.set_query(Some("ref=main")); }
 	for _ in 0..=5 {
 		validate_url(&url, source)?;
 		tracing::info!(source = source.label(), url = %url, "[announcements] 发起公告 HTTP 请求");
@@ -111,9 +116,10 @@ mod tests {
 	#[test]
 	fn sources_are_isolated_and_only_read_published_data() {
 		for source in SOURCES {
-			let valid = Url::parse(&format!("{}index.json", source.location().2)).unwrap();
+			let mut valid = Url::parse(&format!("{}index.json", source.location().2)).unwrap();
+			if source == Source::Gitcode { valid.set_query(Some("ref=main")); }
 			assert!(validate_url(&valid, source).is_ok());
-			let other = match source { Source::Wemgit => Source::Github, Source::Github => Source::Wemgit };
+			let other = match source { Source::Gitcode => Source::Github, Source::Github => Source::Gitcode };
 			assert!(validate_url(&valid, other).is_err());
 		}
 		assert!(validate_url(&Url::parse("https://raw.githubusercontent.com/Wemsur/celestial-announcement/main/index.json").unwrap(), Source::Github).is_err());
@@ -121,26 +127,30 @@ mod tests {
 
 	#[test]
 	fn fallback_has_a_larger_cold_connection_budget() {
-		assert_eq!(Source::Wemgit.timeout(), std::time::Duration::from_secs(4));
+		assert_eq!(Source::Gitcode.timeout(), std::time::Duration::from_secs(4));
 		assert_eq!(Source::Github.timeout(), std::time::Duration::from_secs(15));
 	}
 
 	#[test]
 	fn body_prefers_the_accepted_index_source() {
-		assert_eq!(Source::body_order(None), [Source::Wemgit, Source::Github]);
-		assert_eq!(Source::body_order(Some(Source::Github)), [Source::Github, Source::Wemgit]);
+		assert_eq!(Source::body_order(None), [Source::Gitcode, Source::Github]);
+		assert_eq!(Source::body_order(Some(Source::Github)), [Source::Github, Source::Gitcode]);
 	}
 
 	#[test]
 	fn rejects_other_hosts_ports_and_paths() {
 		for url in [
-			"http://download.celestial.byside.top/celestial/celestial-announcement/raw/branch/main/index.json",
-			"https://download.celestial.byside.top:444/celestial/celestial-announcement/raw/branch/main/index.json",
-			"https://user:secret@download.celestial.byside.top/celestial/celestial-announcement/raw/branch/main/index.json",
-			"https://download.celestial.byside.top/other/index.json",
+			"http://api.gitcode.com/api/v5/repos/Wemsur/celestial-announcement/raw/index.json?ref=main",
+			"https://api.gitcode.com:444/api/v5/repos/Wemsur/celestial-announcement/raw/index.json?ref=main",
+			"https://user:secret@api.gitcode.com/api/v5/repos/Wemsur/celestial-announcement/raw/index.json?ref=main",
+			"https://api.gitcode.com/api/v5/repos/Wemsur/other/raw/index.json?ref=main",
+			"https://api.gitcode.com/api/v5/repos/Wemsur/celestial-announcement/raw/index.json?ref=other",
+			"https://api.gitcode.com/api/v5/repos/Wemsur/celestial-announcement/raw/index.json?ref=main&access_token=secret",
+			"https://api.gitcode.com/api/v5/repos/Wemsur/celestial-announcement/raw/index.json",
+			"https://download.celestial.byside.top/celestial/celestial-announcement/raw/branch/main/index.json",
 			"https://localhost/index.json",
 		] {
-			assert!(validate_url(&Url::parse(url).unwrap(), Source::Wemgit).is_err());
+			assert!(validate_url(&Url::parse(url).unwrap(), Source::Gitcode).is_err());
 		}
 	}
 }

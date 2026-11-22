@@ -163,7 +163,7 @@ async fn refresh_source(state: &State, source: network::Source) -> crate::Result
 }
 
 pub async fn refresh(state: &State) -> crate::Result<()> {
-	tracing::info!("[announcements] 开始后台公告刷新，依次尝试 wemgit 和 GitHub published");
+	tracing::info!("[announcements] 开始后台公告刷新，依次尝试 GitCode 和 GitHub published");
 	let result = tokio::time::timeout(std::time::Duration::from_secs(60), async {
 		let mut failures = Vec::new();
 		for source in network::SOURCES {

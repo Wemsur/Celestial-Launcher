@@ -29,21 +29,19 @@ interface UpdateSource {
     id: string
     /** 打印到控制台的可读名称。 */
     label: string
-    /** 该源的 "latest release" 接口。三家（Gitea/Forgejo/GitHub）返回的 JSON
-     *  字段兼容：tag_name、draft、prerelease、assets[].browser_download_url。 */
+    /** 该源的 latest release 接口，GitCode 响应在读取后归一化。 */
     latestUrl: string
 }
 
 const GITHUB_TEST_RELEASE_TAG = 'v3.5.0-beta.1'
 
-// 优先级：自部署 wemgit → git.gay → GitHub（最次）。
+// 优先级：GitCode → git.gay → GitHub。
 const UPDATE_SOURCES: UpdateSource[] = [
-    {
-        id: 'wemgit',
-        label: 'wemgit (download.celestial.byside.top)',
-        latestUrl:
-            'https://download.celestial.byside.top/api/v1/repos/celestial/Celestial-Launcher/releases/latest',
-    },
+	{
+		id: 'gitcode',
+		label: 'GitCode (Wemsur/Celestial-Launcher)',
+		latestUrl: 'https://api.gitcode.com/api/v5/repos/Wemsur/Celestial-Launcher/releases/latest?type=latest',
+	},
     {
         id: 'gitgay',
         label: 'git.gay',
@@ -55,6 +53,37 @@ const UPDATE_SOURCES: UpdateSource[] = [
         latestUrl: 'https://api.github.com/repos/Wemsur/Celestial-Launcher/releases/latest',
     },
 ]
+
+function normalizeRelease(raw: unknown, source: UpdateSource): Release {
+	if (!raw || typeof raw !== 'object') throw new Error('Release response must be an object')
+	const value = raw as Record<string, unknown>
+	if (value.error_code !== undefined || typeof value.tag_name !== 'string' || !value.tag_name.trim() || !Array.isArray(value.assets)) {
+		throw new Error('Release response has no valid tag/assets or contains an API error')
+	}
+	const gitcode = source.id === 'gitcode'
+	if (gitcode && !['pre', 'latest'].includes(String(value.release_status))) throw new Error('Unknown GitCode release status')
+	if (typeof value.prerelease !== 'boolean' || (!gitcode && typeof value.draft !== 'boolean')) throw new Error('Release visibility is not explicit')
+	const tag = value.tag_name
+	const assets = value.assets.map((entry: unknown): ReleaseAsset => {
+		if (!entry || typeof entry !== 'object') throw new Error('Invalid release asset')
+		const asset = entry as Record<string, unknown>
+		if (typeof asset.name !== 'string' || !asset.name || /[\\/\x00-\x1f\x7f]/.test(asset.name)) throw new Error('Invalid release asset name')
+		if (!gitcode && typeof asset.browser_download_url !== 'string') throw new Error('Release asset has no download URL')
+		return {
+			name: asset.name,
+			browser_download_url: gitcode
+				? `https://api.gitcode.com/api/v5/repos/Wemsur/Celestial-Launcher/releases/${encodeURIComponent(tag)}/attach_files/${encodeURIComponent(asset.name)}/download`
+				: asset.browser_download_url as string,
+			size: typeof asset.size === 'number' && Number.isSafeInteger(asset.size) && asset.size >= 0 ? asset.size : 0,
+		}
+	})
+	return {
+		tag_name: tag, body: typeof value.body === 'string' ? value.body : '',
+		draft: value.draft === true,
+		prerelease: value.prerelease || (gitcode && value.release_status !== 'latest') || tag.replace(/^v/, '').split('+')[0].includes('-'),
+		assets,
+	}
+}
 
 /** 语义化版本比较，返回 -1/0/1 */
 function compareVersions(a: string, b: string): number {
@@ -170,7 +199,7 @@ export async function checkForUpdate(): Promise<{
 
         let release: Release
         try {
-            release = JSON.parse(body)
+            release = normalizeRelease(JSON.parse(body), source)
         } catch (e) {
             const err = e as Error
             const reason = `响应不是合法 JSON（${err.message}），可能是错误页而非 API 响应`
@@ -208,6 +237,12 @@ export async function checkForUpdate(): Promise<{
         }
 
         const asset = selectAsset(release.assets, platform)
+		if (asset && source.id === 'gitcode' && !release.assets.some((entry) => entry.name === `${asset.name}.sig`)) {
+			const reason = `GitCode 安装包 ${asset.name} 缺少配对签名，尝试其他更新源`
+			console.warn(`${prefix}: ✗ 跳过 — ${reason}`)
+			trail.push({ source, outcome: reason })
+			continue
+		}
         if (!asset) {
             const reason = `版本 ${latestVersion} 有更新，但没有匹配当前平台 ${platform.label} 的安装包（assets: ${
                 release.assets?.map((a) => a.name).join(', ') || '空'
