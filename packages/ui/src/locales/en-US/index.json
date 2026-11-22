@@ -1,4 +1,6 @@
 {
+	"content.card.check-version": { "defaultMessage": "Check versions" },
+	"content.card.checking-version": { "defaultMessage": "Checking versions…" },
   "action.no-permission": {
     "defaultMessage": "You do not have permission."
   },

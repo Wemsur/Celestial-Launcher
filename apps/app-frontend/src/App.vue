@@ -85,6 +85,7 @@ import { RouterView, useRoute, useRouter } from 'vue-router'
 import CelestialLogo from '@/assets/celestial.svg?component'
 import AccountsCard from '@/components/ui/AccountsCard.vue'
 import AppActionBar from '@/components/ui/AppActionBar.vue'
+import AnnouncementButton from '@/components/ui/announcements/AnnouncementButton.vue'
 import AnnouncementModal from '@/components/ui/announcements/AnnouncementModal.vue'
 import Breadcrumbs from '@/components/ui/Breadcrumbs.vue'
 import ErrorModal from '@/components/ui/ErrorModal.vue'
@@ -2758,6 +2759,7 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			</div>
 			<section data-tauri-drag-region class="flex shrink-0 ml-auto items-center">
 				<div data-plugin-slot="topbar.right" class="flex items-center gap-1"></div>
+				<AnnouncementButton class="mr-3" />
 				<IconButton
 					v-if="canTranslateContent"
 					:type="translationEnabled ? 'base' : 'quiet'"

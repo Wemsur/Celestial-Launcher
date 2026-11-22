@@ -2,7 +2,7 @@ import MarkdownIt from 'markdown-it'
 import xss from 'xss'
 
 // @ts-expect-error xss types don't reflect CJS default export shape
-const { escapeAttrValue, FilterXSS, safeAttrValue, whiteList } = xss
+const { escapeAttrValue, FilterXSS, safeAttrValue, whiteList, parseAttr, friendlyAttrValue } = xss
 
 // Imgur is blocked in UK and Indonesia
 const imgurProxyCountries = new Set(['GB', 'ID'])
@@ -184,6 +184,55 @@ export const configuredXss = new FilterXSS({
 		return safeAttrValue(tag, name, value, cssFilter)
 	},
 })
+
+export interface ParsedHtmlImage {
+	end: number
+	src: string
+	alt: string
+	title?: string
+	width?: string
+	height?: string
+}
+
+/** Reads one bounded image tag as data; callers must validate its URL before rendering. */
+export function parseHtmlImage(input: string, start = 0, maximum = input.length): ParsedHtmlImage | null {
+	if (input.slice(start, start + 4).toLowerCase() !== '<img' || !/[\s/>]/.test(input.charAt(start + 4))) return null
+	const limit = Math.min(maximum, input.length, start + 8192)
+	let quote: string | null = null
+	let end = -1
+	for (let position = start + 4; position < limit; position++) {
+		const character = input[position]
+		if (quote) {
+			if (character === quote) quote = null
+		} else if (character === '"' || character === "'") {
+			quote = character
+		} else if (character === '<') {
+			return null
+		} else if (character === '>') {
+			end = position + 1
+			break
+		}
+	}
+	if (end < 0) return null
+	const image: ParsedHtmlImage = { end, src: '', alt: '' }
+	const seen = new Set<string>()
+	let duplicate = false
+	parseAttr(input.slice(start + 4, end - 1).replace(/\/\s*$/, ''), (name: string, rawValue: string) => {
+		if (!['src', 'alt', 'title', 'width', 'height'].includes(name)) return ''
+		if (seen.has(name)) duplicate = true
+		seen.add(name)
+		const value = friendlyAttrValue(rawValue).replaceAll('&amp;', '&')
+		if (name === 'src') image.src = value
+		else if (name === 'alt') image.alt = value
+		else if (name === 'title') image.title = value
+		else if (/^[1-9]\d{0,3}$/.test(value) && Number(value) <= 8192) {
+			if (name === 'width') image.width = value
+			if (name === 'height') image.height = value
+		}
+		return ''
+	})
+	return image.src && !duplicate ? image : null
+}
 
 export const md = (options = {}) => {
 	const md = new MarkdownIt('default', {

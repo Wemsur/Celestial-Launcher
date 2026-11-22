@@ -34,7 +34,7 @@ import ContentUpdaterModal from '../../../shared/content-tab/components/modals/c
 import ContentPageLayout from '../../../shared/content-tab/layout.vue'
 import type { ManagedContentData } from '../../../shared/content-tab/providers/content-manager'
 import { provideContentManager } from '../../../shared/content-tab/providers/content-manager'
-import type { ContentItem } from '../../../shared/content-tab/types'
+import type { ContentItem, ContentUpdaterModalHandle } from '../../../shared/content-tab/types'
 import { summarizeManagedContent } from '../../../shared/content-tab/utils/managed-content'
 
 type AddonWithUiState = Archon.Content.v1.Addon & { installing?: boolean }
@@ -663,7 +663,7 @@ async function handleBulkDisable(items: ContentItem[]) {
 
 const modpackUnlinkModal = ref<InstanceType<typeof ConfirmUnlinkModal>>()
 const modpackContentModal = ref<InstanceType<typeof ManagedContentModal>>()
-const contentUpdaterModal = ref<InstanceType<typeof ContentUpdaterModal>>()
+const contentUpdaterModal = ref<ContentUpdaterModalHandle>()
 
 const updatingProject = ref<ContentItem | null>(null)
 const updatingModpack = ref(false)

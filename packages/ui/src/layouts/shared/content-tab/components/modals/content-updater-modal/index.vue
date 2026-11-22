@@ -52,6 +52,7 @@
 								<div class="flex items-center justify-between w-full gap-2">
 									<div class="flex items-center gap-2 min-w-0">
 										<VersionChannelIndicator
+											v-if="version.version_type"
 											:channel="version.version_type"
 											size="sm"
 											class="shrink-0"
@@ -129,6 +130,7 @@
 										{{ selectedVersion.version_number }}
 									</span>
 									<span
+										v-if="selectedVersion.version_type"
 										class="px-2.5 py-0.5 rounded-full text-sm font-medium flex items-center flex-shrink-0 border border-solid"
 										:class="getVersionTypeBadgeClasses(selectedVersion)"
 									>
@@ -268,8 +270,8 @@
 	/>
 </template>
 
-<script setup lang="ts">
-import type { Labrinth } from '@modrinth/api-client'
+<script setup lang="ts" generic="T extends ContentUpdaterVersion">
+import type { ContentUpdaterVersion } from '../../../types'
 import {
 	CircleAlertIcon,
 	DownloadIcon,
@@ -288,7 +290,7 @@ import {
 	renderHighlightedString,
 } from '@modrinth/utils'
 import { useTimeoutFn } from '@vueuse/core'
-import { computed, ref, toRef } from 'vue'
+import { computed, ref, shallowRef, toRef } from 'vue'
 
 import Avatar from '#ui/components/base/Avatar.vue'
 import { Button } from '#ui/components/base/buttons'
@@ -416,7 +418,7 @@ const messages = defineMessages({
 
 const props = withDefaults(
 	defineProps<{
-		versions: Labrinth.Versions.v2.Version[]
+		versions: T[]
 		currentGameVersion: string
 		currentLoader: string
 		currentVersionId: string
@@ -468,11 +470,11 @@ const defaultHeader = computed(() => {
 })
 
 const emit = defineEmits<{
-	update: [version: Labrinth.Versions.v2.Version, event: MouseEvent]
+	update: [version: T, event: MouseEvent]
 	cancel: []
 	/** Emitted when user selects a version, so parent can fetch full version data with changelog */
-	versionSelect: [version: Labrinth.Versions.v2.Version]
-	versionHover: [version: Labrinth.Versions.v2.Version]
+	versionSelect: [version: T]
+	versionHover: [version: T]
 }>()
 
 const modal = ref<InstanceType<typeof NewModal>>()
@@ -480,8 +482,8 @@ const incompatibleUpdateModal = ref<InstanceType<typeof ConfirmModal>>()
 const searchQuery = ref('')
 const hideIncompatibleState = ref(true)
 const switchMode = ref(false)
-const pendingIncompatibleUpdate = ref<{
-	version: Labrinth.Versions.v2.Version
+const pendingIncompatibleUpdate = shallowRef<{
+	version: T
 	event: MouseEvent
 } | null>(null)
 const suppressCancelOnHide = ref(false)
@@ -494,7 +496,8 @@ const { selectedVersion, pinnedInitialVersionId, selectVersion, resetInitialSele
 		debug,
 	})
 
-function isVersionCompatible(version: Labrinth.Versions.v2.Version): boolean {
+function isVersionCompatible(version: T): boolean {
+	if (version.compatibility_known === false) return false
 	const compatible = versionMatchesCompatibilityTarget(version, {
 		gameVersion: props.currentGameVersion,
 		loader: props.currentLoader,
@@ -521,7 +524,7 @@ const showUpdateWarning = computed(() => !isModpack.value)
 const isDowngrade = computed(() => {
 	if (!selectedVersion.value || !currentVersion.value) return false
 	return (
-		new Date(selectedVersion.value.date_published) < new Date(currentVersion.value.date_published)
+		new Date(selectedVersion.value.date_published ?? '') < new Date(currentVersion.value.date_published ?? '')
 	)
 })
 
@@ -538,22 +541,23 @@ const filteredVersions = useContentUpdaterFiltering({
 	debug,
 })
 
-function shouldShowBadge(version: Labrinth.Versions.v2.Version): boolean {
+function shouldShowBadge(version: T): boolean {
 	if (incompatibilityWarningMode.value) return false
-	return version.id === props.currentVersionId || shouldShowIncompatibleBadge(version)
+	return version.id === props.currentVersionId || version.compatibility_known === false || shouldShowIncompatibleBadge(version)
 }
 
-function shouldShowIncompatibleBadge(version: Labrinth.Versions.v2.Version): boolean {
-	return version.id !== props.currentVersionId && !isModpack.value && !isVersionCompatible(version)
+function shouldShowIncompatibleBadge(version: T): boolean {
+	return version.compatibility_known !== false && version.id !== props.currentVersionId && !isModpack.value && !isVersionCompatible(version)
 }
 
-function getBadgeLabel(version: Labrinth.Versions.v2.Version): string {
+function getBadgeLabel(version: T): string {
 	if (version.id === props.currentVersionId) return formatMessage(messages.currentBadge)
+	if (version.compatibility_known === false) return formatMessage(commonMessages.unknownLabel)
 	if (shouldShowIncompatibleBadge(version)) return formatMessage(messages.incompatibleBadge)
 	return ''
 }
 
-function getBadgeClasses(version: Labrinth.Versions.v2.Version): string {
+function getBadgeClasses(version: T): string {
 	// Current badge
 	if (version.id === props.currentVersionId) {
 		return 'bg-surface-4 border-surface-5 text-primary'
@@ -576,7 +580,7 @@ function getBadgeClasses(version: Labrinth.Versions.v2.Version): string {
 	}
 }
 
-function getVersionTypeBadgeClasses(version: Labrinth.Versions.v2.Version): string {
+function getVersionTypeBadgeClasses(version: T): string {
 	switch (version.version_type) {
 		case 'release':
 			return 'bg-highlight-green border-green text-green'
@@ -589,7 +593,8 @@ function getVersionTypeBadgeClasses(version: Labrinth.Versions.v2.Version): stri
 	}
 }
 
-function formatLongDate(dateString: string): string {
+function formatLongDate(dateString?: string | null): string {
+	if (!dateString || !Number.isFinite(Date.parse(dateString))) return formatMessage(commonMessages.unknownLabel)
 	return new Date(dateString).toLocaleDateString('en-US', {
 		year: 'numeric',
 		month: 'long',
@@ -597,13 +602,14 @@ function formatLongDate(dateString: string): string {
 	})
 }
 
-function formatLoaderGameVersion(version: Labrinth.Versions.v2.Version): string {
+function formatLoaderGameVersion(version: T): string {
+	if (version.compatibility_known === false) return formatMessage(commonMessages.unknownLabel)
 	const loader = capitalizeString(version.loaders[0] || '')
 	const gameVersions = formatGameVersions(version)
 	return [loader, gameVersions].filter(Boolean).join(' ')
 }
 
-function formatGameVersions(version: Labrinth.Versions.v2.Version): string {
+function formatGameVersions(version: T): string {
 	if (!incompatibilityWarningMode.value) {
 		return version.game_versions[0] || ''
 	}
@@ -617,7 +623,7 @@ function formatGameVersions(version: Labrinth.Versions.v2.Version): string {
 
 let prefetchTimeout: ReturnType<typeof useTimeoutFn> | null = null
 const HOVER_DURATION_TO_PREFETCH_MS = 500
-function handleVersionMouseEnter(version: Labrinth.Versions.v2.Version) {
+function handleVersionMouseEnter(version: T) {
 	prefetchTimeout = useTimeoutFn(
 		() => emit('versionHover', version),
 		HOVER_DURATION_TO_PREFETCH_MS,
@@ -630,7 +636,7 @@ function handleVersionMouseLeave() {
 	if (prefetchTimeout) prefetchTimeout.stop()
 }
 
-function handleVersionSelect(version: Labrinth.Versions.v2.Version) {
+function handleVersionSelect(version: T) {
 	if (prefetchTimeout) prefetchTimeout.stop()
 	selectVersion(version)
 }
@@ -676,7 +682,7 @@ function confirmIncompatibleUpdate() {
 	if (pendingUpdate) {
 		const current = currentVersion.value
 		const isPendingDowngrade = current
-			? new Date(pendingUpdate.version.date_published) < new Date(current.date_published)
+			? new Date(pendingUpdate.version.date_published ?? '') < new Date(current.date_published ?? '')
 			: false
 		const changesGameVersion = versionChangesGameVersion(
 			pendingUpdate.version,
@@ -692,7 +698,7 @@ function confirmIncompatibleUpdate() {
 }
 
 function emitUpdate(
-	version: Labrinth.Versions.v2.Version,
+	version: T,
 	event: MouseEvent,
 	options: { hide?: boolean } = {},
 ) {

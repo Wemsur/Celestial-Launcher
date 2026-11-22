@@ -1,4 +1,6 @@
 {
+	"content.card.check-version": { "defaultMessage": "检测版本" },
+	"content.card.checking-version": { "defaultMessage": "正在检测版本…" },
   "action.no-permission": {
     "defaultMessage": "你没有操作权限。"
   },

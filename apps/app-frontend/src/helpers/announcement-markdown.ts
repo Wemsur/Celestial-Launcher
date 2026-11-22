@@ -1,4 +1,4 @@
-import { configuredXss, md } from '@modrinth/utils/parse'
+import { configuredXss, md, parseHtmlImage } from '@modrinth/utils/parse'
 
 const IMAGE_BASE = 'https://raw.githubusercontent.com/Wemsur/celestial-announcement/main/'
 const DOCUMENT_BASE = 'https://github.com/Wemsur/celestial-announcement/blob/main/'
@@ -18,6 +18,26 @@ export function announcementLink(raw: string | null, image = false): string | nu
 }
 
 const parser = md({ html: false })
+parser.inline.ruler.before('html_inline', 'announcement_image_html', (state, silent) => {
+	const image = parseHtmlImage(state.src, state.pos, state.posMax)
+	if (!image) return false
+	const src = announcementLink(image.src, true)
+	if (!src) return false
+	if (!silent) {
+		const token = state.push('image', 'img', 0)
+		token.attrSet('src', src)
+		token.attrSet('alt', image.alt)
+		if (image.title) token.attrSet('title', image.title)
+		if (image.width) token.attrSet('width', image.width)
+		if (image.height) token.attrSet('height', image.height)
+		token.content = image.alt
+		const text = new state.Token('text', '', 0)
+		text.content = image.alt
+		token.children = [text]
+	}
+	state.pos = image.end
+	return true
+})
 const imageRenderer = parser.renderer.rules.image
 const linkRenderer = parser.renderer.rules.link_open
 parser.renderer.rules.image = (tokens, index, options, env, self) => {

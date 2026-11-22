@@ -35,6 +35,7 @@ import ConfirmReinstallModal from '../content-tab/components/modals/ConfirmReins
 import ConfirmRepairModal from '../content-tab/components/modals/ConfirmRepairModal.vue'
 import ConfirmUnlinkModal from '../content-tab/components/modals/ConfirmUnlinkModal.vue'
 import ContentUpdaterModal from '../content-tab/components/modals/content-updater-modal/index.vue'
+import type { ContentUpdaterModalHandle } from '../content-tab/types'
 import ContentDiffModal from './components/ContentDiffModal.vue'
 import IncompatibleContentModal from './components/IncompatibleContentModal.vue'
 import { useInstallationForm } from './composables'
@@ -53,7 +54,7 @@ const confirmLeaveModal = ref<InstanceType<typeof ConfirmLeaveModal>>()
 const repairModal = ref<InstanceType<typeof ConfirmRepairModal>>()
 const reinstallModal = ref<InstanceType<typeof ConfirmReinstallModal>>()
 const unlinkModal = ref<InstanceType<typeof ConfirmUnlinkModal>>()
-const contentUpdaterModal = ref<InstanceType<typeof ContentUpdaterModal> | null>()
+const contentUpdaterModal = ref<ContentUpdaterModalHandle | null>()
 
 const contentDiffModal = ref<InstanceType<typeof ContentDiffModal>>()
 const incompatibleContentModal = ref<InstanceType<typeof IncompatibleContentModal>>()

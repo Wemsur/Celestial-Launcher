@@ -19,7 +19,8 @@ import {
 	TrashIcon,
 	UserIcon,
 } from '@modrinth/assets'
-import { useSessionStorage } from '@vueuse/core'
+import { useElementSize, useSessionStorage } from '@vueuse/core'
+import { Dropdown as VDropdown } from 'floating-vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import Avatar from '#ui/components/base/Avatar.vue'
@@ -818,6 +819,12 @@ async function bulkDisable() {
 	await promptDisableItems(items)
 }
 
+function handleCheckVersionById(id: string) {
+	if (ctx.isBusy.value || isBulkOperating.value) return
+	const item = ctx.items.value.find((item) => getItemId(item) === id)
+	if (item && !item.installing) void ctx.checkVersion?.(item)
+}
+
 function handleUpdateById(id: string) {
 	const item = ctx.items.value.find((item) => getItemId(item) === id)
 	if (!item || item.locked) return
@@ -839,6 +846,10 @@ const pendingBulkUpdateAll = ref(false)
 const hasBulkUpdateSupport = computed(
 	() => !!(ctx.bulkUpdateAll || ctx.bulkUpdateItem || ctx.bulkUpdateItems),
 )
+
+const showUpdateAll = computed(() => hasBulkUpdateSupport.value && hasOutdatedProjects.value)
+const updateAllTrigger = ref<HTMLElement | null>(null)
+const { width: updateAllWidth } = useElementSize(updateAllTrigger)
 
 function promptUpdateAll(event?: MouseEvent) {
 	if (!hasBulkUpdateSupport.value) return
@@ -1220,20 +1231,37 @@ const confirmUnlinkModal = ref<InstanceType<typeof ConfirmUnlinkModal>>()
 									Platform-specific controls for the toolbar (the app puts its
 									content-source panel button here). Empty on the web.
 								-->
-								<slot name="toolbar-actions" />
+								<slot name="toolbar-actions" :showUpdateAll="showUpdateAll" />
 
-								<Button
-									v-if="hasBulkUpdateSupport && hasOutdatedProjects"
-									v-tooltip="formatMessage(messages.updateAll)"
-									type="quiet"
-									color="green"
-									:disabled="isBulkOperating"
-									class="!text-sm !font-medium hover:!bg-green focus-visible:!bg-green hover:!text-[var(--color-accent-contrast)] focus-visible:!text-[var(--color-accent-contrast)]"
-									@click="promptUpdateAll"
+								<VDropdown
+									v-if="showUpdateAll"
+									v-tooltip="$slots['update-all-secondary'] ? undefined : formatMessage(messages.updateAll)"
+									:disabled="!$slots['update-all-secondary']"
+									:triggers="['hover', 'focus']"
+									:popper-triggers="['hover', 'focus']"
+									popper-class="content-update-secondary"
+									:delay="{ show: 80, hide: 160 }"
+									:distance="4"
+									placement="bottom-start"
 								>
-									<DownloadIcon />
-									{{ formatMessage(messages.updateAll) }}
-								</Button>
+									<span ref="updateAllTrigger" class="inline-flex">
+										<Button
+											type="quiet"
+											color="green"
+											:disabled="isBulkOperating"
+											class="!text-sm !font-medium hover:!bg-green focus-visible:!bg-green hover:!text-[var(--color-accent-contrast)] focus-visible:!text-[var(--color-accent-contrast)]"
+											@click="promptUpdateAll"
+										>
+											<DownloadIcon />
+											{{ formatMessage(messages.updateAll) }}
+										</Button>
+									</span>
+									<template #popper="{ hide }">
+										<div :style="{ width: `${updateAllWidth}px` }">
+											<slot name="update-all-secondary" :hide="hide" />
+										</div>
+									</template>
+								</VDropdown>
 
 								<Button
 									type="quiet"
@@ -1256,6 +1284,7 @@ const confirmUnlinkModal = ref<InstanceType<typeof ConfirmUnlinkModal>>()
 							@update:enabled="handleToggleEnabledById"
 							@delete="handleDeleteById"
 							@update="handleUpdateById"
+							@check-version="handleCheckVersionById"
 							@switch-version="handleSwitchVersionById"
 						>
 							<template #empty>
@@ -1474,3 +1503,13 @@ const confirmUnlinkModal = ref<InstanceType<typeof ConfirmUnlinkModal>>()
 		<slot name="modals" />
 	</div>
 </template>
+
+<style scoped>
+:global(.v-popper__popper.content-update-secondary .v-popper__inner) {
+	padding: 0 !important;
+}
+
+:global(.v-popper__popper.content-update-secondary .v-popper__arrow-container) {
+	display: none;
+}
+</style>

@@ -1,22 +1,24 @@
-import type { Labrinth } from '@modrinth/api-client'
 import type { Ref } from 'vue'
-import { ref, watch } from 'vue'
+import { ref, shallowRef, watch } from 'vue'
 
-type UseContentUpdaterSelectionOptions = {
-	versions: Readonly<Ref<Labrinth.Versions.v2.Version[]>>
+import type { ContentUpdaterVersion } from '../../../types'
+
+type UseContentUpdaterSelectionOptions<T extends ContentUpdaterVersion> = {
+	versions: Readonly<Ref<T[]>>
 	currentVersionId: Readonly<Ref<string>>
-	onVersionSelect: (version: Labrinth.Versions.v2.Version) => void
+	onVersionSelect: (version: T) => void
 	debug: (message: string, data?: Record<string, unknown>) => void
 }
 
-export function useContentUpdaterSelection({
+export function useContentUpdaterSelection<T extends ContentUpdaterVersion>({
 	versions,
 	currentVersionId,
 	onVersionSelect,
 	debug,
-}: UseContentUpdaterSelectionOptions) {
-	const selectedVersion = ref<Labrinth.Versions.v2.Version | null>(null)
+}: UseContentUpdaterSelectionOptions<T>) {
+	const selectedVersion = shallowRef<T | null>(null)
 	const pendingInitialVersionId = ref<string | undefined>(undefined)
+	const waitingForVersions = ref(false)
 	const pinnedInitialVersionId = ref<string | undefined>(undefined)
 
 	watch(
@@ -29,7 +31,7 @@ export function useContentUpdaterSelection({
 				}
 			}
 
-			if (newVersions.length > 0 && !selectedVersion.value && pendingInitialVersionId.value) {
+			if (newVersions.length > 0 && !selectedVersion.value && waitingForVersions.value) {
 				const pendingFound = newVersions.find((v) => v.id === pendingInitialVersionId.value)
 				debug('versions watcher: initial selection', {
 					pendingInitialVersionId: pendingInitialVersionId.value,
@@ -49,18 +51,20 @@ export function useContentUpdaterSelection({
 					onVersionSelect(version)
 				}
 				pendingInitialVersionId.value = undefined
+				waitingForVersions.value = false
 			}
 		},
 		{ deep: true },
 	)
 
-	function selectVersion(version: Labrinth.Versions.v2.Version) {
+	function selectVersion(version: T) {
 		selectedVersion.value = version
 		onVersionSelect(version)
 	}
 
 	function resetInitialSelection(initialVersionId?: string) {
 		pinnedInitialVersionId.value = initialVersionId
+		waitingForVersions.value = versions.value.length === 0
 
 		if (versions.value.length > 0) {
 			selectedVersion.value = initialVersionId

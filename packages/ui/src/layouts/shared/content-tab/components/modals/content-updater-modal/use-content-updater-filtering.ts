@@ -1,21 +1,21 @@
-import type { Labrinth } from '@modrinth/api-client'
+import type { ContentUpdaterVersion } from '../../../types'
 import type { ComputedRef, Ref } from 'vue'
 import { computed } from 'vue'
 
-type UseContentUpdaterFilteringOptions = {
-	versions: Readonly<Ref<Labrinth.Versions.v2.Version[]>>
+type UseContentUpdaterFilteringOptions<T extends ContentUpdaterVersion> = {
+	versions: Readonly<Ref<T[]>>
 	searchQuery: Ref<string>
 	isModpack: ComputedRef<boolean>
 	incompatibilityWarningMode: ComputedRef<boolean>
 	hideIncompatibleState: Ref<boolean>
-	selectedVersion: Ref<Labrinth.Versions.v2.Version | null>
+	selectedVersion: Ref<T | null>
 	pinnedInitialVersionId: Ref<string | undefined>
 	currentVersionId: Readonly<Ref<string>>
-	isVersionCompatible: (version: Labrinth.Versions.v2.Version) => boolean
+	isVersionCompatible: (version: T) => boolean
 	debug: (message: string, data?: Record<string, unknown>) => void
 }
 
-export function useContentUpdaterFiltering({
+export function useContentUpdaterFiltering<T extends ContentUpdaterVersion>({
 	versions: sourceVersions,
 	searchQuery,
 	isModpack,
@@ -26,7 +26,7 @@ export function useContentUpdaterFiltering({
 	currentVersionId,
 	isVersionCompatible,
 	debug,
-}: UseContentUpdaterFilteringOptions) {
+}: UseContentUpdaterFilteringOptions<T>) {
 	return computed(() => {
 		let versions = [...sourceVersions.value]
 
@@ -47,6 +47,7 @@ export function useContentUpdaterFiltering({
 		if (!incompatibilityWarningMode.value && !isModpack.value && hideIncompatibleState.value) {
 			versions = versions.filter(
 				(version) =>
+					version.compatibility_known === false ||
 					version.id === currentVersionId.value ||
 					version.id === selectedVersion.value?.id ||
 					version.id === pinnedInitialVersionId.value ||

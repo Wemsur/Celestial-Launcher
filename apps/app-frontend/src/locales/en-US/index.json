@@ -1,4 +1,10 @@
 {
+	"app.source-content.description": { "message": "Content from sources not integrated with automatic launcher updates. Manage their versions here." },
+	"app.source-content.empty": { "message": "No content from sources outside automatic launcher updates is tracked in this instance." },
+	"app.source-content.no-versions": { "message": "This source does not provide a version list." },
+	"app.source-content.unloaded": { "message": "This content source is not loaded." },
+	"app.source-content.missing-answer": { "message": "The source returned no update result for this project." },
+	"app.source-content.empty-versions": { "message": "The source returned no selectable versions." },
 	"app.announcements.title": { "message": "Announcements" },
 	"app.announcements.current": { "message": "Current announcement" },
 	"app.announcements.history": { "message": "Announcement history" },

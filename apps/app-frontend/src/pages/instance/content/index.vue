@@ -7,14 +7,21 @@
 	-->
 	<ReadyTransition :pending="loading" :duration="0">
 		<ContentPageLayout :highlighted-item-id="highlightedItemId">
-			<template #toolbar-actions>
+			<template #toolbar-actions="{ showUpdateAll }">
 				<Button
+					v-if="!showUpdateAll"
 					type="quiet"
 					class="!text-sm !font-medium"
 					@click="sourceContentModal?.show()"
 				>
 					<CompassIcon />
 					{{ formatMessage(messages.sourceContentButton) }}
+				</Button>
+			</template>
+			<template #update-all-secondary="{ hide }">
+				<Button type="quiet" class="w-full !text-sm !font-medium !px-2" @click="hide(); sourceContentModal?.show()">
+					<CompassIcon class="shrink-0" />
+					<span class="truncate">{{ formatMessage(messages.sourceContentButton) }}</span>
 				</Button>
 			</template>
 			<template #modals>
@@ -86,20 +93,21 @@
 					:current-version-id="
 						updatingModpack
 							? (instance.link?.version_id ?? '')
-							: (updatingProject?.version?.id ?? '')
+							: updatingSource ? (updatingSource.record.version_id ?? '') : (updatingProject?.version?.id ?? '')
 					"
 					:is-app="true"
 					:project-type="updatingModpack ? 'modpack' : updatingProject?.project_type"
 					:project-icon-url="
-						updatingModpack ? displayedModpackProject?.icon_url : updatingProject?.project?.icon_url
+						updatingModpack ? displayedModpackProject?.icon_url : (updatingSource?.record.icon_url ?? updatingProject?.project?.icon_url ?? undefined)
 					"
 					:project-name="
 						updatingModpack
 							? (displayedModpackProject?.title ?? formatMessage(commonMessages.modpackLabel))
-							: (updatingProject?.project?.title ?? updatingProject?.file_name)
+							: (updatingSource?.record.name ?? updatingProject?.project?.title ?? updatingProject?.file_name)
 					"
 					:loading="loadingVersions"
 					:loading-changelog="loadingChangelog"
+					:action-disabled="Boolean(updatingProject && (!canChangeContentVersion(updatingProject) || isBulkOperating || isInstanceBusy))"
 					@update="handleModalUpdate"
 					@cancel="resetUpdateState"
 					@version-select="handleVersionSelect"
@@ -130,6 +138,9 @@ import {
 	type ContentItem,
 	type ContentOwner,
 	ContentUpdaterModal,
+	type ContentUpdaterModalHandle,
+	type ContentUpdaterVersion,
+	type ContentVersionAction,
 	dedupeManagedContentItems,
 	defineMessages,
 	injectNotificationManager,
@@ -172,10 +183,11 @@ import {
 	type SourceUpdateAnswers,
 	sourceUpdateSupport,
 } from '@/content-sources/installed-content'
-import { installSourceContent, listInstalledSourceContent } from '@/content-sources/ipc'
+import { installSourceContent, listInstalledSourceContent, type SourceContentRecord } from '@/content-sources/ipc'
+import { inspectSourceVersions, loadSourceVersions, sourcePickerVersion, ManualVersionError, manualVersionMessages } from '@/content-sources/manual-versions'
 import { canInstall, installViaOpenDownload } from '@/content-sources/open-download'
 import { sourceProvider } from '@/content-sources/registry'
-import type { ContentType } from '@/content-sources/types'
+import type { ContentType, ContentVersion } from '@/content-sources/types'
 import { trackEvent } from '@/helpers/analytics'
 import { get_project_versions, get_version, get_version_many } from '@/helpers/cache.js'
 import {
@@ -372,6 +384,68 @@ const projects = ref<ContentItem[]>([])
 const sourceRecords = ref<SourceRecordsByPath>(new Map())
 /** Update answers from the sources, keyed by install-record id. */
 const sourceUpdates = ref<SourceUpdateAnswers>({})
+type ManualState = {
+	identity: string
+	action: ContentVersionAction
+	latestVersionId?: string
+	versions: ContentVersion[]
+	error?: string
+}
+const manualVersions = ref<Record<string, ManualState>>({})
+let manualEpoch = 0
+let pageDisposed = false
+
+function sourceIdentity(record: SourceContentRecord): string {
+	return JSON.stringify([record.source_id, record.project_id, record.version_id, record.content_type,
+		record.install_rule, record.relative_path.replace(/\.disabled$/, '')])
+}
+
+function manualRecord(item: ContentItem): SourceContentRecord | undefined {
+	const record = recordOf(item)
+	return record && canTrackUpdates(record) && !sourceUpdateSupport(record).canApplyAutomatically ? record : undefined
+}
+
+function manualState(record: SourceContentRecord): ManualState | undefined {
+	const state = manualVersions.value[record.id]
+	return state?.identity === sourceIdentity(record) ? state : undefined
+}
+
+function resetManualVersions(): void {
+	manualEpoch++
+	manualVersions.value = {}
+}
+
+function manualErrorMessage(error: unknown): string {
+	return error instanceof ManualVersionError ? formatMessage(manualVersionMessages[error.reason])
+		: error instanceof Error ? error.message : String(error)
+}
+
+async function checkManualVersion(item: ContentItem): Promise<void> {
+	const record = manualRecord(item)
+	if (!record || isInstanceBusy.value || isBulkOperating.value || item.installing || hasContentOperation(item)
+		|| manualState(record)?.action === 'checking') return
+	const epoch = manualEpoch
+	const instanceId = instance.value.id
+	const identity = sourceIdentity(record)
+	manualVersions.value[record.id] = { identity, action: 'checking', versions: [] }
+	try {
+		const result = await inspectSourceVersions(record, { gameVersion: instance.value.game_version, loader: instance.value.loader })
+		if (pageDisposed || epoch !== manualEpoch || instanceId !== instance.value.id
+			|| !recordOf(item) || sourceIdentity(recordOf(item)!) !== identity
+			|| !projects.value.some((project) => recordOf(project)?.id === record.id)) return
+		manualVersions.value[record.id] = { identity, ...result }
+	} catch (error) {
+		if (pageDisposed || epoch !== manualEpoch || instanceId !== instance.value.id
+			|| !recordOf(item) || sourceIdentity(recordOf(item)!) !== identity
+			|| !projects.value.some((project) => recordOf(project)?.id === record.id)) return
+		const message = manualErrorMessage(error)
+		manualVersions.value[record.id] = { identity, action: 'check', versions: [], error: message }
+		handleError(new Error(message))
+	}
+}
+
+watch(() => [instance.value.id, instance.value.game_version, instance.value.loader], resetManualVersions)
+onUnmounted(() => { pageDisposed = true; manualEpoch++ })
 
 function recordOf(item: ContentItem) {
 	return sourceRecordFor(sourceRecords.value, item.file_path)
@@ -383,12 +457,18 @@ async function loadSourceRecords(): Promise<SourceRecordsByPath> {
 	try {
 		const records = await listInstalledSourceContent(instanceId)
 		const byPath = indexSourceRecords(records)
+		if (instanceId !== instance.value.id || pageDisposed) return byPath
+		const identities = new Map(records.map((record) => [record.id, sourceIdentity(record)]))
+		for (const [id, state] of Object.entries(manualVersions.value)) {
+			if (identities.get(id) !== state.identity) delete manualVersions.value[id]
+		}
 		sourceRecords.value = byPath
 		return byPath
 	} catch (error) {
 		// Not knowing is the same as no source content; the file is still listed,
 		// just without its origin.
 		debug('could not load source install records', { error })
+		if (instanceId !== instance.value.id || pageDisposed) return new Map()
 		sourceRecords.value = new Map()
 		return new Map()
 	}
@@ -412,7 +492,7 @@ async function refreshSourceUpdates(force = false) {
 	if (!force && Date.now() - lastSourceUpdateCheck < SOURCE_UPDATE_CHECK_INTERVAL) return
 	lastSourceUpdateCheck = Date.now()
 
-	const records = [...new Set(sourceRecords.value.values())]
+	const records = [...new Set(sourceRecords.value.values())].filter((record) => sourceUpdateSupport(record).canApplyAutomatically)
 	if (records.length === 0) {
 		sourceUpdates.value = {}
 		return
@@ -432,7 +512,9 @@ function sourceUpdateVersionId(item: ContentItem): string | null {
 
 /** The launcher's update badge, extended to files a content source installed. */
 function hasSourceUpdate(item: ContentItem): boolean {
-	return canUpdateProject(item) || Boolean(sourceUpdateVersionId(item))
+	const record = recordOf(item)
+	if (record) return sourceUpdateSupport(record).canApplyAutomatically && Boolean(sourceUpdateVersionId(item))
+	return canUpdateProject(item)
 }
 
 const installingBuffer = ref<ContentItem[]>([])
@@ -534,7 +616,7 @@ const isPackLocked = computed(
 
 const shareModal = ref<InstanceType<typeof ShareModalWrapper> | null>()
 const exportModal = ref(null)
-const contentUpdaterModal = ref<InstanceType<typeof ContentUpdaterModal> | null>()
+const contentUpdaterModal = ref<ContentUpdaterModalHandle | null>()
 const managedContentModal = ref<InstanceType<typeof ManagedContentModal> | null>()
 const modpackUpdateConfirmModal = ref<InstanceType<typeof ConfirmModpackUpdateModal> | null>()
 const sharedDisableConfirmModal = ref<InstanceType<typeof ConfirmDisableModal> | null>()
@@ -698,11 +780,12 @@ const managedContentModalHeader = computed(() =>
 
 // TODO: Extract content operation and updater modal state into composables; this page currently owns file mutations, dependency installs, busy flags, and version selection flow.
 const updatingProject = ref<ContentItem | null>(null)
-const updatingProjectVersions = ref<Labrinth.Versions.v2.Version[]>([])
+const updatingProjectVersions = ref<ContentUpdaterVersion[]>([])
+const updatingSource = ref<{ instanceId: string; record: SourceContentRecord } | null>(null)
 const loadingVersions = ref(false)
 const loadingChangelog = ref(false)
 const updatingModpack = ref(false)
-const pendingModpackUpdateVersion = ref<Labrinth.Versions.v2.Version | null>(null)
+const pendingModpackUpdateVersion = ref<ContentUpdaterVersion | null>(null)
 const isModpackUpdateDowngrade = ref(false)
 const activeContentOperationKeys = ref(new Set<string>())
 
@@ -833,14 +916,14 @@ function isActiveUpdateRequest(requestId: number) {
 	return activeUpdateRequestId.value === requestId
 }
 
-function sortVersionsByPublishedDate(versions: Labrinth.Versions.v2.Version[]) {
+function sortVersionsByPublishedDate(versions: ContentUpdaterVersion[]) {
 	return [...versions].sort(
-		(a, b) => new Date(b.date_published).getTime() - new Date(a.date_published).getTime(),
+		(a, b) => new Date(b.date_published ?? '').getTime() - new Date(a.date_published ?? '').getTime(),
 	)
 }
 
 function mergeVersionIntoList(
-	versions: Labrinth.Versions.v2.Version[],
+	versions: ContentUpdaterVersion[],
 	version: Labrinth.Versions.v2.Version,
 ) {
 	const existingIndex = versions.findIndex((v) => v.id === version.id)
@@ -1258,6 +1341,7 @@ async function updateAllSourceContent(onProgress?: (status: BulkOperationStatus)
  * file, so this cannot run silently; the caller decides whether to allow it.
  */
 async function updateSourceContent(item: ContentItem, versionId: string) {
+	const targetInstanceId = instance.value.id
 	const record = recordOf(item)
 	if (!record) throw new Error(formatMessage(messages.sourceNotTracked))
 	const provider = sourceProvider(record.source_id)
@@ -1279,7 +1363,7 @@ async function updateSourceContent(item: ContentItem, versionId: string) {
 
 	if (provider.resolveDownload) {
 		await installSourceContent(
-			instance.value.id,
+			targetInstanceId,
 			record.content_type,
 			await provider.resolveDownload(record.project_id, versionId),
 			metadata,
@@ -1291,25 +1375,27 @@ async function updateSourceContent(item: ContentItem, versionId: string) {
 			projectId: record.project_id,
 			contentType: record.content_type as ContentType,
 			versionId,
-			instanceId: instance.value.id,
+			instanceId: targetInstanceId,
 			meta: metadata,
 		})
 	}
 }
 
 async function updateProject(mod: ContentItem) {
-	if (mod.locked || !canMutateContent(mod)) return
+	if (mod.locked || !canMutateContent(mod) || isInstanceBusy.value) return
 	const record = recordOf(mod)
-	const sourceVersionId = sourceUpdateVersionId(mod)
+	const sourceVersionId = record ? manualState(record)?.latestVersionId ?? sourceUpdateVersionId(mod) : null
 	// A source-installed file has no Modrinth version to switch to, so its
 	// update is the source's own answer rather than `canUpdateProject`.
 	if (!(record && sourceVersionId) && !canUpdateProject(mod)) return
 	const operation = beginContentOperation(mod)
 	if (!operation) return
+	const operationInstanceId = instance.value.id
 
 	try {
 		if (record && sourceVersionId) {
 			await updateSourceContent(mod, sourceVersionId)
+			delete manualVersions.value[record.id]
 			addNotification({
 				title: formatMessage(messages.sourceUpdated, { name: record.name }),
 				text: formatMessage(messages.sourceUpdatedFrom, {
@@ -1338,12 +1424,13 @@ async function updateProject(mod: ContentItem) {
 		handleError(err as Error)
 		throw err
 	} finally {
-		await refreshContentState('must_revalidate')
-		finishContentOperation(mod, operation)
+		try {
+			if (operationInstanceId === instance.value.id && !pageDisposed) await refreshContentState('must_revalidate')
+		} finally { finishContentOperation(mod, operation) }
 	}
 }
 
-async function switchProjectVersion(mod: ContentItem, version: Labrinth.Versions.v2.Version) {
+async function switchProjectVersion(mod: ContentItem, version: ContentUpdaterVersion) {
 	if (!canChangeContentVersion(mod)) return
 	if (!mod.file_path) return
 	const operation = beginContentOperation(mod)
@@ -1373,6 +1460,12 @@ async function handleUpdate(id: string) {
 	const item = projects.value.find((p) => getContentItemId(p) === id)
 	if (!item || item.locked) return
 
+	const manual = manualRecord(item)
+	if (manual) {
+		if (!isBulkOperating.value && !isInstanceBusy.value && manualState(manual)?.action === 'update') await updateProject(item).catch(() => {})
+		return
+	}
+
 	// Content a source installed has no Modrinth versions to pick from, so its
 	// update goes straight to the source's own answer rather than the version
 	// picker the Modrinth path opens.
@@ -1399,6 +1492,7 @@ async function handleUpdate(id: string) {
 	})
 
 	updatingModpack.value = false
+	updatingSource.value = null
 	updatingProject.value = item
 	updatingProjectVersions.value = []
 	loadingVersions.value = true
@@ -1490,14 +1584,47 @@ async function handleUpdate(id: string) {
 	updatingProjectVersions.value = versions
 }
 
+async function showSourceVersions(item: ContentItem, record: SourceContentRecord) {
+	const requestId = beginUpdateRequest()
+	const instanceId = instance.value.id
+	const identity = sourceIdentity(record)
+	updatingModpack.value = false
+	updatingProject.value = item
+	updatingSource.value = { instanceId, record }
+	updatingProjectVersions.value = []
+	loadingVersions.value = true
+	loadingChangelog.value = false
+	await nextTick()
+	contentUpdaterModal.value?.show(record.version_id ?? undefined, { switchMode: true })
+	try {
+		const versions = manualState(record)?.versions.length ? manualState(record)!.versions : await loadSourceVersions(record)
+		if (!isActiveUpdateRequest(requestId) || instance.value.id !== instanceId || pageDisposed
+			|| !recordOf(item) || sourceIdentity(recordOf(item)!) !== identity) return
+		if (!projects.value.some((project) => recordOf(project)?.id === record.id)) return
+		if (versions.length === 0) throw new ManualVersionError('emptyVersions')
+		updatingProjectVersions.value = versions.map((version) => sourcePickerVersion(version, record.content_type))
+	} catch (error) {
+		if (isActiveUpdateRequest(requestId)) handleError(new Error(manualErrorMessage(error)))
+	} finally {
+		if (isActiveUpdateRequest(requestId)) loadingVersions.value = false
+	}
+}
+
 async function handleSwitchVersion(item: ContentItem) {
-	if (!canChangeContentVersion(item)) return
+	if (!canChangeContentVersion(item) || isBulkOperating.value || isInstanceBusy.value || hasContentOperation(item)) return
+	const record = recordOf(item)
+	if (record) {
+		await showSourceVersions(item, record)
+		return
+	}
+	updatingSource.value = null
 	if (!item.project?.id || !item.version?.id) return
 
 	const requestId = beginUpdateRequest()
 	const itemId = getContentItemId(item)
 
 	updatingModpack.value = false
+	updatingSource.value = null
 	updatingProject.value = item
 	updatingProjectVersions.value = []
 	loadingVersions.value = true
@@ -1602,6 +1729,7 @@ watch(
 
 async function handleModpackUpdate() {
 	if (!instance.value?.link?.project_id) return
+	updatingSource.value = null
 
 	const requestId = beginUpdateRequest()
 
@@ -1687,8 +1815,8 @@ async function fetchAndSpliceVersion(
 	updatingProjectVersions.value = mergeVersionIntoList(updatingProjectVersions.value, fullVersion)
 }
 
-async function handleVersionSelect(version: Labrinth.Versions.v2.Version) {
-	if (version.changelog != null) return
+async function handleVersionSelect(version: ContentUpdaterVersion) {
+	if (updatingSource.value || version.changelog != null) return
 	const requestId = activeUpdateRequestId.value
 	loadingChangelog.value = true
 	await fetchAndSpliceVersion(
@@ -1702,27 +1830,28 @@ async function handleVersionSelect(version: Labrinth.Versions.v2.Version) {
 	}
 }
 
-async function handleVersionHover(version: Labrinth.Versions.v2.Version) {
-	if (version.changelog != null) return
+async function handleVersionHover(version: ContentUpdaterVersion) {
+	if (updatingSource.value || version.changelog != null) return
 	await fetchAndSpliceVersion(version.id, undefined, undefined, activeUpdateRequestId.value)
 }
 
 function resetUpdateState() {
 	activeUpdateRequestId.value = 0
 	updatingModpack.value = false
+	updatingSource.value = null
 	updatingProject.value = null
 	updatingProjectVersions.value = []
 	loadingVersions.value = false
 	loadingChangelog.value = false
 }
 
-async function handleModpackUpdateRequest(selectedVersion: Labrinth.Versions.v2.Version) {
+async function handleModpackUpdateRequest(selectedVersion: ContentUpdaterVersion) {
 	pendingModpackUpdateVersion.value = selectedVersion
 
 	const currentVersionId = instance.value?.link?.version_id
 	const currentVersion = updatingProjectVersions.value.find((v) => v.id === currentVersionId)
 	isModpackUpdateDowngrade.value = currentVersion
-		? new Date(selectedVersion.date_published) < new Date(currentVersion.date_published)
+		? new Date(selectedVersion.date_published ?? '') < new Date(currentVersion.date_published ?? '')
 		: false
 	const shouldShowWarning =
 		isModpackUpdateDowngrade.value ||
@@ -1758,9 +1887,34 @@ function handleModpackUpdateCancel() {
 }
 
 async function handleModalUpdate(
-	selectedVersion: Labrinth.Versions.v2.Version,
+	selectedVersion: ContentUpdaterVersion,
 	event?: MouseEvent,
 ) {
+	const sourceSelection = updatingSource.value
+	if (sourceSelection) {
+		const item = updatingProject.value
+		if (!item || !projects.value.some((project) => getContentItemId(project) === getContentItemId(item))
+			|| sourceSelection.instanceId !== instance.value.id || !canChangeContentVersion(item)
+			|| isBulkOperating.value || isInstanceBusy.value || pageDisposed) return
+		const record = recordOf(item)
+		if (!record || sourceIdentity(record) !== sourceIdentity(sourceSelection.record)
+			|| !updatingProjectVersions.value.some((version) => version.id === selectedVersion.id)) return
+		const operation = beginContentOperation(item)
+		if (!operation) return
+		try {
+			await updateSourceContent(item, selectedVersion.id)
+			delete manualVersions.value[record.id]
+			addNotification({ title: formatMessage(messages.sourceUpdated, { name: record.name }),
+				text: formatMessage(messages.sourceUpdatedFrom, { source: sourceOriginOf(record).name }), type: 'success' })
+		} catch (error) { handleError(error as Error) }
+		finally {
+			resetUpdateState()
+			try {
+				if (!pageDisposed && instance.value.id === sourceSelection.instanceId) await refreshContentState('must_revalidate')
+			} finally { finishContentOperation(item, operation) }
+		}
+		return
+	}
 	if (updatingModpack.value) {
 		if (event?.shiftKey) {
 			pendingModpackUpdateVersion.value = selectedVersion
@@ -2039,11 +2193,12 @@ provideContentManager({
 	confirmAction: packActions.confirmAction,
 	confirmDeleteItems: packActions.confirmDeleteItems,
 	getDeleteDependencyWarning,
-	refresh: () => initProjects('must_revalidate'),
+	refresh: async () => { resetManualVersions(); await initProjects('must_revalidate') },
 	browse: handleBrowseContent,
 	uploadFiles: handleUploadFiles,
 	hasUpdateSupport: true,
 	updateItem: handleUpdate,
+	checkVersion: checkManualVersion,
 	bulkUpdateAll: bulkUpdateAllProjects,
 	bulkUpdateItem: updateProject,
 	runManagedContentPrimaryAction:
@@ -2105,6 +2260,16 @@ provideContentManager({
 		// through the Modrinth update path, so it stays hidden for those rows.
 		hideSwitchVersion: !canChangeContentVersion(item) || !item.project?.id || !item.version?.id,
 		hasUpdate: hasSourceUpdate(item) && !item.locked,
+		versionAction: (() => {
+			const record = manualRecord(item)
+			return record ? manualState(record)?.action ?? 'check' : undefined
+		})(),
+		versionActionTooltip: (() => {
+			const record = manualRecord(item)
+			return record ? manualState(record)?.error : undefined
+		})(),
+		versionCheckDisabled: isInstanceBusy.value || isBulkOperating.value || hasContentOperation(item),
+		versionActionDisabled: !canChangeContentVersion(item),
 	}),
 	showSharedContentFilter,
 	filterPersistKey: instance.value.id,

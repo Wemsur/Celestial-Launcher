@@ -5,6 +5,7 @@ import { ref } from 'vue'
 
 import { Button } from '../../components/base/buttons'
 import ContentUpdaterModal from '../../layouts/shared/content-tab/components/modals/content-updater-modal/index.vue'
+import type { ContentUpdaterModalHandle } from '../../layouts/shared/content-tab/types'
 
 // Real version data from Modrinth API - Sodium (mod)
 const sodiumVersions: Labrinth.Versions.v2.Version[] = [
@@ -267,7 +268,7 @@ export const ModExample: Story = {
 	render: (args) => ({
 		components: { ContentUpdaterModal, Button },
 		setup() {
-			const modalRef = ref<InstanceType<typeof ContentUpdaterModal> | null>(null)
+			const modalRef = ref<ContentUpdaterModalHandle | null>(null)
 			const openModal = () => modalRef.value?.show()
 			const handleUpdate = (version: Labrinth.Versions.v2.Version) => {
 				console.log('Update to version:', version)
@@ -306,7 +307,7 @@ export const ModpackExample: Story = {
 	render: (args) => ({
 		components: { ContentUpdaterModal, Button },
 		setup() {
-			const modalRef = ref<InstanceType<typeof ContentUpdaterModal> | null>(null)
+			const modalRef = ref<ContentUpdaterModalHandle | null>(null)
 			const openModal = () => modalRef.value?.show()
 			const handleUpdate = (version: Labrinth.Versions.v2.Version) => {
 				console.log('Update to version:', version)
@@ -345,7 +346,7 @@ export const WithIncompatibleVersions: Story = {
 	render: (args) => ({
 		components: { ContentUpdaterModal, Button },
 		setup() {
-			const modalRef = ref<InstanceType<typeof ContentUpdaterModal> | null>(null)
+			const modalRef = ref<ContentUpdaterModalHandle | null>(null)
 			const openModal = () => modalRef.value?.show()
 			return { args, modalRef, openModal }
 		},
@@ -377,7 +378,7 @@ export const AllVersionTypes: Story = {
 	render: (args) => ({
 		components: { ContentUpdaterModal, Button },
 		setup() {
-			const modalRef = ref<InstanceType<typeof ContentUpdaterModal> | null>(null)
+			const modalRef = ref<ContentUpdaterModalHandle | null>(null)
 			const openModal = () => modalRef.value?.show()
 			return { args, modalRef, openModal }
 		},

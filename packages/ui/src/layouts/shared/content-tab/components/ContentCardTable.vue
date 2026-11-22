@@ -54,6 +54,7 @@ const emit = defineEmits<{
 	'update:enabled': [id: string, value: boolean]
 	delete: [id: string, event: MouseEvent]
 	update: [id: string]
+	checkVersion: [id: string]
 	switchVersion: [id: string]
 	sort: [column: ContentCardTableSortColumn, direction: ContentCardTableSortDirection]
 }>()
@@ -82,7 +83,7 @@ const hasAnyActions = computed(() => {
 	const hasItemActions = props.items.some(
 		(item) =>
 			(item.overflowOptions && item.overflowOptions.length > 0) ||
-			item.hasUpdate ||
+			item.hasUpdate || item.versionAction ||
 			item.enabled !== undefined,
 	)
 
@@ -365,6 +366,10 @@ function handleSort(column: ContentCardTableSortColumn) {
 					:installing="item.installing"
 					:install-progress="item.installProgress"
 					:has-update="item.hasUpdate"
+					:version-action="item.versionAction"
+					:version-action-tooltip="item.versionActionTooltip"
+					:version-check-disabled="item.versionCheckDisabled"
+					:version-action-disabled="item.versionActionDisabled"
 					:is-client-only="item.isClientOnly"
 					:client-warning="item.clientWarning"
 					:synced="item.synced"
@@ -399,6 +404,7 @@ function handleSort(column: ContentCardTableSortColumn) {
 					@update:enabled="(val) => emit('update:enabled', item.id, val)"
 					@delete="(e: MouseEvent) => emit('delete', item.id, e)"
 					@update="emit('update', item.id)"
+					@check-version="emit('checkVersion', item.id)"
 					v-on="
 						hasSwitchVersionListener ? { switchVersion: () => emit('switchVersion', item.id) } : {}
 					"
@@ -440,6 +446,10 @@ function handleSort(column: ContentCardTableSortColumn) {
 				:installing="item.installing"
 				:install-progress="item.installProgress"
 				:has-update="item.hasUpdate"
+				:version-action="item.versionAction"
+				:version-action-tooltip="item.versionActionTooltip"
+				:version-check-disabled="item.versionCheckDisabled"
+				:version-action-disabled="item.versionActionDisabled"
 				:is-client-only="item.isClientOnly"
 				:client-warning="item.clientWarning"
 				:synced="item.synced"
@@ -469,6 +479,7 @@ function handleSort(column: ContentCardTableSortColumn) {
 				@update:enabled="(val) => emit('update:enabled', item.id, val)"
 				@delete="(e: MouseEvent) => emit('delete', item.id, e)"
 				@update="emit('update', item.id)"
+				@check-version="emit('checkVersion', item.id)"
 				@switch-version="emit('switchVersion', item.id)"
 			>
 				<template #title-badges>

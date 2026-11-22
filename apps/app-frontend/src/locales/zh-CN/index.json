@@ -1,4 +1,8 @@
 {
+	"app.source-content.no-versions": { "message": "该内容源不提供版本列表。" },
+	"app.source-content.unloaded": { "message": "该内容源尚未加载。" },
+	"app.source-content.missing-answer": { "message": "内容源没有返回该项目的检测结果。" },
+	"app.source-content.empty-versions": { "message": "内容源没有提供可选择的版本。" },
 	"app.announcements.title": { "message": "公告" },
 	"app.announcements.current": { "message": "当前公告" },
 	"app.announcements.history": { "message": "历史公告" },
@@ -2319,13 +2323,13 @@
     "message": "正在检查…"
   },
   "app.source-content.description": {
-    "message": "从内容源安装的内容，以及其内容源是否有更新。"
+    "message": "未接入启动器自动更新的内容源内容，可在这里管理其版本。"
   },
   "app.source-content.done": {
     "message": "完成"
   },
   "app.source-content.empty": {
-    "message": "此实例还没有从内容源安装任何内容。"
+    "message": "此实例没有登记未接入自动更新的内容源内容。"
   },
   "app.source-content.failed": {
     "message": "检查失败"

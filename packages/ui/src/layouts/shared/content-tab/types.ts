@@ -62,6 +62,27 @@ export interface EmbeddedContentMetadata {
 	icon_url?: string | null
 }
 
+export type ContentVersionAction = 'check' | 'checking' | 'update' | 'switch'
+
+/** Display data for the native picker, including sources with unknown metadata. */
+export interface ContentUpdaterVersion {
+	id: string
+	name: string
+	version_number: string
+	changelog?: string | null
+	date_published?: string | null
+	version_type?: 'release' | 'beta' | 'alpha' | null
+	game_versions: string[]
+	loaders: string[]
+	files?: Array<{ filename?: string; size?: number }>
+	compatibility_known?: boolean
+}
+
+export interface ContentUpdaterModalHandle {
+	show: (initialVersionId?: string, options?: { switchMode?: boolean }) => void
+	hide: () => void
+}
+
 export interface ContentCardTableItem {
 	id: string
 	project: ContentCardProject
@@ -83,6 +104,10 @@ export interface ContentCardTableItem {
 	installing?: boolean
 	installProgress?: number | null
 	hasUpdate?: boolean
+	versionAction?: ContentVersionAction
+	versionActionTooltip?: string | null
+	versionCheckDisabled?: boolean
+	versionActionDisabled?: boolean
 	isClientOnly?: boolean
 	clientWarning?: ClientWarningType | null
 	synced?: boolean

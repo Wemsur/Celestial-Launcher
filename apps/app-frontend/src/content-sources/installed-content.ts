@@ -71,6 +71,13 @@ export function sourceManifest(sourceId: string) {
  * only `open_download` can still be updated, but only one item at a time, in a
  * window the user completes — never as part of a silent bulk update.
  */
+export function sourceSupportsAutomaticUpdates(sourceId: string): boolean {
+	const manifest = sourceManifest(sourceId)
+	const provider = sourceProvider(sourceId)
+	return Boolean(manifest?.capabilities.update_check && provider?.checkUpdate
+		&& manifest.capabilities.resolve_download && provider.resolveDownload)
+}
+
 export function sourceUpdateSupport(record: SourceContentRecord): {
 	canCheck: boolean
 	canApplyAutomatically: boolean
@@ -84,9 +91,7 @@ export function sourceUpdateSupport(record: SourceContentRecord): {
 	// actually do. Both have to agree, or the launcher would offer an update
 	// whose check function does not exist.
 	const canCheck = Boolean(manifest?.capabilities.update_check && provider?.checkUpdate)
-	const canApplyAutomatically = Boolean(
-		canCheck && manifest?.capabilities.resolve_download,
-	)
+	const canApplyAutomatically = sourceSupportsAutomaticUpdates(record.source_id)
 	return { canCheck, canApplyAutomatically }
 }
 

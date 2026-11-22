@@ -5,7 +5,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useDebugLogger } from '#ui/composables/debug-logger'
 import { formatLoaderLabel } from '#ui/utils/loaders'
 
-import type { ContentUpdaterModal } from '../../content-tab'
+import type { ContentUpdaterModalHandle } from '../../content-tab'
 import type ContentDiffModal from '../components/ContentDiffModal.vue'
 import type IncompatibleContentModal from '../components/IncompatibleContentModal.vue'
 import type { InstallationSettingsContext } from '../providers/installation-settings'
@@ -15,7 +15,7 @@ export type IncompatibleContentVariant = 'loader-change' | 'game-version-change'
 
 export function useInstallationForm(
 	ctx: InstallationSettingsContext,
-	updaterModalRef: Ref<InstanceType<typeof ContentUpdaterModal> | null | undefined>,
+	updaterModalRef: Ref<ContentUpdaterModalHandle | null | undefined>,
 	contentDiffModalRef?: Ref<InstanceType<typeof ContentDiffModal> | null | undefined>,
 	incompatibleContentModalRef?: Ref<
 		InstanceType<typeof IncompatibleContentModal> | null | undefined

@@ -10,7 +10,7 @@ import { Button, defineMessages, injectNotificationManager, NewModal, useVIntl }
 import { computed, ref } from 'vue'
 
 import { selectableSources } from '@/content-sources/catalog'
-import { checkSourceUpdates, sourceUpdateSupport } from '@/content-sources/installed-content'
+import { checkSourceUpdates, sourceSupportsAutomaticUpdates, sourceUpdateSupport } from '@/content-sources/installed-content'
 import {
 	forgetInstalledSourceContent,
 	installSourceContent,
@@ -36,12 +36,12 @@ const messages = defineMessages({
 	description: {
 		id: 'app.source-content.description',
 		defaultMessage:
-			'Content installed from a content source, and whether its source has something newer.',
+			'Content from sources not integrated with automatic launcher updates. Manage their versions here.',
 	},
 	empty: {
 		id: 'app.source-content.empty',
 		defaultMessage:
-			'Nothing has been installed from a content source into this instance yet.',
+			'No content from sources outside automatic launcher updates is tracked in this instance.',
 	},
 	check: { id: 'app.source-content.check', defaultMessage: 'Check for updates' },
 	checking: { id: 'app.source-content.checking', defaultMessage: 'Checking…' },
@@ -73,7 +73,8 @@ const messages = defineMessages({
 })
 
 const modal = ref<InstanceType<typeof NewModal> | null>(null)
-const records = ref<SourceContentRecord[]>([])
+const allRecords = ref<SourceContentRecord[]>([])
+const records = computed(() => allRecords.value.filter((record) => !sourceSupportsAutomaticUpdates(record.source_id)))
 const loading = ref(false)
 const checking = ref(false)
 const busyId = ref<string | null>(null)
@@ -101,7 +102,7 @@ function sourceNameOf(record: SourceContentRecord): string {
 async function reload() {
 	loading.value = true
 	try {
-		records.value = await listInstalledSourceContent(props.instanceId)
+		allRecords.value = await listInstalledSourceContent(props.instanceId)
 	} catch (error) {
 		handleError(toError(error))
 	} finally {

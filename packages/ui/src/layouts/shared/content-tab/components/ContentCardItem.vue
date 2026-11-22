@@ -5,6 +5,7 @@ import {
 	Link2Icon,
 	LockIcon,
 	MoreVerticalIcon,
+	SearchIcon,
 	SpinnerIcon,
 	TrashExclamationIcon,
 	TrashIcon,
@@ -34,11 +35,14 @@ import type {
 	ContentOrigin,
 	ContentOwner,
 	ContentSource,
+	ContentVersionAction,
 } from '../types'
 
 const { formatMessage } = useVIntl()
 
 const messages = defineMessages({
+	checkVersion: { id: 'content.card.check-version', defaultMessage: 'Check versions' },
+	checkingVersion: { id: 'content.card.checking-version', defaultMessage: 'Checking versions…' },
 	selectProject: {
 		id: 'content.card.select-project',
 		defaultMessage: 'Select {project}',
@@ -78,6 +82,10 @@ interface Props {
 	installing?: boolean
 	installProgress?: number | null
 	hasUpdate?: boolean
+	versionAction?: ContentVersionAction
+	versionActionTooltip?: string | null
+	versionCheckDisabled?: boolean
+	versionActionDisabled?: boolean
 	isClientOnly?: boolean
 	clientWarning?: ClientWarningType | null
 	synced?: boolean
@@ -133,6 +141,7 @@ const emit = defineEmits<{
 	select: [value: boolean, event?: MouseEvent]
 	delete: [event: MouseEvent]
 	update: []
+	checkVersion: []
 	switchVersion: []
 }>()
 
@@ -147,6 +156,15 @@ const versionNumberRef = ref<HTMLElement | null>(null)
 const fileNameRef = ref<HTMLElement | null>(null)
 
 const isDisabled = computed(() => props.disabled || props.installing)
+const manualActionTooltip = computed(() => props.locked ? formatMessage(messages.frozen)
+	: props.versionActionDisabled && props.versionActionTooltip ? props.versionActionTooltip
+		: isDisabled.value && props.disabledTooltip ? props.disabledTooltip
+			: formatMessage(props.versionAction === 'update' ? commonMessages.updateAvailableLabel : commonMessages.switchVersionButton))
+function runManualVersionAction() {
+	if (isDisabled.value || props.locked || props.versionActionDisabled) return
+	if (props.versionAction === 'update') emit('update')
+	else emit('switchVersion')
+}
 const isToggleDisabled = computed(() => isDisabled.value || props.toggleDisabled)
 const syncStatusLabel = computed(() =>
 	formatMessage(props.syncUpdatePending ? messages.syncUpdatePending : messages.synced),
@@ -415,14 +433,32 @@ const installTooltip = computed(() => {
 			<!-- Fixed width container to reserve space for update/switch version button -->
 			<div
 				v-if="
-					locked ||
+					versionAction || locked ||
 					(hasUpdateListener && hasUpdate) ||
 					(hasSwitchVersionListener && version && !hideSwitchVersion)
 				"
 				class="flex w-8 items-center justify-center"
 			>
+				<template v-if="versionAction">
+					<IconButton
+						v-if="versionAction === 'check' || versionAction === 'checking'"
+						v-tooltip="versionActionTooltip || formatMessage(versionAction === 'checking' ? messages.checkingVersion : messages.checkVersion)"
+						type="quiet"
+						:label="versionActionTooltip || formatMessage(messages.checkVersion)"
+						:disabled="versionAction === 'checking' || versionCheckDisabled || installing"
+						@click="emit('checkVersion')"
+					>
+						<SpinnerIcon v-if="versionAction === 'checking'" class="size-5 animate-spin" />
+						<SearchIcon v-else class="size-5" />
+					</IconButton>
+					<IconButton v-else v-tooltip="manualActionTooltip" :label="manualActionTooltip" type="quiet"
+						:color="versionAction === 'update' ? 'green' : undefined" :disabled="isDisabled || locked || versionActionDisabled" @click="runManualVersionAction">
+						<DownloadIcon v-if="versionAction === 'update'" class="size-5" />
+						<ArrowLeftRightIcon v-else class="size-5" />
+					</IconButton>
+				</template>
 				<IconButton
-					v-if="locked"
+					v-else-if="locked"
 					v-tooltip="formatMessage(messages.frozen)"
 					type="quiet"
 					:label="formatMessage(messages.frozen)"
