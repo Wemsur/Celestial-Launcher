@@ -166,6 +166,31 @@ async function preflight(directory, version) {
 	return files
 }
 
+/** Sanitize complete diagnostics before truncating, so a boundary cannot expose a partial token. */
+function gitDiagnostic(text) {
+	const token = process.env.GITCODE_TOKEN || ''
+	const username = process.env.GITCODE_USERNAME || ''
+	const secrets = [
+		token, username,
+		token && encodeURIComponent(token),
+		username && encodeURIComponent(username),
+		token && Buffer.from(`${username}:${token}`).toString('base64'),
+	].filter(Boolean).sort((a, b) => b.length - a.length)
+	for (const secret of secrets) text = text.split(secret).join('[REDACTED]')
+	return text
+		.replace(/https?:\/\/[^\s<>"']+/gi, (raw) => {
+			try {
+				const url = new URL(raw)
+				return `${url.protocol}//${url.host}${url.pathname}${url.search ? '?[REDACTED]' : ''}${url.hash ? '#[REDACTED]' : ''}`
+			} catch { return '[REDACTED URL]' }
+		})
+		.replace(/\b(?:authorization|proxy-authorization)\s*:[^\r\n]*/gi, '[REDACTED AUTHORIZATION]')
+		.replace(/\b(?:Bearer|Basic)\s+[^\s]+/gi, '[REDACTED AUTHORIZATION]')
+		.replace(/\b(access_token|private_token|password|passwd|token)\s*[=:]\s*[^\s&]+/gi, '$1=[REDACTED]')
+		.replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
+		.split(/\r?\n/).map((line) => `  | ${line}`).join('\n')
+}
+
 /** Git uses argv and a temporary askpass program; credentials never enter URLs or config. */
 async function withGit(callback) {
 	const directory = await mkdtemp(join(tmpdir(), 'celestial-gitcode-'))
@@ -176,30 +201,44 @@ async function withGit(callback) {
 		for (const key of Object.keys(env)) {
 			if (key.startsWith('GIT_TRACE') || key === 'GIT_CURL_VERBOSE') delete env[key]
 		}
-		const git = (args) => new Promise((accept, reject) => {
+		const git = (step, args) => new Promise((accept, reject) => {
+			console.log(`GitCode Git step: ${step}`)
+			const started = Date.now()
 			const child = spawn('git', ['-c', 'http.followRedirects=false', '-c', 'credential.helper=',
 				'-c', 'http.extraHeader=', ...args], { env, shell: false, stdio: ['ignore', 'pipe', 'pipe'] })
-			let output = ''
+			const stdout = []
+			const stderr = []
 			let bytes = 0
 			let exceeded = false
-			const collect = (chunk, stdout) => {
+			let timedOut = false
+			const collect = (chunk, target) => {
 				bytes += chunk.length
 				if (bytes > MAX_JSON_BYTES) {
 					exceeded = true
 					child.kill('SIGKILL')
-				} else if (stdout) output += chunk.toString('utf8')
+				} else target.push(chunk)
 			}
-			child.stdout.on('data', (chunk) => collect(chunk, true))
-			child.stderr.on('data', (chunk) => collect(chunk, false))
-			const timer = setTimeout(() => child.kill('SIGKILL'), GIT_TIMEOUT_MS)
-			child.on('error', () => {
+			child.stdout.on('data', (chunk) => collect(chunk, stdout))
+			child.stderr.on('data', (chunk) => collect(chunk, stderr))
+			const timer = setTimeout(() => {
+				timedOut = true
+				child.kill('SIGKILL')
+			}, GIT_TIMEOUT_MS)
+			child.on('error', (error) => {
 				clearTimeout(timer)
-				reject(new Error('Cannot start Git'))
+				reject(new Error(`Cannot start Git (${step}); code=${error.code || 'unknown'}`))
 			})
-			child.on('close', (code) => {
+			child.on('close', (code, signal) => {
 				clearTimeout(timer)
-				if (code !== 0 || exceeded) reject(new Error('Git operation failed; check credentials, tag conflicts, permissions or timeout'))
-				else accept(output.trim())
+				if (code !== 0 || exceeded || timedOut) {
+					const details = exceeded
+						? '  | Output exceeded the capture limit; partial diagnostics withheld to avoid exposing truncated secrets.'
+						: gitDiagnostic(Buffer.concat(stderr.length ? stderr : stdout).toString('utf8')).slice(0, 12_000)
+					reject(new Error(`Git operation failed (${step}); exit=${code}; signal=${signal || 'none'}; timeout=${timedOut}; outputLimit=${exceeded}; elapsedMs=${Date.now() - started}\n${details || '  | No diagnostic output'}`))
+				} else {
+					console.log(`GitCode Git step completed: ${step} (${Date.now() - started}ms)`)
+					accept(Buffer.concat(stdout).toString('utf8').trim())
+				}
 			})
 		})
 		return await callback(git)
@@ -210,10 +249,10 @@ async function withGit(callback) {
 
 async function pushTag(git, tag, commit) {
 	const ref = `refs/tags/${tag}`
-	await git(['check-ref-format', ref])
-	check(await git(['rev-parse', 'HEAD']) === commit, 'Checkout does not match RELEASE_COMMIT')
-	check(await git(['rev-parse', '--is-shallow-repository']) === 'false', 'Full source history is required')
-	const refs = await git(['ls-remote', '--tags', REPOSITORY, ref, `${ref}^{}`])
+	await git('validate tag name', ['check-ref-format', ref])
+	check(await git('read checkout commit', ['rev-parse', 'HEAD']) === commit, 'Checkout does not match RELEASE_COMMIT')
+	check(await git('check full source history', ['rev-parse', '--is-shallow-repository']) === 'false', 'Full source history is required')
+	const refs = await git('query GitCode tag', ['ls-remote', '--tags', REPOSITORY, ref, `${ref}^{}`])
 	if (refs) {
 		const entries = new Map(refs.split('\n').map((line) => {
 			const [sha, name] = line.split(/\s+/)
@@ -223,8 +262,8 @@ async function pushTag(git, tag, commit) {
 		check((entries.get(`${ref}^{}`) ?? entries.get(ref)) === commit, 'GitCode tag points to a different commit; refusing to overwrite')
 		return
 	}
-	await git(['push', '--no-follow-tags', REPOSITORY, `${commit}:${ref}`])
-	const pushed = await git(['ls-remote', '--tags', REPOSITORY, ref, `${ref}^{}`])
+	await git('push built commit as GitCode tag', ['push', '--no-follow-tags', REPOSITORY, `${commit}:${ref}`])
+	const pushed = await git('verify pushed GitCode tag', ['ls-remote', '--tags', REPOSITORY, ref, `${ref}^{}`])
 	check(pushed === `${commit}\t${ref}`, 'GitCode tag verification failed')
 }
 
