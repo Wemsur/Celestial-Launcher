@@ -14,6 +14,16 @@
 
 GitCode 任务下载本次所选平台的已签名产物，以 Node.js 22 运行 `.github/scripts/publish-gitcode.mjs release-files`。脚本要求 `GITCODE_USERNAME`、`GITCODE_TOKEN`、`RELEASE_TAG`、`RELEASE_VERSION`、`RELEASE_COMMIT` 环境变量；检出必须是完整历史且 HEAD 与构建提交一致。
 
+## 不构建的分发测试
+
+在 GitHub Actions 手动运行 **GitCode distribution smoke test**，选择包含该工作流的分支。使用同一仓库的 `GITCODE_USERNAME`、`GITCODE_TOKEN`，不需要签名私钥、不安装项目依赖、不编译启动器。
+
+工作流生成不含凭据的小文本 `connectivity-test.txt`，依次验证仓库 API、Git tag 查询/推送、公开预发布创建、OBS 附件上传、附件登记及匿名下载 SHA256。Git 操作复用正式发布器的诊断与认证；实际下载使用客户端同类主机白名单，每跳检查，不携带 Token。若实际下载主机不符合白名单，会输出去除查询串的地址并停止，不能据此放开任意云存储。
+
+每次 tag 为 `distribution-test-<run_id>-<run_attempt>`，不使用 `v*`，不触发本仓库的版本构建。始终为公开 `pre`，不推广为 latest，文本也不匹配安装包名。推送 tag 会同步当前提交可达的源码历史，与正式分发相同。
+
+测试通过或失败都查看运行摘要：可能已产生测试 tag 或预发布；按摘要链接手动删除测试 Release，再单独删除同名 tag。脚本不自动删除、不覆盖已有发布。这个测试验证传输和公开下载，不验证安装包签名，也不替代真实安装包验收。本次代码交付没有执行这个测试工作流。
+
 ## 暂存与人工推广
 
 GitCode 没有 draft API。脚本始终以 `release_status: pre` 创建**公开预发布**，包括稳定版本号；上传期间可能已经能看到不完整附件，不能视为私有草稿。

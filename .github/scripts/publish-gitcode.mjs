@@ -5,6 +5,7 @@ import { appendFile, lstat, mkdtemp, open, opendir, rm, writeFile } from 'node:f
 import https from 'node:https'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 
@@ -391,7 +392,11 @@ async function main() {
 	}
 }
 
-main().catch((error) => {
-	console.error(`GitCode publisher: ${error.message}`)
-	process.exitCode = 1
-})
+export { apiClient, inspectFile, uploadTarget, uploadFile, verifyAssets, withGit, pushTag, summary, gitDiagnostic }
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+	main().catch((error) => {
+		console.error(`GitCode publisher: ${error.message}`)
+		process.exitCode = 1
+	})
+}
