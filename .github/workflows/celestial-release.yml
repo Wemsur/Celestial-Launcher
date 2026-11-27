@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: '版本 tag（留空 = v + apps/app-frontend/package.json 版本）'
+        description: '版本 tag（留空读取项目版本；手动填写时 Windows 跳过 MSI）'
         required: false
         type: string
         default: ''
@@ -91,7 +91,10 @@ jobs:
             const fs = require('node:fs')
             const { execFileSync } = require('node:child_process')
             const projectVersion = JSON.parse(fs.readFileSync('apps/app-frontend/package.json', 'utf8')).version
-            const tag = process.env.RELEASE_TAG.trim() ||
+            const customTag = (process.env.RELEASE_TAG || '').trim()
+            const skipMsi = context.eventName === 'workflow_dispatch' && customTag.length > 0
+            const windowsBundles = skipMsi ? '--bundles nsis' : '--bundles nsis,msi'
+            const tag = customTag ||
               (context.eventName === 'push' && context.ref.startsWith('refs/tags/')
                 ? context.ref.slice('refs/tags/'.length)
                 : `v${projectVersion}`)
@@ -102,12 +105,12 @@ jobs:
 
             const platforms = [
               ['WINDOWS_X64', {
-                name: 'windows', runner: 'windows-latest', args: '--bundles nsis,msi',
+                name: 'windows', runner: 'windows-latest', args: windowsBundles,
                 out: 'target/release/bundle', os: 'windows', arch: 'x64',
                 java_distribution: 'temurin', java_version: '17', skip_install_scripts: false,
               }],
               ['WINDOWS_ARM64', {
-                name: 'windows-arm64', runner: 'windows-11-arm', args: '--bundles nsis,msi',
+                name: 'windows-arm64', runner: 'windows-11-arm', args: windowsBundles,
                 out: 'target/release/bundle', os: 'windows', arch: 'arm64',
                 java_distribution: 'zulu', java_version: '17', skip_install_scripts: true,
               }],
@@ -127,6 +130,7 @@ jobs:
                 java_distribution: 'temurin', java_version: '17', skip_install_scripts: false,
               }],
             ]
+            if (skipMsi) core.info('Custom tag supplied: Windows x64/ARM64 will build NSIS only; MSI is skipped.')
             const selected = platforms
               .filter(([input]) => context.eventName !== 'workflow_dispatch' || process.env[input] === 'true')
               .map(([, platform]) => platform)
