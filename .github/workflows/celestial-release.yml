@@ -140,11 +140,16 @@ jobs:
               } catch (error) {
                 if (error.status !== 404) throw error
               }
+              let tagExists = false
               try {
-                const tagged = await github.rest.repos.getCommit({ ...context.repo, ref: `refs/tags/${tag}` })
-                if (tagged.data.sha !== commit) throw new Error(`Tag ${tag} points to another commit; build that tag or use a new one.`)
+                await github.rest.git.getRef({ ...context.repo, ref: `tags/${tag}` })
+                tagExists = true
               } catch (error) {
                 if (error.status !== 404) throw error
+              }
+              if (tagExists) {
+                const tagged = await github.rest.repos.getCommit({ ...context.repo, ref: `refs/tags/${tag}` })
+                if (tagged.data.sha !== commit) throw new Error(`Tag ${tag} points to another commit; build that tag or use a new one.`)
               }
             }
 
