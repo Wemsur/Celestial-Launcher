@@ -33,8 +33,19 @@ function check(condition, message) {
 	if (!condition) throw new Error(message)
 }
 
+function diagnosticCode(value) {
+	return /^[A-Za-z0-9_.-]{1,80}$/.test(String(value ?? '')) ? String(value) : 'unknown'
+}
+
+function apiErrorCode(data) {
+	return `code=${diagnosticCode(data?.error_code)}; name=${diagnosticCode(data?.error_code_name)}`
+}
+
 /** Read bounded JSON without exposing server bodies or credential-bearing errors. */
 async function requestJson(url, { method = 'GET', headers = {}, body, timeout = API_TIMEOUT_MS, upload } = {}) {
+	const started = Date.now()
+	const endpoint = url.hostname === 'api.gitcode.com' ? `${url.origin}${url.pathname}` : `${url.origin}/[object]`
+	console.log(`HTTP request: ${method} ${endpoint}`)
 	return new Promise((accept, reject) => {
 		let timer
 		let settled = false
@@ -47,6 +58,7 @@ async function requestJson(url, { method = 'GET', headers = {}, body, timeout = 
 		}
 		const request = https.request(url, { method, headers }, (response) => {
 			const chunks = []
+			console.log(`HTTP response: ${method} ${endpoint}; status=${response.statusCode}; elapsedMs=${Date.now() - started}`)
 			let bytes = 0
 			response.on('data', (chunk) => {
 				bytes += chunk.length
@@ -56,7 +68,7 @@ async function requestJson(url, { method = 'GET', headers = {}, body, timeout = 
 					finish(new Error('Response exceeded the allowed size'))
 				} else chunks.push(chunk)
 			})
-			response.on('error', () => finish(new Error('Response interrupted')))
+			response.on('error', (error) => finish(new Error(`Response interrupted (${method} ${endpoint}); code=${diagnosticCode(error.code)}`)))
 			response.on('end', () => {
 				const status = response.statusCode
 				if (status >= 300 && status < 400) {
@@ -75,21 +87,21 @@ async function requestJson(url, { method = 'GET', headers = {}, body, timeout = 
 				}
 				if (status >= 200 && status < 300 && data && typeof data === 'object' && Object.hasOwn(data, 'error_code') &&
 					data.error_code !== 0 && data.error_code !== '0' && data.error_code !== null) {
-					finish(new Error(`Remote API reported an error (HTTP ${status})`))
+					finish(new Error(`Remote API reported an error (HTTP ${status}); ${apiErrorCode(data)}`))
 					return
 				}
 				finish(null, { status, data })
 			})
 		})
-		request.on('error', () => finish(new Error('Network request failed')))
+		request.on('error', (error) => finish(new Error(`Network request failed (${method} ${endpoint}); code=${diagnosticCode(error.code)}; cause=${diagnosticCode(error.cause?.code)}`)))
 		timer = setTimeout(() => {
 			request.destroy()
 			finish(new Error('Network request timed out'))
 		}, timeout)
 		if (upload) {
-			upload(request).catch(() => {
+			upload(request).catch((error) => {
 				request.destroy()
-				finish(new Error('Upload stream failed or artifact changed'))
+				finish(new Error(`Upload stream failed or artifact changed; code=${diagnosticCode(error.code)}; details=${gitDiagnostic(String(error.message)).slice(0, 2000)}`))
 			})
 		} else request.end(body)
 	})
@@ -109,7 +121,7 @@ function apiClient(token) {
 		if (allowMissing && (result.status === 404 || (result.status === 400 &&
 			result.data?.error_code === 400 && result.data?.error_code_name === 'BAD_REQUEST' &&
 			result.data?.error_message === 'Release not found'))) return null
-		check(result.status >= 200 && result.status < 300, `GitCode API request failed (HTTP ${result.status})`)
+		check(result.status >= 200 && result.status < 300, `GitCode API request failed (HTTP ${result.status}); ${apiErrorCode(result.data)}`)
 		check(result.data && typeof result.data === 'object', 'GitCode API returned no object')
 		return result.data
 	}
@@ -272,10 +284,12 @@ function uploadTarget(data, token) {
 	check(typeof data.url === 'string' && data.url.length <= 32_768 && !/[\s\x00-\x1f\x7f]/.test(data.url), 'Invalid upload URL')
 	let url
 	try { url = new URL(data.url) } catch { throw new Error('Invalid upload URL') }
+	console.log(`Upload target host: ${url.hostname}; protocol=${url.protocol}; port=${url.port || 'default'}; queryPresent=${Boolean(url.search)}`)
 	check(url.protocol === 'https:' && !url.username && !url.password && !url.hash &&
 		(!url.port || url.port === '443') && OBS_HOST.test(url.hostname), 'Upload host is outside the Huawei OBS allowlist')
 	check(!data.url.includes(token), 'Upload URL unexpectedly contains the GitCode credential')
 	check(data.headers && typeof data.headers === 'object' && !Array.isArray(data.headers), 'Missing upload headers')
+	console.log(`Upload header names: ${Object.keys(data.headers).slice(0, 20).map(diagnosticCode).join(', ')}`)
 	const expected = new Set(['x-obs-meta-project-id', 'x-obs-acl', 'x-obs-callback', 'content-type'])
 	const headers = {}
 	for (const [name, value] of Object.entries(data.headers)) {
@@ -366,7 +380,9 @@ async function main() {
 	check(await api(releasePath, { allowMissing: true }) === null,
 		'GitCode release already exists; manually resolve it before retrying (no overwrite or deletion)')
 	await withGit((git) => pushTag(git, tag, commit))
+	let stage = 'create prerelease'
 	try {
+		console.log(`GitCode stage: ${stage}`)
 		await api('/releases', {
 			method: 'POST',
 			body: {
@@ -377,18 +393,29 @@ async function main() {
 				release_status: 'pre',
 			},
 		})
+		console.log('GitCode stage completed: create prerelease')
 		for (const file of files) {
+			stage = `obtain upload target for ${file.name}`
+			console.log(`GitCode stage: ${stage}`)
 			const data = await api(`/releases/${encodedTag}/upload_url?file_name=${encodeURIComponent(file.name)}`)
+			stage = `validate upload target for ${file.name}`
+			console.log(`GitCode stage: ${stage}`)
 			const target = uploadTarget(data, token)
-			console.log(`Uploading ${file.name} to ${target.url.hostname}`)
+			stage = `upload ${file.name}`
+			console.log(`GitCode stage: ${stage}; host=${target.url.hostname}; bytes=${file.size}`)
 			await uploadFile(target, file)
+			console.log(`GitCode stage completed: ${stage}`)
 		}
+		stage = 'verify registered release attachments'
+		console.log(`GitCode stage: ${stage}`)
 		verifyAssets(await api(releasePath), files)
 		console.log(`GitCode prerelease verified: ${link}; manual promotion required`)
 		await summary(`### GitCode 预发布已暂存\n\n[查看 ${tag}](${link})：${files.length} 个附件已逐一核验。状态始终为 **pre**（公开预发布，并非草稿），稳定版本也不会自动推广。请维护者确认完整性后在 GitCode 发布页人工推广；测试版本可保持预发布。`)
-	} catch {
-		await summary(`### GitCode 暂存未完成\n\n[检查 ${tag}](${link})。可能已存在部分上传的公开预发布；请勿推广。脚本不会删除或覆盖附件，同名 release 会阻止重跑，必须先人工处理。`)
-		throw new Error('GitCode staging failed; inspect the prerelease manually before retrying. No assets were deleted or overwritten.')
+	} catch (error) {
+		const details = gitDiagnostic(String(error.message)).slice(0, 12_000)
+		console.error(`GitCode stage failed: ${stage}\n${details}`)
+		await summary(`### GitCode 暂存未完成\n\n[检查 ${tag}](${link})。失败阶段：${stage}。可能已存在部分上传的公开预发布；请勿推广。脚本不会删除或覆盖附件，同名 release 会阻止重跑，必须先人工处理。`)
+		throw new Error(`GitCode staging failed (${stage}):\n${details}\nNo assets were deleted or overwritten.`)
 	}
 }
 
