@@ -5,6 +5,7 @@ import { arch as osArch, type as osType } from '@tauri-apps/plugin-os'
 
 import { compareBetaTags, isBetaTag } from '@/helpers/beta-release'
 import { toError } from '@/helpers/errors'
+import { compareReleaseVersions } from '@/helpers/release-version'
 import { get as getSettings } from '@/helpers/settings'
 import {
     appUpdateState,
@@ -118,16 +119,6 @@ async function latestBetaRelease(source: UpdateSource): Promise<Release> {
 		}
 	}
 	throw new Error('发布列表超过分页上限，无法确认最新 beta，停止本次测试更新')
-}
-
-/** 语义化版本比较，返回 -1/0/1 */
-function compareVersions(a: string, b: string): number {
-    const parse = (v: string) => v.split('.').map(Number)
-    const [a1, a2, a3] = parse(a)
-    const [b1, b2, b3] = parse(b)
-    if (a1 !== b1) return a1 - b1
-    if (a2 !== b2) return a2 - b2
-    return a3 - b3
 }
 
 /** 当前设备平台，token 与发布产物命名规范对齐（os=windows/macos/linux，
@@ -245,7 +236,13 @@ export async function checkForUpdate(): Promise<{
 
 		const latestVersion = release.tag_name.replace(/^v/, '')
 		// 开发测试允许重复验证同一个包，不依赖正式版的版本比较。
-		const cmp = testingPrerelease ? 1 : compareVersions(latestVersion, currentVersion)
+		const cmp = testingPrerelease ? 1 : compareReleaseVersions(latestVersion, currentVersion)
+		if (cmp === null) {
+			const reason = `无法按 SemVer 比较版本：远端 ${latestVersion}，当前 ${currentVersion}`
+			console.warn(`${prefix}: ✗ 跳过 — ${reason}`)
+			trail.push({ source, outcome: reason })
+			continue
+		}
         if (cmp <= 0) {
             const reason =
                 cmp === 0
