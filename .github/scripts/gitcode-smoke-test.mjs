@@ -18,6 +18,7 @@ function allowedDownload(url) {
 	if (url.protocol !== 'https:' || url.username || url.password || url.hash || (url.port && url.port !== '443')) return false
 	if (url.hostname === 'api.gitcode.com') return url.pathname.startsWith('/api/v5/repos/Wemsur/Celestial-Launcher/releases/') && url.pathname.endsWith('/download')
 	if (url.hostname === 'gitcode.com') return url.pathname.startsWith('/Wemsur/Celestial-Launcher/')
+	if (url.hostname === 'file-cdn.gitcode.com') return url.pathname.startsWith('/11450940/releases/')
 	return /^(?:gitcode|atomgit)(?:-[a-z0-9-]+)?\.obs\.[a-z0-9-]+\.myhuaweicloud\.com$/.test(url.hostname)
 }
 
@@ -25,8 +26,8 @@ async function verifyAnonymousDownload(tag, file) {
 	const deadline = AbortSignal.timeout(60_000)
 	let url = new URL(`${API}/releases/${encodeURIComponent(tag)}/attach_files/${encodeURIComponent(file.name)}/download`)
 	for (let hop = 0; hop <= 5; hop++) {
-		check(allowedDownload(url), 'Anonymous download redirected outside the client allowlist; do not broaden it without checking the actual host')
 		console.log(`Anonymous download hop ${hop}: ${url.origin}${url.pathname}`)
+		check(allowedDownload(url), 'Anonymous download redirected outside the client allowlist; do not broaden it without checking the actual host')
 		const response = await fetch(url, { redirect: 'manual', signal: deadline })
 		console.log(`Anonymous download HTTP ${response.status}`)
 		if ([301, 302, 303, 307, 308].includes(response.status)) {

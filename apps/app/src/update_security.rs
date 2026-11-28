@@ -79,6 +79,7 @@ pub fn download_host_allowed(url: &Url) -> bool {
 				&& url.path().contains("/attach_files/") && !url.path().contains("%2f") && !url.path().contains("%2F")
 		}
 		Some("gitcode.com") => url.path().starts_with("/Wemsur/Celestial-Launcher/"),
+		Some("file-cdn.gitcode.com") => url.path().starts_with("/11450940/releases/"),
 		Some(host) if gitcode_object_host(host) => true,
 		_ => host_in(url, DOWNLOAD_HOSTS),
 	}
@@ -189,6 +190,9 @@ mod gitcode_tests {
 		assert!(!download_host_allowed(&Url::parse("https://api.gitcode.com/api/v5/repos/other/other/releases/v1/attach_files/setup.exe/download").unwrap()));
 		assert!(!download_host_allowed(&Url::parse("http://gitcode.com/Wemsur/Celestial-Launcher/setup.exe").unwrap()));
 		assert!(!download_host_allowed(&Url::parse("https://user:password@gitcode.com/Wemsur/Celestial-Launcher/setup.exe").unwrap()));
+		assert!(download_host_allowed(&Url::parse("https://file-cdn.gitcode.com/11450940/releases/test/setup.exe?signature=example").unwrap()));
+		assert!(!download_host_allowed(&Url::parse("https://file-cdn.gitcode.com/other/releases/test/setup.exe").unwrap()));
+		assert!(!download_host_allowed(&Url::parse("https://file-cdn.gitcode.com.evil.example/11450940/releases/test/setup.exe").unwrap()));
 		assert!(gitcode_object_host("gitcode-release.obs.cn-north-4.myhuaweicloud.com"));
 		assert!(!gitcode_object_host("unrelated.obs.cn-north-4.myhuaweicloud.com"));
 		assert!(!gitcode_object_host("gitcode-release.obs.cn-north-4.myhuaweicloud.com.evil.example"));
