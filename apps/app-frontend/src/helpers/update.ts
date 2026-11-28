@@ -34,6 +34,15 @@ interface UpdateSource {
 }
 
 const GITHUB_TEST_RELEASE_TAG = 'v3.5.0-beta.1'
+const GITCODE_TEST_RELEASE_TAG = 'v3.5.0-beta.2'
+
+type TestReleaseMode = 'gitcode' | 'github' | null
+
+function testReleaseMode(flags: { gitcode_test_release_updates?: boolean; github_test_release_updates?: boolean }): TestReleaseMode {
+	if (flags.gitcode_test_release_updates === true) return 'gitcode'
+	if (flags.github_test_release_updates === true) return 'github'
+	return null
+}
 
 // 优先级：GitCode → git.gay → GitHub。
 const UPDATE_SOURCES: UpdateSource[] = [
@@ -60,7 +69,7 @@ function normalizeRelease(raw: unknown, source: UpdateSource): Release {
 	if (value.error_code !== undefined || typeof value.tag_name !== 'string' || !value.tag_name.trim() || !Array.isArray(value.assets)) {
 		throw new Error('Release response has no valid tag/assets or contains an API error')
 	}
-	const gitcode = source.id === 'gitcode'
+	const gitcode = source.id === 'gitcode' || source.id === 'gitcode-preview-test'
 	if (gitcode && !['pre', 'latest'].includes(String(value.release_status))) throw new Error('Unknown GitCode release status')
 	if (typeof value.prerelease !== 'boolean' || (!gitcode && typeof value.draft !== 'boolean')) throw new Error('Release visibility is not explicit')
 	const tag = value.tag_name
@@ -155,15 +164,22 @@ export async function checkForUpdate(): Promise<{
 } | null> {
 	const currentVersion = await getVersion()
 	const platform = currentPlatform()
-	const testTag = GITHUB_TEST_RELEASE_TAG
-	const testingPrerelease = (await getSettings()).feature_flags.github_test_release_updates === true
-	const sources: UpdateSource[] = testingPrerelease
+	const mode = testReleaseMode((await getSettings()).feature_flags)
+	const testingPrerelease = mode !== null
+	const testTag = mode === 'gitcode' ? GITCODE_TEST_RELEASE_TAG : GITHUB_TEST_RELEASE_TAG
+	const sources: UpdateSource[] = mode === 'gitcode'
 		? [{
-				id: 'github-preview-test',
-				label: `GitHub 测试发布（${testTag}）`,
-				latestUrl: `https://api.github.com/repos/Wemsur/Celestial-Launcher/releases/tags/${encodeURIComponent(testTag)}`,
+				id: 'gitcode-preview-test',
+				label: `GitCode 测试发布（${testTag}）`,
+				latestUrl: `https://api.gitcode.com/api/v5/repos/Wemsur/Celestial-Launcher/releases/tags/${encodeURIComponent(testTag)}`,
 			}]
-		: UPDATE_SOURCES
+		: mode === 'github'
+			? [{
+					id: 'github-preview-test',
+					label: `GitHub 测试发布（${testTag}）`,
+					latestUrl: `https://api.github.com/repos/Wemsur/Celestial-Launcher/releases/tags/${encodeURIComponent(testTag)}`,
+				}]
+			: UPDATE_SOURCES
 
 	const trail: { source: UpdateSource; outcome: string }[] = []
 
@@ -237,7 +253,7 @@ export async function checkForUpdate(): Promise<{
         }
 
         const asset = selectAsset(release.assets, platform)
-		if (asset && source.id === 'gitcode' && !release.assets.some((entry) => entry.name === `${asset.name}.sig`)) {
+		if (asset && (source.id === 'gitcode' || source.id === 'gitcode-preview-test') && !release.assets.some((entry) => entry.name === `${asset.name}.sig`)) {
 			const reason = `GitCode 安装包 ${asset.name} 缺少配对签名，尝试其他更新源`
 			console.warn(`${prefix}: ✗ 跳过 — ${reason}`)
 			trail.push({ source, outcome: reason })
@@ -252,7 +268,7 @@ export async function checkForUpdate(): Promise<{
             continue
         }
 
-		if (((await getSettings()).feature_flags.github_test_release_updates === true) !== testingPrerelease) {
+		if (testReleaseMode((await getSettings()).feature_flags) !== mode) {
 			console.info('[updater] 更新模式已改变，忽略本次检查结果')
 			return null
 		}

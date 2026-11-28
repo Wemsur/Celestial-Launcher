@@ -77,6 +77,7 @@ pub enum FeatureFlag {
     ServerProjectQa,
     I18nDebug,
 	GithubTestReleaseUpdates,
+	GitcodeTestReleaseUpdates,
     ShowInstancePlayTime,
     CompactInstanceCards,
     SkipNonEssentialWarnings,
@@ -103,6 +104,17 @@ mod feature_flag_tests {
 		).unwrap();
 		assert_eq!(flags.get(&FeatureFlag::I18nDebug), Some(&true));
 		assert_eq!(flags.get(&FeatureFlag::GithubTestReleaseUpdates), Some(&false));
+		assert!(!flags.contains_key(&FeatureFlag::GitcodeTestReleaseUpdates));
+	}
+
+	#[test]
+	fn gitcode_test_updates_roundtrip_with_existing_flags() {
+		let flags: HashMap<FeatureFlag, bool> = serde_json::from_str(
+			r#"{"i18n_debug":true,"github_test_release_updates":false,"gitcode_test_release_updates":true}"#,
+		).unwrap();
+		assert_eq!(flags.get(&FeatureFlag::GitcodeTestReleaseUpdates), Some(&true));
+		assert_eq!(flags.get(&FeatureFlag::I18nDebug), Some(&true));
+		assert_eq!(serde_json::to_string(&FeatureFlag::GitcodeTestReleaseUpdates).unwrap(), "\"gitcode_test_release_updates\"");
 	}
 }
 
