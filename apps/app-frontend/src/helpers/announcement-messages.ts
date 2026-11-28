@@ -2,7 +2,7 @@ import { defineMessages } from '@modrinth/ui'
 
 export const announcementMessages = defineMessages({
 	title: { id: 'app.announcements.title', defaultMessage: 'Announcements' },
-	current: { id: 'app.announcements.current', defaultMessage: 'Current announcement' },
+	current: { id: 'app.announcements.current', defaultMessage: 'Latest announcement' },
 	history: { id: 'app.announcements.history', defaultMessage: 'Announcement history' },
 	other: { id: 'app.announcements.other', defaultMessage: 'Other announcements' },
 	active: { id: 'app.announcements.active', defaultMessage: 'Active' },

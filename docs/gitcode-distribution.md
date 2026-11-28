@@ -38,7 +38,7 @@ GitCode 没有 draft API。脚本始终以 `release_status: pre` 创建**公开�
 
 ## 客户端来源与旧版本过渡
 
-本次客户端正式更新顺序为 GitCode → git.gay → GitHub；原 GitHub 测试 Release 功能开关保持默认关闭及原有指定测试 tag。GitCode 元数据只接受明确的 pre/latest 状态与布尔 prerelease，并把附件转换为官方固定下载入口；缺少对应 `.sig` 时尝试下一个更新源。公告顺序为 GitCode main → GitHub published，匿名读取 `https://api.gitcode.com/api/v5/repos/Wemsur/celestial-announcement/raw/index.json?ref=main`，不向客户端放入 PAT。公告数据库结构、ID、generation 和“不再显示”偏好均不重置。
+本次客户端正式更新顺序为 GitCode → git.gay → GitHub；GitHub/GitCode 测试 Release 功能开关均默认关闭；开启后分页查询对应平台 Release 列表，选择 SemVer 优先级最高且预发布标识包含独立 `beta` 段的已发布版本，不固定 tag。草稿、RC、正式版及 `distribution-test-*` 不参与；`beta.10` 高于 `beta.9`。两开关同时开启时优先 GitCode。最多20页、每页100条，达到上限仍未遍历完则报错，不假装已经找到最新。选中最高 beta 后要求当前平台安装包和配对 `.sig`；缺失时停止采用，不自动降级旧 beta。测试模式继续允许重复验证同版本，不与本机版本比较。GitCode 元数据只接受明确的 pre/latest 状态与布尔 prerelease，并把附件转换为官方固定下载入口；缺少对应 `.sig` 时尝试下一个更新源。公告顺序为 GitCode main → GitHub published，匿名读取 `https://api.gitcode.com/api/v5/repos/Wemsur/celestial-announcement/raw/index.json?ref=main`，不向客户端放入 PAT。公告数据库结构、ID、generation 和“不再显示”偏好均不重置。
 
 旧客户端不会自动得知新来源。把包含本次修改的过渡版本同时发布到旧客户端认识的 GitHub/git.gay 正式来源；不要只发布在 GitCode。旧代码在高优先源返回较旧但有效版本时会停止回退，因此旧 wemgit 若恢复后仍提供过时的成功响应，可能挡住旧客户端升级，应维护过渡发布或明确提供不可用响应并引导手动下载。
 

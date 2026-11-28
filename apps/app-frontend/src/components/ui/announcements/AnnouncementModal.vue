@@ -221,8 +221,8 @@ onBeforeUnmount(() => {
 				<AnnouncementArticle :metadata="current" />
 				<p v-if="currentActive?.suppressed" class="m-0 text-sm text-secondary">{{ formatMessage(messages.suppressed) }}</p>
 			</section>
-			<section v-if="others.length" class="min-w-0 space-y-6">
-				<h2 class="m-0 text-lg font-semibold text-contrast">{{ formatMessage(messages.other) }}</h2>
+			<section v-if="others.length" class="min-w-0 space-y-3">
+				<h2 class="m-0 text-sm font-semibold text-secondary">{{ formatMessage(messages.other) }}</h2>
 				<AnnouncementArticle v-for="item in others" :key="item.id" :metadata="item" />
 			</section>
 			<section v-if="history.length" class="min-w-0 space-y-6">

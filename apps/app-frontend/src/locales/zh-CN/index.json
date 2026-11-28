@@ -4,7 +4,7 @@
 	"app.source-content.missing-answer": { "message": "内容源没有返回该项目的检测结果。" },
 	"app.source-content.empty-versions": { "message": "内容源没有提供可选择的版本。" },
 	"app.announcements.title": { "message": "公告" },
-	"app.announcements.current": { "message": "当前公告" },
+	"app.announcements.current": { "message": "最新公告" },
 	"app.announcements.history": { "message": "历史公告" },
 	"app.announcements.other": { "message": "其他公告" },
 	"app.announcements.active": { "message": "有效" },

@@ -6,7 +6,7 @@
 	"app.source-content.missing-answer": { "message": "The source returned no update result for this project." },
 	"app.source-content.empty-versions": { "message": "The source returned no selectable versions." },
 	"app.announcements.title": { "message": "Announcements" },
-	"app.announcements.current": { "message": "Current announcement" },
+	"app.announcements.current": { "message": "Latest announcement" },
 	"app.announcements.history": { "message": "Announcement history" },
 	"app.announcements.other": { "message": "Other announcements" },
 	"app.announcements.active": { "message": "Active" },

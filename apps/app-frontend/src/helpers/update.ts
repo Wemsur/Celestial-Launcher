@@ -3,6 +3,7 @@ import {invoke} from "@tauri-apps/api/core";
 import { listen } from '@tauri-apps/api/event'
 import { arch as osArch, type as osType } from '@tauri-apps/plugin-os'
 
+import { compareBetaTags, isBetaTag } from '@/helpers/beta-release'
 import { toError } from '@/helpers/errors'
 import { get as getSettings } from '@/helpers/settings'
 import {
@@ -32,9 +33,6 @@ interface UpdateSource {
     /** 该源的 latest release 接口，GitCode 响应在读取后归一化。 */
     latestUrl: string
 }
-
-const GITHUB_TEST_RELEASE_TAG = 'v3.5.0-beta.1'
-const GITCODE_TEST_RELEASE_TAG = 'v3.5.0-beta.2'
 
 type TestReleaseMode = 'gitcode' | 'github' | null
 
@@ -92,6 +90,34 @@ function normalizeRelease(raw: unknown, source: UpdateSource): Release {
 		prerelease: value.prerelease || (gitcode && value.release_status !== 'latest') || tag.replace(/^v/, '').split('+')[0].includes('-'),
 		assets,
 	}
+}
+
+async function latestBetaRelease(source: UpdateSource): Promise<Release> {
+	const pageSize = 100
+	const maxPages = 20
+	let latest: Release | null = null
+	for (let page = 1; page <= maxPages; page++) {
+		const url = new URL(source.latestUrl)
+		url.searchParams.set('page', String(page))
+		url.searchParams.set('per_page', String(pageSize))
+		console.info(`[updater] ${source.label}: 获取发布列表第 ${page} 页`)
+		const raw: unknown = JSON.parse(await invoke<string>('fetch_release_metadata', { url: url.href }))
+		if (!Array.isArray(raw)) throw new Error('Release list must be an array')
+		if (raw.length > pageSize) throw new Error('Release list exceeds the requested page size')
+		for (const entry of raw) {
+			if (!entry || typeof entry !== 'object') continue
+			const item = entry as Record<string, unknown>
+			if (item.draft === true || typeof item.tag_name !== 'string' || !isBetaTag(item.tag_name)) continue
+			const release = normalizeRelease(entry, source)
+			if (!latest || (compareBetaTags(release.tag_name, latest.tag_name) ?? 0) > 0) latest = release
+		}
+		if (raw.length < pageSize) {
+			if (!latest) throw new Error('没有找到已发布的 beta Release')
+			console.info(`[updater] ${source.label}: 选择最高 beta 版本 ${latest.tag_name}`)
+			return latest
+		}
+	}
+	throw new Error('发布列表超过分页上限，无法确认最新 beta，停止本次测试更新')
 }
 
 /** 语义化版本比较，返回 -1/0/1 */
@@ -166,18 +192,17 @@ export async function checkForUpdate(): Promise<{
 	const platform = currentPlatform()
 	const mode = testReleaseMode((await getSettings()).feature_flags)
 	const testingPrerelease = mode !== null
-	const testTag = mode === 'gitcode' ? GITCODE_TEST_RELEASE_TAG : GITHUB_TEST_RELEASE_TAG
 	const sources: UpdateSource[] = mode === 'gitcode'
 		? [{
 				id: 'gitcode-preview-test',
-				label: `GitCode 测试发布（${testTag}）`,
-				latestUrl: `https://api.gitcode.com/api/v5/repos/Wemsur/Celestial-Launcher/releases/tags/${encodeURIComponent(testTag)}`,
+				label: 'GitCode 最新 beta 测试发布',
+				latestUrl: 'https://api.gitcode.com/api/v5/repos/Wemsur/Celestial-Launcher/releases',
 			}]
 		: mode === 'github'
 			? [{
 					id: 'github-preview-test',
-					label: `GitHub 测试发布（${testTag}）`,
-					latestUrl: `https://api.github.com/repos/Wemsur/Celestial-Launcher/releases/tags/${encodeURIComponent(testTag)}`,
+					label: 'GitHub 最新 beta 测试发布',
+					latestUrl: 'https://api.github.com/repos/Wemsur/Celestial-Launcher/releases',
 				}]
 			: UPDATE_SOURCES
 
@@ -195,44 +220,26 @@ export async function checkForUpdate(): Promise<{
         console.log(`${prefix}: 请求 ${source.latestUrl}`)
 
         const started = performance.now()
-        let body: string
+        let release: Release
         try {
-            // 走 Rust（reqwest）而非 webview fetch：绕开 CORS。自部署 Gitea / CDN
-            // 不回 Access-Control-Allow-Origin 时，前端 fetch 会 "Failed to fetch"，
-            // 而 Rust 侧不受 CORS 约束。Rust 出错时抛字符串（"HTTP 404: ..." 等）。
-            body = await invoke<string>('fetch_release_metadata', { url: source.latestUrl })
+			release = testingPrerelease
+				? await latestBetaRelease(source)
+				: normalizeRelease(JSON.parse(await invoke<string>('fetch_release_metadata', { url: source.latestUrl })), source)
         } catch (e) {
             const msg = typeof e === 'string' ? e : ((e as Error)?.message ?? String(e))
             const ms = Math.round(performance.now() - started)
-            const reason = msg.startsWith('HTTP ')
-                ? `${msg}（耗时 ${ms}ms）`
-                : `请求失败（${msg}），耗时 ${ms}ms。常见原因：主机不可达 / DNS 失败 / 超时 / TLS 失败`
+            const reason = `请求或发布数据校验失败（${msg}），耗时 ${ms}ms`
             console.warn(`${prefix}: ✗ 跳过 — ${reason}`)
             trail.push({ source, outcome: `跳过（${reason}）` })
             continue
         }
         const ms = Math.round(performance.now() - started)
-
-        let release: Release
-        try {
-            release = normalizeRelease(JSON.parse(body), source)
-        } catch (e) {
-            const err = e as Error
-            const reason = `响应不是合法 JSON（${err.message}），可能是错误页而非 API 响应`
-            console.warn(`${prefix}: ✗ 跳过 — ${reason}`)
-            trail.push({ source, outcome: `跳过（${reason}）` })
-            continue
-        }
         console.log(`${prefix}: 成功（耗时 ${ms}ms），tag=${release.tag_name}`)
 
 		if (release.draft || (release.prerelease && !testingPrerelease)) {
 			const reason = `最新发布是 ${release.draft ? 'draft' : 'prerelease'}，不作为更新`
 			console.log(`${prefix}: ✗ 跳过 — ${reason}`)
 			trail.push({ source, outcome: `跳过（${reason}）` })
-			continue
-		}
-		if (testingPrerelease && release.tag_name !== testTag) {
-			console.warn(`${prefix}: 测试发布 tag 不匹配，拒绝使用 ${release.tag_name}`)
 			continue
 		}
 
@@ -253,8 +260,8 @@ export async function checkForUpdate(): Promise<{
         }
 
         const asset = selectAsset(release.assets, platform)
-		if (asset && (source.id === 'gitcode' || source.id === 'gitcode-preview-test') && !release.assets.some((entry) => entry.name === `${asset.name}.sig`)) {
-			const reason = `GitCode 安装包 ${asset.name} 缺少配对签名，尝试其他更新源`
+		if (asset && (testingPrerelease || source.id === 'gitcode') && !release.assets.some((entry) => entry.name === `${asset.name}.sig`)) {
+			const reason = `${source.label} 安装包 ${asset.name} 缺少配对签名，停止采用该发布`
 			console.warn(`${prefix}: ✗ 跳过 — ${reason}`)
 			trail.push({ source, outcome: reason })
 			continue

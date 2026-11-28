@@ -61,7 +61,8 @@ pub fn metadata_host_allowed(url: &Url) -> bool {
 	if !safe_https(url) || !host_in(url, METADATA_HOSTS) {
 		return false;
 	}
-	url.host_str() != Some("api.gitcode.com") || url.path().starts_with(GITCODE_RELEASE_ROOT)
+	url.host_str() != Some("api.gitcode.com") || url.path() == GITCODE_RELEASE_ROOT.trim_end_matches('/')
+		|| url.path().starts_with(GITCODE_RELEASE_ROOT)
 }
 
 const GITCODE_RELEASE_ROOT: &str = "/api/v5/repos/Wemsur/Celestial-Launcher/releases/";
@@ -186,6 +187,8 @@ mod gitcode_tests {
 	#[test]
 	fn restricts_gitcode_sources_and_storage() {
 		assert!(metadata_host_allowed(&Url::parse("https://api.gitcode.com/api/v5/repos/Wemsur/Celestial-Launcher/releases/latest?type=latest").unwrap()));
+		assert!(metadata_host_allowed(&Url::parse("https://api.gitcode.com/api/v5/repos/Wemsur/Celestial-Launcher/releases?page=1&per_page=100").unwrap()));
+		assert!(!metadata_host_allowed(&Url::parse("https://api.gitcode.com/api/v5/repos/Wemsur/Celestial-Launcher/releases-other").unwrap()));
 		assert!(!metadata_host_allowed(&Url::parse("https://api.gitcode.com/api/v5/repos/other/other/releases/latest").unwrap()));
 		assert!(!download_host_allowed(&Url::parse("https://api.gitcode.com/api/v5/repos/other/other/releases/v1/attach_files/setup.exe/download").unwrap()));
 		assert!(!download_host_allowed(&Url::parse("http://gitcode.com/Wemsur/Celestial-Launcher/setup.exe").unwrap()));
