@@ -13,7 +13,7 @@ export const announcementMessages = defineMessages({
 	warning: { id: 'app.announcements.warning', defaultMessage: 'Important' },
 	critical: { id: 'app.announcements.critical', defaultMessage: 'Critical' },
 	published: { id: 'app.announcements.published', defaultMessage: 'Published {date}' },
-	period: { id: 'app.announcements.period', defaultMessage: 'Valid from {start} to {end}' },
+	expires: { id: 'app.announcements.expires', defaultMessage: 'Valid until: {date}' },
 	close: { id: 'app.announcements.close', defaultMessage: 'Close' },
 	suppress: { id: 'app.announcements.suppress', defaultMessage: "Don't show again" },
 	suppressed: { id: 'app.announcements.suppressed', defaultMessage: 'Automatic reminders are disabled for this announcement.' },

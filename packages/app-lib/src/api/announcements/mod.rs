@@ -63,8 +63,8 @@ impl Announcement {
 	}
 
 	pub fn is_visible(&self, now: DateTime<Utc>) -> bool {
-		self.state == AnnouncementState::Withdrawn
-			|| self.starts_at.is_some_and(|start| start <= now)
+		self.state != AnnouncementState::Withdrawn
+			&& self.starts_at.is_some_and(|start| start <= now)
 	}
 }
 
@@ -368,5 +368,9 @@ mod tests {
 			state: AnnouncementState::Published, body_path: None, body_sha256: None };
 		assert!(item.is_active(start));
 		assert!(!item.is_active(start + chrono::Duration::hours(1)));
+		assert!(item.is_visible(start + chrono::Duration::hours(1)));
+		let withdrawn = Announcement { state: AnnouncementState::Withdrawn, ..item };
+		assert!(!withdrawn.is_visible(start));
+		assert!(!withdrawn.is_visible(start + chrono::Duration::days(1)));
 	}
 }

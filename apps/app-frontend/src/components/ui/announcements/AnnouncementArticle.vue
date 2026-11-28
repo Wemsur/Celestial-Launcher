@@ -45,24 +45,29 @@ async function openLink(event: MouseEvent): Promise<void> {
 </script>
 
 <template>
-	<article class="min-w-0 space-y-3" :data-announcement-id="metadata.id">
-		<div class="flex flex-wrap items-center gap-2">
+	<article
+		v-if="metadata.state !== 'withdrawn'"
+		class="announcement-card min-w-0 overflow-hidden rounded-xl"
+		:data-announcement-id="metadata.id"
+		:data-level="metadata.level"
+	>
+		<header class="announcement-header flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
 			<h3 class="m-0 min-w-0 break-words text-lg font-semibold text-contrast">
 				{{ metadata.title ?? formatMessage(messages.withdrawn) }}
 			</h3>
 			<Badge :type="formatMessage(status)" :color="isAnnouncementActive(metadata, now) ? 'green' : 'gray'" />
 			<Badge
-				v-if="metadata.level && metadata.state !== 'withdrawn'"
+				v-if="metadata.level"
 				:type="formatMessage(messages[metadata.level])"
 				:color="metadata.level === 'critical' ? 'red' : metadata.level === 'warning' ? 'orange' : 'gray'"
 			/>
-		</div>
-		<p class="m-0 text-xs text-secondary">{{ formatMessage(messages.published, { date: date(metadata.published_at) }) }}</p>
-		<p v-if="metadata.starts_at && metadata.expires_at" class="m-0 text-xs text-secondary">
-			{{ formatMessage(messages.period, { start: date(metadata.starts_at), end: date(metadata.expires_at) }) }}
-		</p>
-		<p v-if="body?.response?.stale" class="m-0 text-sm text-secondary">{{ formatMessage(messages.cachedBody) }}</p>
-		<template v-if="metadata.state !== 'withdrawn'">
+			<span class="text-xs text-secondary">{{ formatMessage(messages.published, { date: date(metadata.published_at) }) }}</span>
+			<span v-if="metadata.expires_at" class="text-xs text-secondary">
+				{{ formatMessage(messages.expires, { date: date(metadata.expires_at) }) }}
+			</span>
+		</header>
+		<div class="min-w-0 space-y-3 p-4 sm:p-5">
+			<p v-if="body?.response?.stale" class="m-0 text-sm text-secondary">{{ formatMessage(messages.cachedBody) }}</p>
 			<div v-if="body?.loading" class="flex items-center gap-2 text-secondary" role="status">
 				<LoadingIndicator /> {{ formatMessage(messages.loading) }}
 			</div>
@@ -77,6 +82,27 @@ async function openLink(event: MouseEvent): Promise<void> {
 				<p v-if="body?.error" class="break-words text-secondary">{{ body.error }}</p>
 				<Button type="quiet" @click="retry">{{ formatMessage(messages.retry) }}</Button>
 			</Admonition>
-		</template>
+		</div>
 	</article>
 </template>
+
+<style scoped>
+.announcement-card {
+	--announcement-base: color-mix(in srgb, var(--surface-5) 95%, var(--color-green-50) 5%);
+	--announcement-tint: var(--announcement-base);
+	background-color: color-mix(in srgb, var(--surface-5) 75%, transparent);
+	background-color: color-mix(in srgb, var(--announcement-tint) 75%, transparent);
+}
+
+.announcement-header {
+	background-color: color-mix(in srgb, var(--surface-4) 95%, var(--color-green-50) 5%);
+}
+
+.announcement-card[data-level='critical'] {
+	--announcement-tint: color-mix(in srgb, var(--announcement-base) 98%, var(--color-red) 2%);
+}
+
+.announcement-card[data-level='warning'] {
+	--announcement-tint: color-mix(in srgb, var(--announcement-base) 96%, var(--color-orange) 4%);
+}
+</style>

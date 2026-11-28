@@ -15,7 +15,7 @@
 	"app.announcements.warning": { "message": "重要" },
 	"app.announcements.critical": { "message": "紧急" },
 	"app.announcements.published": { "message": "发布于 {date}" },
-	"app.announcements.period": { "message": "有效期：{start} 至 {end}" },
+	"app.announcements.expires": { "message": "有效期至：{date}" },
 	"app.announcements.close": { "message": "关闭" },
 	"app.announcements.suppress": { "message": "不再显示" },
 	"app.announcements.suppressed": { "message": "已关闭此公告的自动提示，仍可手动查看。" },

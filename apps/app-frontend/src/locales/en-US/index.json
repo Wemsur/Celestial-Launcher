@@ -17,7 +17,7 @@
 	"app.announcements.warning": { "message": "Important" },
 	"app.announcements.critical": { "message": "Critical" },
 	"app.announcements.published": { "message": "Published {date}" },
-	"app.announcements.period": { "message": "Valid from {start} to {end}" },
+	"app.announcements.expires": { "message": "Valid until: {date}" },
 	"app.announcements.close": { "message": "Close" },
 	"app.announcements.suppress": { "message": "Don't show again" },
 	"app.announcements.suppressed": { "message": "Automatic reminders are disabled for this announcement." },

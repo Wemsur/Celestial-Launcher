@@ -43,8 +43,9 @@ function logAutoReason(reason: string, details?: Record<string, unknown>): void 
 	console.info(`[announcements] 自动显示判断：${reason}`, details ?? {})
 }
 
-const others = computed(() => entries.value.filter((item) => item.id !== currentId.value && isAnnouncementActive(item, now.value)))
-const history = computed(() => entries.value.filter((item) => item.id !== currentId.value && !isAnnouncementActive(item, now.value)))
+const visibleEntries = computed(() => entries.value.filter((item) => item.state !== 'withdrawn'))
+const others = computed(() => visibleEntries.value.filter((item) => item.id !== currentId.value && isAnnouncementActive(item, now.value)))
+const history = computed(() => visibleEntries.value.filter((item) => item.id !== currentId.value && !isAnnouncementActive(item, now.value)))
 const currentActive = computed(() => active.value.find((item) => item.id === currentId.value))
 const canSuppress = computed(() => Boolean(currentActive.value && !currentActive.value.suppressed) && !saving.value)
 const lastSync = computed(() => snapshot.value.last_success_at
@@ -215,25 +216,25 @@ onBeforeUnmount(() => {
 			<Admonition v-if="!snapshot.fresh && snapshot.last_success_at" type="warning" :header="formatMessage(messages.cache)">
 				<p v-if="lastSync" class="m-0 text-secondary">{{ formatMessage(messages.lastSync, { date: lastSync }) }}</p>
 			</Admonition>
-			<section v-if="current" class="min-w-0 space-y-3">
+			<section v-if="current && current.state !== 'withdrawn'" class="min-w-0 space-y-3">
 				<h2 class="m-0 text-sm font-semibold text-secondary">{{ formatMessage(messages.current) }}</h2>
 				<AnnouncementArticle :metadata="current" />
 				<p v-if="currentActive?.suppressed" class="m-0 text-sm text-secondary">{{ formatMessage(messages.suppressed) }}</p>
 			</section>
 			<section v-if="others.length" class="min-w-0 space-y-6">
 				<h2 class="m-0 text-lg font-semibold text-contrast">{{ formatMessage(messages.other) }}</h2>
-				<AnnouncementArticle v-for="item in others" :key="item.id" :metadata="item" class="border-0 border-b border-solid border-surface-5 pb-6" />
+				<AnnouncementArticle v-for="item in others" :key="item.id" :metadata="item" />
 			</section>
 			<section v-if="history.length" class="min-w-0 space-y-6">
 				<h2 class="m-0 text-lg font-semibold text-contrast">{{ formatMessage(messages.history) }}</h2>
-				<AnnouncementArticle v-for="item in history" :key="item.id" :metadata="item" class="border-0 border-b border-solid border-surface-5 pb-6" />
+				<AnnouncementArticle v-for="item in history" :key="item.id" :metadata="item" />
 			</section>
 			<div v-if="loadingPage" class="flex items-center gap-2 text-secondary" role="status"><LoadingIndicator /> {{ formatMessage(messages.loading) }}</div>
 			<Admonition v-if="pageError" type="warning" :header="formatMessage(messages.unavailable)">
 				<p class="break-words">{{ pageError }}</p>
 				<Button type="quiet" @click="loadMore">{{ formatMessage(messages.retry) }}</Button>
 			</Admonition>
-			<p v-if="!current && !entries.length && !loadingPage && !pageError" class="m-0 text-secondary">{{ formatMessage(messages.empty) }}</p>
+			<p v-if="(!current || current.state === 'withdrawn') && !visibleEntries.length && !loadingPage && !pageError" class="m-0 text-secondary">{{ formatMessage(messages.empty) }}</p>
 			<div v-if="cursor !== null" ref="sentinel" class="flex justify-center">
 				<Button type="quiet" :disabled="loadingPage" @click="loadMore">{{ formatMessage(messages.more) }}</Button>
 			</div>
