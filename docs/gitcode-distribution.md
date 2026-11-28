@@ -32,7 +32,7 @@ GitCode 没有 draft API。脚本始终以 `release_status: pre` 创建**公开�
 
 检查不存在同名 release 后，将**实际构建提交**推送为 GitCode tag；同名远端 tag 必须解析到相同提交，否则停止。不强推、不跳过 hooks，不推送分支。即使仓库为空也可推送；为了创建 release target，这会同步该提交可达的源代码和历史，请先确认可公开。
 
-上传通过 GitCode API 获取 OBS 临时地址，直接流式 PUT；仅接受 HTTPS、默认 443、无用户信息/fragment 的 Huawei OBS 公有对象存储主机及指定四个响应头，并按已核验文件大小发送 Content-Length，不向 OBS 发送 GitCode PAT，不跟随重定向。API 使用 Bearer 认证，并限制响应大小及请求时长；日志不输出 PAT、临时签名查询串或原始响应。
+上传通过 GitCode API 获取 OBS 临时地址，直接流式 PUT；仅接受 HTTPS、默认 443、无用户信息/fragment 的精确主机 `file.gitcode.com` 或 Huawei OBS 公有对象存储主机及指定四个响应头，并按已核验文件大小发送 Content-Length，不向 OBS 发送 GitCode PAT，不跟随重定向。API 使用 Bearer 认证，并限制响应大小及请求时长；日志不输出 PAT、临时签名查询串或原始响应。
 
 全部上传后，脚本重新读取 release，核对每个附件名唯一且有 HTTPS 下载地址，并在 API 提供时核对大小及 SHA-256/SHA-512 摘要。Actions summary 提供发布链接。维护者核查附件完整、签名齐全及匿名下载后，在 GitCode 发布页**人工推广**正式版本；测试版本可继续保持预发布。脚本不调用推广 API，即使稳定 tag 也不会自动改为 `latest`。
 

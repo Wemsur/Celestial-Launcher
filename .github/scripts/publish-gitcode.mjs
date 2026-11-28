@@ -286,7 +286,7 @@ function uploadTarget(data, token) {
 	try { url = new URL(data.url) } catch { throw new Error('Invalid upload URL') }
 	console.log(`Upload target host: ${url.hostname}; protocol=${url.protocol}; port=${url.port || 'default'}; queryPresent=${Boolean(url.search)}`)
 	check(url.protocol === 'https:' && !url.username && !url.password && !url.hash &&
-		(!url.port || url.port === '443') && OBS_HOST.test(url.hostname), 'Upload host is outside the Huawei OBS allowlist')
+		(!url.port || url.port === '443') && (url.hostname === 'file.gitcode.com' || OBS_HOST.test(url.hostname)), 'Upload host is outside the GitCode file/OBS allowlist')
 	check(!data.url.includes(token), 'Upload URL unexpectedly contains the GitCode credential')
 	check(data.headers && typeof data.headers === 'object' && !Array.isArray(data.headers), 'Missing upload headers')
 	console.log(`Upload header names: ${Object.keys(data.headers).slice(0, 20).map(diagnosticCode).join(', ')}`)
